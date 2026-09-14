@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+import tomli_w
+
+from .errors import ProjectNotInitialized
+from .models import ProjectConfig
+
+# Derived at import time from this package's own name, so this module never
+# needs template substitution: it just works under whatever package_name
+# the project was generated with.
+_PACKAGE_NAME = __name__.split(".")[0]
+PROJECT_DIR_NAME = f".{_PACKAGE_NAME}"
+CONFIG_FILE_NAME = "config.toml"
+
+
+def find_project_root(start: Path) -> Path | None:
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / PROJECT_DIR_NAME).is_dir():
+            return candidate
+    return None
+
+
+def require_project_root(start: Path) -> Path:
+    root = find_project_root(start)
+    if root is None:
+        raise ProjectNotInitialized(str(start))
+    return root
+
+
+def config_path(project_root: Path) -> Path:
+    return project_root / PROJECT_DIR_NAME / CONFIG_FILE_NAME
+
+
+def load_config(project_root: Path) -> ProjectConfig:
+    data = tomllib.loads(config_path(project_root).read_text())
+    return ProjectConfig.model_validate(data)
+
+
+def save_config(project_root: Path, config: ProjectConfig) -> None:
+    path = config_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(tomli_w.dumps(config.model_dump()))
+
+
+def init_project(project_root: Path, name: str) -> ProjectConfig:
+    config = ProjectConfig(name=name)
+    save_config(project_root, config)
+    return config

@@ -1,0 +1,46 @@
+# AGENTS.md
+
+Guidance for coding agents working on the **{{ package_name }}** package
+itself (not its end users — see `src/{{ package_name }}/data/SKILL.md` for
+that).
+
+## Development
+
+```bash
+uv sync
+uv run {{ package_name }} --help
+uv run pytest
+uv run ruff check .
+```
+
+Run `scripts/install_hooks.sh` once (`.git/hooks/` isn't versioned by git,
+so this is also needed again after a fresh clone). It installs a
+pre-commit hook that warns — never blocks — when a command's logic changed
+without its docstring changing too, since that docstring is the `--help`
+text agents read as this CLI's API contract.
+
+## Architecture (do not violate)
+
+- `commands/` — argument parsing only. No business logic here.
+- `core/` — services, models, errors. All real logic lives here.
+- `providers/` — external API/integration implementations.
+- `credentials/` — secrets via OS keychain + env vars. Never write a secret
+  to `.{{ package_name }}/config.toml` or any other project-local file.
+- `output/` — every command supports both human and `--json` output via
+  `output.emit_success` / `output.guard`. Don't `print()` directly in a
+  command.
+- Errors are `CliError` subclasses with a stable `code` and the fixed
+  exit-code table (see `core/errors.py`). Don't raise bare exceptions as the
+  intended user-facing failure path.
+- Any new command that changes external state irreversibly (deletes,
+  overwrites a remote resource, restarts something, ...) must support
+  `--dry-run` (`output.is_dry_run`) and gate the actual action behind
+  `output.require_confirmation`. Commands that only touch local project
+  files (`init`, `config set`) don't need this.
+
+## After changing the command surface
+
+Update `src/{{ package_name }}/data/SKILL.md` (the bundled agent skill) to
+match — it's what `{{ package_name }} --ai` and `{{ package_name }} skill install`
+ship to end users and their AI tools. If you added a destructive command,
+list it explicitly under that file's "Safety" section.

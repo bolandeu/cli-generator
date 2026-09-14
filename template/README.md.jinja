@@ -1,0 +1,63 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Development
+
+```bash
+uv sync
+uv run {{ package_name }} --help
+uv run pytest
+scripts/install_hooks.sh  # installs a pre-commit hook warning on stale --help docstrings
+```
+
+## Install
+
+**On this machine, from a local checkout:**
+
+```bash
+uv tool install .
+```
+
+**On any other machine (any OS), once this repo is pushed to GitHub — no
+PyPI publish needed:**
+
+```bash
+{% if repository_url -%}
+uv tool install "git+{{ repository_url }}.git"
+{%- else -%}
+uv tool install "git+https://github.com/<owner>/<repo>.git"
+{%- endif %}
+```
+
+Pin a version/branch by appending `@<tag-or-branch>` to the URL. This is
+also how an AI agent bootstraps this CLI on a fresh machine/sandbox where
+it isn't installed yet — see `src/{{ package_name }}/data/SKILL.md`.
+
+After install, the command `{{ package_name }}` is available globally, on
+macOS, Linux and Windows alike (see `architecture.md` in the cli-generator
+plugin for why: no shelling out, no hardcoded POSIX paths).
+
+To pick up later architecture changes from the `cli-generator` template
+itself, run `copier update` in this repo (requires this repo and the
+template to both be git repos; see the `cli-generator` plugin's README).
+
+## Architecture
+
+This project follows a fixed CLI architecture:
+
+- `src/{{ package_name }}/commands/` — argument parsing only, no business logic.
+- `src/{{ package_name }}/core/` — services, models, errors: the real logic.
+- `src/{{ package_name }}/providers/` — external APIs/integrations.
+- `src/{{ package_name }}/credentials/` — secrets via the OS keychain (`keyring`)
+  and environment variables. Secrets never live in `.{{ package_name }}/config.toml`.
+- `src/{{ package_name }}/output/` — human (`rich`) and `--json` rendering.
+
+Run `{{ package_name }} doctor` to check environment/config/auth readiness, and
+`{{ package_name }} --help` for the full command surface. Every command supports
+`--json` for machine/agent consumption.
+
+See `src/{{ package_name }}/data/SKILL.md` for the agent-facing usage guide
+bundled with this package — install it into an AI tool with
+`{{ package_name }} skill install`, or get it as plain text with
+`{{ package_name }} --ai` (works even without file access).

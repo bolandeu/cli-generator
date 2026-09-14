@@ -1,0 +1,98 @@
+---
+name: {{ package_name }}
+description: Use the {{ package_name }} CLI to manage this project and run its operations. Invoke when the task involves this project's status, configuration, credentials, or its `run` operation.
+---
+
+# {{ package_name }}
+
+Use `{{ package_name }}` to manage this project and execute its operations.
+
+If you can run the CLI but cannot read files from this repository (e.g. a
+sandbox with no filesystem access to the skill), run
+`{{ package_name }} --ai` to print this document to stdout instead.
+
+## Installation (if `{{ package_name }}` is not found on this machine)
+
+This skill can end up on a machine (synced skills directory, dotfiles, a
+fresh sandbox) before the CLI itself is installed there. If running
+`{{ package_name }} --version` fails, install it — no PyPI publish required:
+
+```bash
+{% if repository_url -%}
+uv tool install "git+{{ repository_url }}.git"
+{%- else -%}
+uv tool install "git+<this project's GitHub URL>.git"
+{%- endif %}
+```
+
+This works identically on macOS, Linux and Windows. Do not attempt to
+build or run this project from source unless explicitly asked to develop
+it — installing the published tool is the correct path for using it.
+
+## Discovery
+
+Always start with:
+
+    {{ package_name }} --help
+
+For project state:
+
+    {{ package_name }} status --json
+
+For diagnostics:
+
+    {{ package_name }} doctor --json
+
+## Project initialization
+
+If the current directory is not initialized:
+
+    {{ package_name }} init --non-interactive
+
+## Authentication
+
+Never ask the user to paste credentials into command arguments.
+
+Check first:
+
+    {{ package_name }} auth status --json
+
+If authentication is required:
+
+    {{ package_name }} auth login
+
+## Output
+
+Prefer `--json` when consuming command output programmatically. Do not parse
+human-readable terminal output when JSON output is available.
+
+## Safety: destructive commands
+
+Any command documented below as destructive/irreversible supports
+`--dry-run` (preview only, no changes) and requires `--confirm` to run
+non-interactively. Always:
+
+1. Run it with `--dry-run` first and show the user what it would do.
+2. Get explicit user sign-off before re-running it for real with
+   `--confirm --non-interactive`.
+
+Never chain a destructive command straight to `--confirm --non-interactive`
+without a human having seen and approved the dry-run output first — that
+defeats the point of the gate. (This template ships no destructive command
+by default; update this section with the real ones as they're added.)
+
+## Errors
+
+Inspect, in this order, before retrying:
+
+1. process exit code
+2. JSON `error.code`
+3. JSON `error.action`
+
+Exit codes:
+
+    0  Success
+    1  General error
+    2  Invalid arguments
+    3  Authentication error
+    4  Project not initialized

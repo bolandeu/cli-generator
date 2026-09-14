@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from importlib import resources
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
+
+import typer
+
+{% if include_auth -%}
+from .commands import auth, doctor, init, run, skill, status
+from .commands import config as config_cmd
+{%- else -%}
+from .commands import config as config_cmd
+from .commands import doctor, init, run, skill, status
+{%- endif %}
+
+_PACKAGE_NAME = __name__.split(".")[0]
+
+app = typer.Typer(
+    help="Project-aware automation CLI.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+
+app.add_typer(config_cmd.app, name="config")
+{% if include_auth -%}
+app.add_typer(auth.app, name="auth")
+{%- endif %}
+app.add_typer(skill.app, name="skill")
+
+app.command(name="init")(init.init)
+app.command(name="status")(status.status)
+app.command(name="doctor")(doctor.doctor)
+app.command(name="run")(run.run)
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    try:
+        current = pkg_version(_PACKAGE_NAME)
+    except PackageNotFoundError:
+        current = "0.0.0-dev"
+    typer.echo(current)
+    raise typer.Exit()
+
+
+def _ai_callback(value: bool) -> None:
+    """Print the bundled agent skill doc to stdout.
+
+    For agents that can execute this CLI but cannot read files from disk
+    (e.g. a sandboxed shell with no access to a SKILL.md on the filesystem),
+    this is the fallback way to get full usage guidance.
+    """
+    if not value:
+        return
+    content = resources.files(f"{_PACKAGE_NAME}.data").joinpath("SKILL.md").read_text()
+    typer.echo(content)
+    raise typer.Exit()
+
+
+@app.callback()
+def main_options(
+    ctx: typer.Context,
+    project: str = typer.Option(None, "--project", help="Path to the project root."),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON output."),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress non-essential output."),
+    verbose: bool = typer.Option(False, "--verbose", help="Emit extra diagnostic output."),
+    non_interactive: bool = typer.Option(False, "--non-interactive", help="Never prompt; fail instead."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would happen without making changes."),
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."
+    ),
+    ai: bool = typer.Option(
+        False,
+        "--ai",
+        callback=_ai_callback,
+        is_eager=True,
+        help="Print AI-oriented usage documentation (the bundled skill doc) and exit.",
+    ),
+) -> None:
+    ctx.ensure_object(dict)
+    ctx.obj["project"] = project
+    ctx.obj["json"] = json_output
+    ctx.obj["quiet"] = quiet
+    ctx.obj["verbose"] = verbose
+    ctx.obj["non_interactive"] = non_interactive
+    ctx.obj["dry_run"] = dry_run
+
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    main()

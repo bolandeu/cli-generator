@@ -1,0 +1,46 @@
+_subdirectory: template
+
+_exclude:
+  - "copier.yaml"
+  - "copier.yml"
+  - "~*"
+  - "*.py[co]"
+  - "__pycache__"
+  - ".git"
+  - ".DS_Store"
+  - ".svn"
+  - "{% if not include_auth %}src/{{ package_name }}/commands/auth.py{% endif %}"
+  - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
+
+package_name:
+  type: str
+  help: "Python-importable package/command name (snake_case, e.g. mycli)"
+  validator: >-
+    {% if not (package_name | regex_search('^[a-z][a-z0-9_]*$')) %}
+    package_name must be a valid snake_case Python identifier
+    {% endif %}
+
+project_name:
+  type: str
+  help: "Display name for the project"
+  default: "{{ package_name }}"
+
+description:
+  type: str
+  help: "One-sentence description of what this CLI does"
+  default: "Project-aware automation CLI"
+
+author_name:
+  type: str
+  help: "Author name for pyproject.toml"
+  default: "Unknown"
+
+include_auth:
+  type: bool
+  help: "Include the credentials/auth module (keyring-backed)?"
+  default: true
+
+repository_url:
+  type: str
+  help: "GitHub repo URL once pushed (e.g. https://github.com/you/mycli) — leave blank if not created yet, fill in later in README.md/SKILL.md"
+  default: ""
