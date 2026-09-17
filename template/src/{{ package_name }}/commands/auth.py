@@ -6,7 +6,7 @@ from .. import output
 from ..core.errors import InvalidArguments
 from ..credentials import manager as credentials
 
-app = typer.Typer(help="Manage credentials.")
+app = output.group("Manage credentials.")
 
 
 @app.command("login")
@@ -28,7 +28,9 @@ def login(
         secret = typer.prompt(f"Enter API key for '{provider}'", hide_input=True)
     credentials.store_secret(provider, secret)
     output.emit_success(
-        ctx, {"provider": provider}, render_human=lambda d: output.human.echo(f"Stored credential for '{d['provider']}'.")
+        ctx,
+        {"provider": provider},
+        render_human=lambda d: output.human.echo(f"Stored credential for '{d['provider']}'."),
     )
 
 
@@ -43,7 +45,9 @@ def logout(
     """Remove a stored credential."""
     credentials.delete_secret(provider)
     output.emit_success(
-        ctx, {"provider": provider}, render_human=lambda d: output.human.echo(f"Removed credential for '{d['provider']}'.")
+        ctx,
+        {"provider": provider},
+        render_human=lambda d: output.human.echo(f"Removed credential for '{d['provider']}'."),
     )
 
 

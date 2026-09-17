@@ -3,7 +3,9 @@
 Claude Code plugin: a `cli-builder` skill that scaffolds new CLI tools or
 refactors existing ones onto one shared architecture (Python + uv + Typer,
 project-aware config, OS-keychain credentials, dual human/JSON output,
-AI-readable errors).
+AI-readable errors, an `HttpProvider` base for external APIs, enforced
+`min_version`, tagged releases, CI that proves `uv tool install` works on
+three OSes).
 
 ## Layout
 
@@ -29,6 +31,12 @@ session without the flag), then ask for either:
 - "refactor this script/package into our CLI architecture" → refactor mode
   (works on a feature branch, never directly on main — see SKILL.md step 0)
 
+Both modes end by offering to publish: create a **private** GitHub repo
+with `gh repo create --private --source=. --push` and verify that
+`uv tool install "git+https://github.com/<owner>/<repo>.git"` works from
+there — the one-command install every generated README/SKILL.md points
+other machines (and agents) at. Nothing is created without your go-ahead.
+
 If it doesn't trigger automatically, invoke it explicitly:
 `/cli-generator:cli-builder`.
 
@@ -40,6 +48,8 @@ generated package must satisfy.
 ## Using the template directly
 
 ```bash
+# `gh:bolandeu/cli-generator` in place of `.` works from anywhere (add
+# `--vcs-ref v1.0.0` to pin a template release)
 uvx copier copy . <dest-dir> \
   --data package_name=mycli \
   --data project_name="My CLI" \
@@ -54,4 +64,7 @@ uv run pytest
 Once a project has been generated this way, pulling in later architecture
 changes is `cd <dest-dir> && copier update` (requires the destination to be
 a git repo — copier uses git to diff and merge template changes without
-clobbering your business logic).
+clobbering your business logic). Template releases are git tags on this
+repo (`v1.0.0`, ...): `copier update` moves a project from the tag it was
+generated with to the newest one, and re-runs the same verify loop
+afterwards is how you know the merge was clean.

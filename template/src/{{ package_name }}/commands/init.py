@@ -11,7 +11,7 @@ from ..core import services
 @output.guard
 def init(
     ctx: typer.Context,
-    name: str = typer.Option(None, "--name", help="Project name (defaults to directory name)."),
+    name: str | None = typer.Option(None, "--name", help="Project name (defaults to directory name)."),
     force: bool = typer.Option(False, "--force", help="Overwrite an already-initialized project's config."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,

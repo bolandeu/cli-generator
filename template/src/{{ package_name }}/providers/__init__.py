@@ -1,15 +1,14 @@
+"""External integrations (HTTP APIs, LLMs, ...) live here, one module per service.
+
+Subclass `HttpProvider` for anything that speaks HTTP — it already maps
+auth failures, rate limits, outages and network errors onto the CLI's
+error codes and retries what's safe to retry. Keep API calls out of
+`commands/` and `core/services.py`; services call a provider, commands
+call a service.
+"""
+
 from __future__ import annotations
 
-from typing import Protocol
+from .http import HttpProvider
 
-
-class Provider(Protocol):
-    """Extension point for external integrations (APIs, LLMs, etc.).
-
-    Implement this in a new module under `providers/` for each backend the
-    project needs; keep API calls out of `commands/` and `core/services.py`.
-    """
-
-    name: str
-
-    def call(self, *args, **kwargs): ...
+__all__ = ["HttpProvider"]

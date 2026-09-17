@@ -45,10 +45,15 @@ function) is governed by these four rules instead
    - `project_name`, one-line `description`, `author_name`.
    - Whether it needs credentials (`include_auth`) — default yes if the task
      mentions any external API/provider.
-   - `repository_url` — the GitHub URL this will be pushed to, if known
-     (e.g. `https://github.com/you/mycli`). It's fine to leave blank and
-     fill in later; it only pre-fills the "install from GitHub on any
-     machine" instructions in README.md and the bundled SKILL.md.
+   - `repository_url` — the GitHub URL this will live at. Decide it
+     **now**, before generating, even though the repo itself is only
+     created in the Publish step below: default to
+     `https://github.com/<owner>/<repo>` with `<owner>` from
+     `gh api user -q .login` and `<repo>` = `package_name` with `_` → `-`
+     (GitHub convention), unless the user names something else. Passing
+     it to copier is what puts the real `uv tool install "git+…"` command
+     into README.md, the bundled SKILL.md and `.copier-answers.yml` from
+     the start instead of an `<owner>/<repo>` placeholder to chase later.
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
 2. Generate the skeleton with copier, pointing it at this plugin's repo
@@ -60,25 +65,41 @@ function) is governed by these four rules instead
    uvx copier copy /absolute/path/to/this/plugin/repo <dest-dir> \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
-     --data include_auth=true
+     --data include_auth=true \
+     --data repository_url=https://github.com/<owner>/<repo>
    ```
 
-   Once this plugin's repo is on GitHub, `gh:<owner>/<repo>` also works as
-   the template source in place of a local path.
+   `gh:bolandeu/cli-generator` works as the template source in place of
+   the local path (copier clones it; use `--vcs-ref vX.Y.Z` to pin a
+   template release — `copier update` in the generated project later
+   moves between those tags).
 3. Implement the real logic:
    - Business logic goes in `src/<package_name>/core/services.py` (or new
      modules under `core/`), never inside `commands/*.py`. Commands stay
      thin: parse args → call a service → call `output.emit_success` /
      `output.guard`.
-   - External integrations (APIs, LLMs, etc.) go under `providers/`,
-     implementing the `Provider` protocol.
+   - External integrations go under `providers/`, one module per service,
+     subclassing `providers.HttpProvider` — it already maps 401/403,
+     429/5xx, timeouts and network errors onto the CLI's error codes and
+     retries what's safe; don't re-implement that per project. The
+     credential comes from `credentials.manager` inside `auth_headers()`.
    - Wire the real work into `commands/run.py`, replacing the placeholder.
-4. Verify before calling it done:
+   - Any new command group (`<cli> thing list|add`) is created with
+     `output.group("...")`, never `typer.Typer(...)`, so a bare
+     `<cli> thing` prints help instead of a usage error.
+   - Add a `CHANGELOG.md` entry under `## [Unreleased]` for what you built.
+4. Verify before calling it done — every check CI will run, in the same
+   order:
    ```bash
-   cd <dest-dir> && uv sync && uv run pytest && uv run <package_name> doctor
+   cd <dest-dir> && uv sync && uv run ruff check . && uv run ruff format --check . \
+     && uv run ty check && uv run pytest && uv run <package_name> doctor
    ```
-5. Do not `git init`/create a remote/push without the user's explicit
-   go-ahead — scaffolding is local until they say otherwise.
+   `uv sync` writes `uv.lock` — it's committed (CI runs `uv lock --check`).
+   `pytest` enforces the coverage floor from `pyproject.toml`; a new
+   command without tests fails here, which is the intended nudge.
+5. Publish — follow "Publish to GitHub" below. Scaffolding is local
+   until the user says otherwise: do not `git init`/create a remote/push
+   before they've answered that section's question.
 
 ## Mode: Refactor
 
@@ -124,6 +145,99 @@ business logic).
 5. Verify the same way as Scaffold mode (`uv sync && pytest && doctor`), plus
    confirm any behavior that existed before the refactor still produces the
    same result.
+6. Publish — follow "Publish to GitHub" below (checklist item 12). A
+   refactored script usually has never been `uv tool install`-able from
+   anywhere; leaving it that way means the "works on any machine" half of
+   the architecture is still missing after all the other items pass.
+
+## Publish to GitHub (both modes)
+
+The end state for every package is: installable on any machine, any OS,
+with one command and no PyPI account —
+
+```bash
+uv tool install "git+https://github.com/<owner>/<repo>.git"
+```
+
+Do this after the verify step. Everything from step 2 on touches state
+outside the working tree, so it happens only after one explicit
+go-ahead from the user — but always *offer* it; don't leave the package
+sitting installable-from-nowhere without asking.
+
+1. **Prove it's installable locally first.** This catches packaging
+   mistakes (missing `[build-system]`, no `[project.scripts]`, package
+   data not shipped) before the repo exists, where they're confusing to
+   debug:
+   ```bash
+   uv tool install --reinstall . && <package_name> --version
+   ```
+   The template's `pyproject.toml` has everything needed; a refactored
+   project may not — fix it here, not later.
+2. **Ask once, with the defaults filled in:** create GitHub repo
+   `<owner>/<repo>` (owner from `gh api user -q .login`, repo name as
+   decided in Scaffold step 1 / by the refactored project's existing name)
+   as a **private** repo and push to it? Private is the default, not an
+   option to bring up: these CLIs typically hold account-specific
+   provider logic, and `uv tool install` works from a private repo just
+   as well (step 6). Only go `--public` if the user says so. If they
+   decline, stop here and tell them the placeholder in README.md and
+   `src/<package_name>/data/SKILL.md` needs filling once a repo exists
+   (step 5) — don't silently leave it.
+3. **Preconditions.** `gh auth status` must succeed — if it doesn't, ask
+   the user to run `gh auth login` themselves; never handle tokens on
+   their behalf. If the directory isn't a git repo yet (Scaffold mode):
+   `git init -b main && git add -A && git commit -m "Initial commit"`.
+   In Refactor mode you're on a feature branch — pushing that branch is
+   fine, merging it is the user's call. If the repo already has an
+   `origin` remote, skip step 4 entirely.
+4. **Create and push in one step:**
+   ```bash
+   gh repo create <owner>/<repo> --private --source=. --remote=origin --push
+   ```
+   Then try to make the CI gates unskippable — a ruleset that requires
+   the `test` and `audit` checks to pass and forbids force-pushes on
+   `main`:
+   ```bash
+   gh api -X POST repos/<owner>/<repo>/rulesets --input - <<'JSON'
+   {"name":"main","target":"branch","enforcement":"active",
+    "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
+    "rules":[{"type":"non_fast_forward"},{"type":"deletion"},
+             {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,
+              "required_status_checks":[{"context":"test"},{"context":"audit"}]}}]}
+   JSON
+   ```
+   On a personal free plan GitHub refuses this for **private** repos
+   (HTTP 403 mentioning "Upgrade"); that's expected — tell the user in
+   one line and move on, the gates still run on every push and PR.
+5. **Make sure the package knows its own URL.** In Scaffold mode with
+   `repository_url` passed to copier this is already true. Otherwise
+   replace the `<owner>/<repo>` placeholder in README.md ("Install") and
+   `src/<package_name>/data/SKILL.md` ("Installation"), and for a
+   copier-generated project also set `repository_url` in
+   `.copier-answers.yml` — that file is the answer store `copier update`
+   reads, so without this the next update would render the placeholder
+   back. Commit and push these edits.
+6. **Verify from GitHub, not from the checkout** — this is the command
+   every other machine (and every agent reading the bundled SKILL.md)
+   will run:
+   ```bash
+   uv tool install --reinstall "git+https://github.com/<owner>/<repo>.git" && <package_name> --version
+   ```
+   (`--reinstall` because step 1 installed the same tool from the local
+   path.) For a private repo this works over plain HTTPS because
+   `gh auth login` also configured git's credential helper; on a machine
+   where it wasn't done interactively (`gh auth login --with-token`, CI)
+   it needs `gh auth setup-git` once, or the SSH form
+   `git+ssh://git@github.com/<owner>/<repo>.git`. Both are documented in
+   the generated README.md and SKILL.md — don't re-explain them per
+   project.
+7. **Cut the first release** once the user is happy with what's on
+   `main`: `uv run scripts/release.py minor` (→ `v0.2.0`; `patch` for a
+   fix). It bumps `pyproject.toml`, dates the changelog, commits, tags
+   and pushes. From then on `uv tool install "git+…@v0.2.0"` is
+   reproducible anywhere and `uv tool upgrade <package_name>` moves other
+   machines forward. Later work: entries under `## [Unreleased]` as you
+   go, `release.py` when it should ship — never edit `version =` by hand.
 
 ## Non-negotiables (apply in both modes)
 
@@ -135,10 +249,31 @@ skipped under time pressure — check them explicitly:
 - Errors are raised as `CliError` subclasses with a stable `code`, and follow
   the exit-code table in `reference/conventions.md` — never a bare
   `sys.exit(1)` or an unstructured stack trace as the user-facing failure.
+  Every command is wrapped in `@output.guard` (which is also what turns an
+  unmapped exception into an `UNEXPECTED` JSON envelope); human errors go
+  to stderr, stdout carries data only.
+- A bare `<cli>` or `<cli> <group>` prints help and exits 0 — groups are
+  made with `output.group(...)`; don't reintroduce `typer.Typer(...)` or
+  `no_args_is_help=True` (Click exits 2 on that).
+- External services are reached only through a `providers.HttpProvider`
+  subclass (or a `providers/` module raising the same `ProviderError` /
+  `AuthRequired`) — never `httpx`/`requests` calls sprinkled through
+  `core/` or `commands/`.
 - No secret ever gets written to project-local config (`.{{package}}/config.toml`
   is safe to commit). Secrets only live in the OS keychain or env vars.
-- `doctor` and the bundled `skills/<package_name>/SKILL.md` are not optional
-  extras — every generated/refactored CLI ships both.
+- `doctor` and the bundled `data/SKILL.md` are not optional extras —
+  every generated/refactored CLI ships both. The SKILL.md stays
+  conventions-only: never add a command list to it, the command's
+  docstring is its documentation (that's what a bare `<cli>` renders).
+- The quality gates are part of the package, not of CI alone:
+  `fail_under` coverage in `pyproject.toml` (raise it, never lower it),
+  ruff's `S` (security) rules, and the `audit` CI job (OSV-Scanner over
+  `uv.lock`). A refactored project gets all three.
+- The package is installable with `uv tool install "git+<repo-url>"` and
+  its README.md + bundled SKILL.md carry that exact command with the real
+  URL, not a placeholder — see "Publish to GitHub". A CLI that only runs
+  from its own checkout hasn't met the "installed once, used from any
+  project" premise in `reference/architecture.md`.
 - Run `scripts/install_hooks.sh` once per checkout (`.git/hooks/` isn't
   versioned). It installs a non-blocking pre-commit warning
   (`scripts/check_command_docstrings.py`) for command docstrings drifting

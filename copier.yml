@@ -11,6 +11,7 @@ _exclude:
   - ".svn"
   - "{% if not include_auth %}src/{{ package_name }}/commands/auth.py{% endif %}"
   - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
+  - "{% if not include_auth %}tests/test_auth.py{% endif %}"
 
 package_name:
   type: str
@@ -42,5 +43,5 @@ include_auth:
 
 repository_url:
   type: str
-  help: "GitHub repo URL once pushed (e.g. https://github.com/you/mycli) — leave blank if not created yet, fill in later in README.md/SKILL.md"
+  help: "GitHub repo URL this package will live at (e.g. https://github.com/you/mycli; the skill creates it as a private repo after generation) — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
   default: ""

@@ -31,7 +31,13 @@ order before moving to the next item.
 5. **Structured errors + fixed exit codes.**
    Fail if failures are bare `sys.exit(1)`, uncaught exceptions as the
    user-facing failure, or ad-hoc messages. Introduce `CliError` subclasses
-   and the exit-code table from `conventions.md`.
+   and the exit-code table from `conventions.md`, wrap every command in
+   `@output.guard` (unmapped exceptions → `UNEXPECTED` envelope), send
+   human errors to stderr, and make a bare `<cli>` / `<cli> <group>` print
+   help with exit 0 (`output.group`), not a "Missing command" error.
+   External calls go through a `providers.HttpProvider` subclass so
+   network/HTTP failures come out as `PROVIDER_ERROR` / `AUTH_REQUIRED`
+   instead of a `requests` traceback.
 
 6. **`doctor` command exists.**
    Fail if there's no single command that checks environment/config/auth
@@ -55,19 +61,36 @@ order before moving to the next item.
    on a specific shell's builtins. Replace with `pathlib`/`shutil`; use
    `platformdirs` for user-level config location.
 
-10. **Version compatibility declared.**
+10. **Version compatibility declared — and enforced.**
     Fail if a project consuming this CLI has no way to declare
-    `min_version`. Add `[cli] min_version` to the project config model.
+    `min_version`, or declares it but nothing checks it. Add `[cli]
+    min_version` to the project config model, `services.check_cli_compat`
+    to `load_config`, and `scripts/release.py` + `CHANGELOG.md` so the
+    version actually moves (a static `version = "0.1.0"` forever makes the
+    check meaningless).
 
-11. **Bundled agent skill.**
+11. **Bundled agent skill + quality gates.**
     Fail if there's no `src/<package_name>/data/SKILL.md` (bundled as
-    package data, not just sitting in the source repo) describing
-    discovery, installation, init, auth, safety and error-inspection for
-    an agent driving this CLI. Add it last, once the command surface it
-    describes is stable.
+    package data, not just sitting in the source repo) with the
+    conventions an agent needs — install, `--json`, exit codes,
+    credentials, dry-run/confirm — and *no* command list (commands come
+    from docstrings via a bare `<cli>`; fail if any docstring is missing
+    or stale). Also fail if `pyproject.toml` has no coverage
+    `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
+    job — copy all three from the template.
+
+12. **Installable from GitHub.**
+    Fail if `uv tool install "git+<repo-url>"` doesn't produce a working
+    command on a clean machine — no GitHub repo at all, no `[build-system]`
+    in `pyproject.toml`, package data (the bundled SKILL.md) not shipped in
+    the wheel, or README.md / `data/SKILL.md` still carrying an
+    `<owner>/<repo>` placeholder instead of the real URL. Fix via
+    SKILL.md's "Publish to GitHub" section (private repo by default; ask
+    before creating anything). This is the item that makes the previous
+    eleven usable from anywhere but the dev checkout.
 
 ## Reporting the audit
 
 Before changing code, summarize findings as a short pass/fail list against
-these eleven items — this tells the user (and you) exactly how much work
+these twelve items — this tells the user (and you) exactly how much work
 the refactor is and in what order, before any file gets touched.

@@ -1,98 +1,74 @@
 ---
 name: {{ package_name }}
-description: Use the {{ package_name }} CLI to manage this project and run its operations. Invoke when the task involves this project's status, configuration, credentials, or its `run` operation.
+description: Conventions for driving the {{ package_name }} CLI from an agent — install, JSON output, exit codes, credentials, destructive-command gating. Invoke when a task involves this project's operations.
 ---
 
 # {{ package_name }}
 
-Use `{{ package_name }}` to manage this project and execute its operations.
+Everything command-specific is in the CLI itself — run `{{ package_name }}`
+with no arguments for version + command list, `{{ package_name }} <command>
+--help` for details. This document only covers what `--help` can't tell
+you. If you can run the CLI but not read files, `{{ package_name }} --ai`
+prints this document.
 
-If you can run the CLI but cannot read files from this repository (e.g. a
-sandbox with no filesystem access to the skill), run
-`{{ package_name }} --ai` to print this document to stdout instead.
-
-## Installation (if `{{ package_name }}` is not found on this machine)
-
-This skill can end up on a machine (synced skills directory, dotfiles, a
-fresh sandbox) before the CLI itself is installed there. If running
-`{{ package_name }} --version` fails, install it — no PyPI publish required:
+## Install (if `{{ package_name }} --version` fails)
 
 ```bash
 {% if repository_url -%}
 uv tool install "git+{{ repository_url }}.git"
 {%- else -%}
-uv tool install "git+<this project's GitHub URL>.git"
+uv tool install "git+https://github.com/<owner>/<repo>.git"
 {%- endif %}
 ```
 
-This works identically on macOS, Linux and Windows. Do not attempt to
-build or run this project from source unless explicitly asked to develop
-it — installing the published tool is the correct path for using it.
+Same command on macOS, Linux and Windows; `uv tool upgrade {{ package_name }}`
+updates it. Do not run from source unless asked to develop the CLI.
 
-## Discovery
+The repository may be private. On an auth error (`Authentication failed`,
+`could not read Username`, `Repository not found`) do not ask for a token:
+run `gh auth status`; if it passes, `gh auth setup-git` and retry; if not,
+ask the user to run `gh auth login`. With SSH keys configured, this works
+without any of that:
 
-Always start with:
+```bash
+{% if repository_url -%}
+uv tool install "git+ssh://git@github.com/{{ repository_url | replace('https://github.com/', '') }}.git"
+{%- else -%}
+uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
+{%- endif %}
+```
 
-    {{ package_name }} --help
+## Conventions
 
-For project state:
-
-    {{ package_name }} status --json
-
-For diagnostics:
-
-    {{ package_name }} doctor --json
-
-## Project initialization
-
-If the current directory is not initialized:
-
-    {{ package_name }} init --non-interactive
-
-## Authentication
-
-Never ask the user to paste credentials into command arguments.
-
-Check first:
-
-    {{ package_name }} auth status --json
-
-If authentication is required:
-
-    {{ package_name }} auth login
-
-## Output
-
-Prefer `--json` when consuming command output programmatically. Do not parse
-human-readable terminal output when JSON output is available.
-
-## Safety: destructive commands
-
-Any command documented below as destructive/irreversible supports
-`--dry-run` (preview only, no changes) and requires `--confirm` to run
-non-interactively. Always:
-
-1. Run it with `--dry-run` first and show the user what it would do.
-2. Get explicit user sign-off before re-running it for real with
-   `--confirm --non-interactive`.
-
-Never chain a destructive command straight to `--confirm --non-interactive`
-without a human having seen and approved the dry-run output first — that
-defeats the point of the gate. (This template ships no destructive command
-by default; update this section with the real ones as they're added.)
+- **`--json` on every command.** Parse stdout; never scrape human output.
+  stdout is data only, stderr is diagnostics.
+- **Project-aware.** Commands find the project by walking up from the
+  current directory, or take `--project PATH`. Not initialized →
+  `{{ package_name }} init --non-interactive`.
+- **`--non-interactive`** on anything that could prompt. It fails with a
+  structured error instead of hanging.
+- **Credentials** live in the OS keychain or env vars
+  (`{{ package_name.upper() }}_<PROVIDER>_<FIELD>`), never in arguments or
+  config. Check `auth status --json`; log in with `auth login`; never ask
+  the user to paste a secret into a command line.
+- **Destructive commands** are the ones whose `--help` shows `--dry-run`
+  and `--confirm`. Always: run with `--dry-run`, show the user, get
+  explicit sign-off, then `--confirm --non-interactive`. Never chain
+  straight to `--confirm` without a human having seen the dry-run.
+- **`doctor --json`** first when something looks off — it reports
+  project, config, version compatibility and credential readiness.
 
 ## Errors
 
-Inspect, in this order, before retrying:
+Error envelope: `{"ok": false, "error": {"code", "message", "action"}}`.
+Read exit code → `error.code` → `error.action` (the concrete next command).
 
-1. process exit code
-2. JSON `error.code`
-3. JSON `error.action`
+    0  ok
+    1  general (UNEXPECTED = a bug: re-run with --verbose, report; ABORTED = user said no)
+    2  invalid arguments
+    3  auth required          → {{ package_name }} auth login
+    4  project not initialized → {{ package_name }} init
+    5  provider error (network / external service; already retried) → retry later
+    6  CLI too old for this project → uv tool upgrade {{ package_name }}
 
-Exit codes:
-
-    0  Success
-    1  General error
-    2  Invalid arguments
-    3  Authentication error
-    4  Project not initialized
+Only exit 5 is worth an automatic retry.

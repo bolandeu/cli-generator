@@ -9,7 +9,7 @@ from ..core import services
 from ..core.errors import InvalidArguments
 from ..core.models import ProjectConfig
 
-app = typer.Typer(help="Manage project configuration.")
+app = output.group("Manage project configuration.")
 
 
 @app.command("list")

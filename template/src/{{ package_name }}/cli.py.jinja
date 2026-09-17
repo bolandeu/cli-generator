@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from importlib import resources
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as pkg_version
 
 import typer
 
+from . import output
 {% if include_auth -%}
 from .commands import auth, doctor, init, run, skill, status
 from .commands import config as config_cmd
@@ -13,13 +12,16 @@ from .commands import config as config_cmd
 from .commands import config as config_cmd
 from .commands import doctor, init, run, skill, status
 {%- endif %}
+from .core.version import DEV_VERSION, installed_version, package_summary
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
+# A bare `<cli>` is the discovery entry point for humans and agents alike:
+# name + version + description, then every command with the first line of
+# its docstring. No `no_args_is_help` (that exits 2) — main_options() below
+# prints this and exits 0. Shell completion stays enabled.
 app = typer.Typer(
-    help="Project-aware automation CLI.",
-    no_args_is_help=True,
-    add_completion=False,
+    help=f"{_PACKAGE_NAME} {installed_version() or DEV_VERSION} — {package_summary() or 'project-aware automation CLI'}"
 )
 
 app.add_typer(config_cmd.app, name="config")
@@ -37,11 +39,7 @@ app.command(name="run")(run.run)
 def _version_callback(value: bool) -> None:
     if not value:
         return
-    try:
-        current = pkg_version(_PACKAGE_NAME)
-    except PackageNotFoundError:
-        current = "0.0.0-dev"
-    typer.echo(current)
+    typer.echo(installed_version() or DEV_VERSION)
     raise typer.Exit()
 
 
@@ -59,7 +57,7 @@ def _ai_callback(value: bool) -> None:
     raise typer.Exit()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main_options(
     ctx: typer.Context,
     project: str = typer.Option(None, "--project", help="Path to the project root."),
@@ -86,6 +84,8 @@ def main_options(
     ctx.obj["verbose"] = verbose
     ctx.obj["non_interactive"] = non_interactive
     ctx.obj["dry_run"] = dry_run
+    output.configure_logging(verbose)
+    output.help_if_no_command(ctx)
 
 
 def main() -> None:

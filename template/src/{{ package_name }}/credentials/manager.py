@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 import keyring
 import keyring.errors
+from keyring.backends import fail
 
 from ..core.errors import CredentialStoreUnavailable
 
 # Derived from this package's own name so the module needs no templating.
 _PACKAGE_NAME = __name__.split(".")[0]
+log = logging.getLogger(__name__)
 
 # A "credential" is a small dict of named fields stored as one JSON blob per
 # provider in the OS keychain. `provider` is whatever identifies the
@@ -53,11 +56,28 @@ def get_credential(provider: str, *, env_fields: list[str] | None = None) -> dic
     try:
         stored_raw = keyring.get_password(_service_name(provider), provider)
     except keyring.errors.KeyringError as exc:
-        raise CredentialStoreUnavailable(provider, str(exc)) from exc
+        # A missing/locked keychain (headless Linux, CI) must not block the
+        # env-var path — that's the whole point of having a fallback.
+        log.warning("OS credential store unavailable (%s); using environment variables only", exc)
+        stored_raw = None
     stored: dict[str, str] = json.loads(stored_raw) if stored_raw else {}
     fields_to_check = env_fields or list(stored.keys()) or ["api_key"]
     merged = {**stored, **read_fields_from_env(provider, fields_to_check)}
     return merged or None
+
+
+def store_backend() -> str | None:
+    """Name of the active keyring backend, or None when there's no usable one.
+
+    `keyring` falls back to its `fail` backend on a machine without a
+    secret service (headless Linux, some containers) — reads and writes
+    then raise, and only env vars can supply credentials. `doctor` reports
+    this so it isn't discovered from a confusing `auth login` failure.
+    """
+    backend = keyring.get_keyring()
+    if isinstance(backend, fail.Keyring):
+        return None
+    return f"{type(backend).__module__}.{type(backend).__name__}"
 
 
 def store_credential(provider: str, fields: dict[str, str]) -> None:

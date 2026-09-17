@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from rich.console import Console
 
+# Data goes to stdout; errors and diagnostics go to stderr, so
+# `<cli> status > out.txt` never captures an "Error: ..." line as data.
 console = Console()
+err_console = Console(stderr=True)
 
 
 def echo(message: str) -> None:

@@ -7,9 +7,24 @@
 ```bash
 uv sync
 uv run {{ package_name }} --help
-uv run pytest
+uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
 scripts/install_hooks.sh  # installs a pre-commit hook warning on stale --help docstrings
 ```
+
+`pytest` fails below the coverage floor in `pyproject.toml`; `ruff` includes
+the security (`S`) rules; CI additionally scans `uv.lock` for known
+vulnerabilities (OSV-Scanner) — the same as `osv-scanner --lockfile=uv.lock`
+locally.
+
+## Release
+
+```bash
+uv run scripts/release.py patch   # or minor / major
+```
+
+Bumps the version in `pyproject.toml`, dates the `## [Unreleased]` section
+of `CHANGELOG.md`, commits, tags `v<version>` and pushes. Keep the changelog
+current as you work; the release script only stamps it.
 
 ## Install
 
@@ -30,9 +45,35 @@ uv tool install "git+https://github.com/<owner>/<repo>.git"
 {%- endif %}
 ```
 
-Pin a version/branch by appending `@<tag-or-branch>` to the URL. This is
-also how an AI agent bootstraps this CLI on a fresh machine/sandbox where
-it isn't installed yet — see `src/{{ package_name }}/data/SKILL.md`.
+Pin a release by appending `@v<version>` (a tag cut by `scripts/release.py`)
+to the URL, or a branch/commit the same way. This is also how an AI agent
+bootstraps this CLI on a fresh machine/sandbox where it isn't installed
+yet — see `src/{{ package_name }}/data/SKILL.md`.
+
+**Private repo?** The command above is unchanged — `uv` runs git under the
+hood, so it authenticates the same way `git clone` does. On a machine
+where the install is refused with an auth error, do one of these once:
+
+```bash
+gh auth login          # interactive login also sets up git's credential helper
+gh auth setup-git      # only needed if gh was logged in with --with-token / in CI
+```
+
+or use the SSH form instead of HTTPS:
+
+```bash
+{% if repository_url -%}
+uv tool install "git+ssh://git@github.com/{{ repository_url | replace('https://github.com/', '') }}.git"
+{%- else -%}
+uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
+{%- endif %}
+```
+
+**Update** an installed copy to the latest commit:
+
+```bash
+uv tool upgrade {{ package_name }}
+```
 
 After install, the command `{{ package_name }}` is available globally, on
 macOS, Linux and Windows alike (see `architecture.md` in the cli-generator
@@ -55,7 +96,13 @@ This project follows a fixed CLI architecture:
 
 Run `{{ package_name }} doctor` to check environment/config/auth readiness, and
 `{{ package_name }} --help` for the full command surface. Every command supports
-`--json` for machine/agent consumption.
+`--json` for machine/agent consumption; errors are structured (`error.code`,
+fixed exit codes, `error.action` telling you what to do next) and go to
+stderr in human mode, so stdout is always safe to pipe.
+
+A project can require a minimum CLI version in its `.{{ package_name }}/config.toml`
+(`[cli] min_version = "..."`); an older install refuses with exit 6 and
+`uv tool upgrade {{ package_name }}` fixes it.
 
 See `src/{{ package_name }}/data/SKILL.md` for the agent-facing usage guide
 bundled with this package — install it into an AI tool with

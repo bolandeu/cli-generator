@@ -33,18 +33,57 @@ command the caller (human or agent) can run to unblock itself.
 
 ```
 0  Success
-1  General error
+1  General error (incl. UNEXPECTED and ABORTED)
 2  Invalid arguments
 3  Authentication error
 4  Project not initialized
+5  Provider error (external service: network, timeout, 5xx, 429, bad body)
+6  CLI too old for this project (cli.min_version)
 ```
 
-Implemented as `CliError` subclasses in `core/errors.py`:
-`ProjectNotInitialized` → 4, `AuthRequired` → 3, `InvalidArguments` → 2,
-anything else unexpected → let it be a plain `CliError("...", exit_code=1)`
-or, for truly unexpected exceptions, let them surface as tracebacks (exit
-1) rather than swallowing them silently — only expected, named failure
-modes get a `CliError`.
+## Error codes
+
+All `CliError` subclasses live in `core/errors.py`; don't invent a code
+per project when one of these fits:
+
+| `error.code`                   | exit | raised by |
+|--------------------------------|------|-----------|
+| `INVALID_ARGUMENTS`            | 2    | any command; also `--non-interactive` without `--confirm` |
+| `AUTH_REQUIRED`                | 3    | a provider getting 401/403, or a service with no credential |
+| `PROJECT_NOT_INITIALIZED`      | 4    | `services.require_project_root` |
+| `PROVIDER_ERROR`               | 5    | `providers.HttpProvider` after retries; carries `provider` and `status` |
+| `CLI_TOO_OLD`                  | 6    | `services.load_config` when installed < `cli.min_version` |
+| `CREDENTIAL_STORE_UNAVAILABLE` | 1    | `credentials.manager` on write/delete when the keychain is unusable |
+| `ABORTED`                      | 1    | the user answered "no" to `require_confirmation` |
+| `UNEXPECTED`                   | 1    | `output.guard` — any exception nobody mapped |
+
+`UNEXPECTED` is the safety net, not a design: every command goes through
+`output.guard`, which turns an escaped exception into this envelope so a
+`--json` caller still gets JSON (with `action: "Re-run with --verbose..."`
+— the traceback goes to stderr only under `--verbose`). When one shows up
+repeatedly for the same cause, that cause deserves its own `CliError`.
+
+## stdout / stderr
+
+- **stdout is data only**: the JSON envelope (success *or* error) under
+  `--json`; the human rendering of a *successful* result otherwise.
+- **stderr is everything else**: human-mode `Error:` lines, `--verbose`
+  progress (`output.vecho`), `logging` output (WARNING and above always,
+  DEBUG under `--verbose`), tracebacks.
+
+So `<cli> status > out.json` never captures an error as data, and an agent
+under `--json` parses stdout and reads stderr only to debug. Under
+`--json`, the error envelope stays on stdout on purpose — one stream to
+parse, and `ok: false` + exit code say it's an error.
+
+## No-args = help, not a usage error
+
+`<cli>` alone and `<cli> <group>` alone (`<cli> config`, `<cli> auth`)
+print their help and exit **0**. Click/Typer's default is a "Missing
+command" usage error with exit 2 — wrong for a CLI agents explore by
+poking at it. The template's root callback and `output.group()` implement
+this; every new group must be created with `output.group(...)`, not
+`typer.Typer(...)`.
 
 ## Global options every command inherits
 
@@ -88,6 +127,14 @@ subcommand: `<cli> --json status`) and a local option on every leaf command
 (after it: `<cli> status --json`) — an agent shouldn't have to know which
 form a given CLI accepts. See the template's `output.guard`/`output.JsonOption`
 for how this is kept from being copy-pasted per command.
+
+## Discovery: a bare `<cli>` is the command reference
+
+`<cli>` with no arguments prints `<name> <version> — <description>`,
+then every command with the first line of its docstring; `<cli> <command>
+--help` prints the full docstring and options. That is the command
+documentation — it can't drift from the code because it's rendered from
+it. Nothing else (SKILL.md, README) lists commands.
 
 ## Two ways an agent gets usage docs without prior context
 

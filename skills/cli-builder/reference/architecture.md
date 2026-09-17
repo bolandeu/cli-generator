@@ -42,6 +42,23 @@ installed on a machine before the CLI binary itself is — e.g. a synced
 If `repository_url` was left blank at generation time, both files carry a
 `<owner>/<repo>` placeholder to fill in once the repo exists.
 
+The repo is **private by default**. These CLIs usually wrap one person's
+accounts and providers, and nothing about the install path needs a public
+repo: `uv tool install` shells out to git, so it authenticates exactly like
+`git clone` does — over HTTPS through the credential helper that
+`gh auth login` configures (`gh auth setup-git` if `gh` was logged in
+non-interactively), or over SSH with the
+`git+ssh://git@github.com/<owner>/<repo>.git` form. Both the generated
+README.md and SKILL.md say this, so a fresh machine or an agent in a
+sandbox knows what to do when the plain HTTPS install is refused with an
+auth error. Later updates on any machine are `uv tool upgrade <pkg>`.
+
+Creating that repo is part of the skill's job (SKILL.md, "Publish to
+GitHub"): after the package verifies, it offers to `gh repo create
+--private --source=. --push` and then proves the from-GitHub install
+works — in both Scaffold and Refactor mode, never without the user's
+go-ahead.
+
 ## 2. Four layers
 
 ```
@@ -50,7 +67,7 @@ CLI (commands/)      — argument parsing, --json/--help, nothing else
 Core (core/)         — services, models, errors: the real business logic
   ↓
 Providers / Filesystem / Credentials
-  — providers/    external APIs, LLMs, etc. (Provider protocol)
+  — providers/    external APIs, LLMs, etc. (subclasses of HttpProvider)
   — core/services  project filesystem state (.{{package}}/config.toml)
   — credentials/   OS keychain + env vars, never project files
 ```
@@ -58,6 +75,53 @@ Providers / Filesystem / Credentials
 A command function should read like: parse → call one service function →
 render result. If a command has more than ~15 lines that aren't argument
 handling, that logic belongs in `core/`.
+
+### Providers: one `HttpProvider` subclass per external service
+
+`providers/http.py` is the base for anything that speaks HTTP. A subclass
+sets `name` and `base_url`, overrides `auth_headers()` (reading the secret
+from `credentials.manager`, never from config) and adds typed methods that
+call `self.request(...)` / `self.get_json(...)`. The base already does
+what every integration otherwise reinvents slightly differently:
+
+- 401/403 → `AuthRequired` (exit 3, `action` names the login command)
+- 429 / 502 / 503 / 504, timeouts and connection errors → retried with
+  exponential backoff (honoring `Retry-After`), then `ProviderError` (exit 5)
+- other 4xx/5xx → `ProviderError` with the HTTP `status` in the envelope
+- a non-JSON body from `get_json` → `ProviderError`
+- a `User-Agent` of `<cli>/<version>` and a 30 s timeout, so a stuck
+  service can't hang an agent forever
+
+`transport` is a test seam for `httpx.MockTransport` — the template's
+`tests/test_providers.py` shows the pattern.
+
+Non-HTTP integrations (a vendor SDK, a local binary, a database driver)
+still live under `providers/` and still speak the same error language,
+they just don't get the base class. The contract is the same mappings,
+done at the provider boundary so nothing above it ever sees a vendor
+exception:
+
+```python
+# providers/ffmpeg.py — sketch, not in the template
+class FfmpegProvider:
+    name = "ffmpeg"
+
+    def transcode(self, src: Path, dst: Path) -> None:
+        exe = shutil.which("ffmpeg")
+        if exe is None:  # "not installed" is a provider failure with a fix
+            raise ProviderError(self.name, "ffmpeg not found on PATH", action="Install ffmpeg and retry.")
+        result = subprocess.run([exe, "-i", str(src), str(dst)], capture_output=True, text=True)
+        if result.returncode != 0:  # vendor failure → ProviderError, never a traceback
+            raise ProviderError(self.name, result.stderr.strip()[-200:])
+
+# A vendor SDK: wrap its exceptions the same way — its auth error →
+# AuthRequired(self.name); its rate-limit/outage errors → ProviderError(...,
+# action="Retry later."); anything else it raises → ProviderError with the
+# message. Retry only if the SDK doesn't already.
+```
+
+Test such a provider by injecting the thing it calls (`subprocess.run`,
+the SDK client) exactly like `transport` on `HttpProvider`.
 
 ## 3. Two run modes
 
@@ -117,7 +181,18 @@ Every command supports `--json`. Human output is for people at a terminal;
 JSON output is the actual contract agents integrate against — see
 `conventions.md` for the exact envelope. `--help` is also part of the API:
 it must state exit codes and be safe for an agent to parse cold, with no
-prior context.
+prior context — which is also why a bare `<cli>` or `<cli> <group>` prints
+help and exits 0 instead of a usage error, with `<name> <version> —
+<description>` as the header so one call answers "what is this and what
+can it do".
+
+That contract holds even when something goes wrong that nobody planned
+for: `output.guard` wraps every command, so an escaped exception becomes
+an `UNEXPECTED` JSON envelope (exit 1) rather than a traceback where an
+agent expected JSON. Diagnostics never share stdout with data: human
+errors, `--verbose` progress and `logging` all go to stderr
+(`output.configure_logging` turns `--verbose` into DEBUG-level logging,
+which is where a provider's request/retry lines show up).
 
 A command function's docstring *is* its `--help` text (Typer renders it
 directly), which makes it easy to edit a command's body and forget the
@@ -139,19 +214,41 @@ can't get what it needs without prompting.
 lets the exact same package install and run unmodified on macOS, Linux and
 Windows.
 
-## 8. Version compatibility
+## 8. Version compatibility and releases
 
-A project's `.{{package_name}}/config.toml` may declare
-`[cli] min_version = "..."`. Prefer range checks (`>=1.2,<2.0`) over pinning
-an exact CLI version — projects outlive any single CLI release.
+A project's `.{{package_name}}/config.toml` declares
+`[cli] min_version = "..."` — the oldest CLI release that understands
+this project (its config fields, the commands its automation calls).
+`services.load_config` enforces it: an older installed CLI fails with
+`CLI_TOO_OLD` (exit 6, `action: uv tool upgrade <cli>`), and `doctor`
+reports it as a `cli_compat` check instead of failing. It's a lower
+bound, not a pin — projects outlive any single CLI release, and an
+upgrade is always the fix. A bare source run (nothing installed, not even
+editable) has no version and skips the check.
+
+For `min_version` to mean anything, versions have to actually move:
+`version` in `pyproject.toml` is bumped only by `scripts/release.py
+patch|minor|major`, which also dates the `## [Unreleased]` section of
+`CHANGELOG.md`, commits, tags `v<version>` and pushes with tags. Add
+changelog entries as you go, not at release time. A tag is what makes
+`uv tool install "git+<url>@v1.2.0"` reproducible on another machine
+and what `--version` / `doctor` report — between releases every machine
+on `main` says the same version, so cut one whenever a project's
+`min_version` needs to be able to refer to the change.
 
 ## 9. Every package ships its own agent skill
 
 `src/{{package_name}}/data/SKILL.md`, bundled into the installed package
 (not just the source repo) so `<cli> --ai` and `<cli> skill install` can
-serve it from anywhere. Describes discovery (`--help`, `status --json`,
-`doctor --json`), installation, init, auth, output preference, error
-inspection and — see below — which operations need explicit confirmation.
+serve it from anywhere. It is **conventions only** — install command,
+`--json`, exit codes, credential rules, the dry-run/confirm gate — and
+deliberately never lists commands: a bare `<cli>` prints name, version,
+description and every command with the first line of its docstring, and
+`<cli> <command> --help` the rest. Listing commands in the skill would
+duplicate that into an agent's context and go stale the first time a
+command is added; the docstrings can't go stale because they *are* the
+help. Consequence: adding a command means writing a good docstring, not
+editing SKILL.md.
 
 ## 10. Safe vs. dangerous operations — confirm gate and dry-run
 
@@ -183,7 +280,8 @@ Output shape must not depend on whether stdout is a TTY or a pipe: no
 interactive pagers (`less`, `click.echo_via_pager`), no prompts outside of
 `require_confirmation`'s explicit gate, no output that only appears when a
 human is watching. An agent piping a command's output must see exactly
-what a human redirecting it to a file would see.
+what a human redirecting it to a file would see — and never an error
+message mixed into it (those go to stderr, see `conventions.md`).
 
 For a command that returns a list of records (not in the minimal
 template, but common once one is added — e.g. `<cli> resource list`),

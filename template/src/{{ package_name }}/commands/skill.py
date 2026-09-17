@@ -7,7 +7,7 @@ import typer
 
 from .. import output
 
-app = typer.Typer(help="Install this CLI's agent skill for AI tools.")
+app = output.group("Install this CLI's agent skill for AI tools.")
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
@@ -57,6 +57,6 @@ def install(
 
     output.emit_success(
         ctx,
-        {"tool": tool, "scope": scope, "path": str(target_path)},
+        {"tool": tool, "scope": scope, "path": str(target_path.resolve())},
         render_human=lambda d: output.human.echo(f"Installed skill for '{d['tool']}' ({d['scope']}) at {d['path']}"),
     )

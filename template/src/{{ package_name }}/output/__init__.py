@@ -1,28 +1,33 @@
 from __future__ import annotations
 
 import functools
+import logging
+import sys
 from collections.abc import Callable
 
 import typer
 
-from ..core.errors import CliError, InvalidArguments
+from ..core.errors import Aborted, CliError, InvalidArguments
 from . import human
 from . import json as json_output
 
 __all__ = [
-    "human",
-    "emit_success",
+    "ConfirmOption",
+    "DryRunOption",
+    "JsonOption",
+    "NonInteractiveOption",
+    "QuietOption",
+    "VerboseOption",
+    "configure_logging",
     "emit_error",
+    "emit_success",
+    "group",
     "guard",
+    "help_if_no_command",
+    "human",
     "is_dry_run",
     "require_confirmation",
     "vecho",
-    "JsonOption",
-    "QuietOption",
-    "DryRunOption",
-    "ConfirmOption",
-    "VerboseOption",
-    "NonInteractiveOption",
 ]
 
 # Reusable local options: attach to any command so `<cli> <command> --json`
@@ -37,6 +42,49 @@ VerboseOption = typer.Option(False, "--verbose", help="Emit extra diagnostic out
 NonInteractiveOption = typer.Option(False, "--non-interactive", help="Never prompt; fail instead.")
 
 
+def configure_logging(verbose: bool) -> None:
+    """Route `logging` to stderr: DEBUG under --verbose, WARNING otherwise.
+
+    This is the diagnostics channel that also works under --json (stdout
+    stays pure data). Library debug output (httpx request lines, keyring
+    backend selection, ...) shows up under --verbose for free.
+    """
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.WARNING,
+        stream=sys.stderr,
+        format="%(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
+
+
+def help_if_no_command(ctx: typer.Context) -> None:
+    """Print the group's help and exit 0 when it was invoked without a subcommand.
+
+    Click's own no-args handling exits 2 (a usage *error*); a bare
+    `<cli>` or `<cli> auth` is a question, not a mistake, so it gets the
+    help text and a clean exit instead.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    # Typer's rich help renders straight to the console and returns "";
+    # plain click returns the text — handle both.
+    text = ctx.get_help()
+    if text:
+        typer.echo(text)
+    raise typer.Exit()
+
+
+def group(help_text: str) -> typer.Typer:
+    """Create a command group (`<cli> config ...`) with help-on-no-args behavior."""
+    app = typer.Typer(help=help_text)
+
+    @app.callback(invoke_without_command=True)
+    def _default(ctx: typer.Context) -> None:
+        help_if_no_command(ctx)
+
+    return app
+
+
 def emit_success(ctx: typer.Context, payload: dict, render_human: Callable[[dict], None]) -> None:
     if ctx.obj.get("json"):
         json_output.emit({"ok": True, **payload})
@@ -48,9 +96,9 @@ def emit_error(ctx: typer.Context, error: CliError) -> None:
     if ctx.obj.get("json"):
         json_output.emit({"ok": False, "error": error.to_dict()})
     else:
-        human.console.print(f"[red]Error:[/red] {error.message}")
+        human.err_console.print(f"[red]Error:[/red] {error.message}")
         if error.action:
-            human.console.print(f"[dim]{error.action}[/dim]")
+            human.err_console.print(f"[dim]{error.action}[/dim]")
     raise typer.Exit(code=error.exit_code)
 
 
@@ -68,9 +116,13 @@ def is_dry_run(ctx: typer.Context) -> bool:
 
 
 def vecho(ctx: typer.Context, message: str) -> None:
-    """Print a diagnostic line, only under --verbose and only in human mode."""
+    """Print a progress line for a human, only under --verbose and only in human mode.
+
+    For diagnostics that should also reach --json callers (on stderr), use
+    `logging.getLogger(__name__).debug(...)` instead — see configure_logging.
+    """
     if ctx.obj.get("verbose") and not ctx.obj.get("json") and not ctx.obj.get("quiet"):
-        human.console.print(f"[dim]{message}[/dim]")
+        human.err_console.print(f"[dim]{message}[/dim]")
 
 
 def require_confirmation(ctx: typer.Context, description: str, confirm: bool) -> None:
@@ -80,24 +132,28 @@ def require_confirmation(ctx: typer.Context, description: str, confirm: bool) ->
     --dry-run preview — dry-run should short-circuit earlier and skip this
     entirely). `--confirm` skips the prompt for scripts/agents that already
     got human sign-off; `--non-interactive` without `--confirm` fails
-    loudly instead of hanging on a prompt an agent can't answer.
+    loudly instead of hanging on a prompt an agent can't answer. Declining
+    the prompt raises `Aborted`, so it's reported like any other CliError
+    (JSON envelope under --json, exit 1).
     """
     if confirm:
         return
     if ctx.obj.get("non_interactive"):
         raise InvalidArguments(f"{description} requires --confirm when --non-interactive is set.")
     if not typer.confirm(f"{description}. Continue?"):
-        human.console.print("[yellow]Aborted.[/yellow]")
-        raise typer.Exit(code=1)
+        raise Aborted(description)
 
 
 def guard(func: Callable) -> Callable:
-    """Route any CliError raised by a command through emit_error.
+    """Route any error raised by a command through emit_error.
 
-    Also merges any command-local --json/--quiet/--verbose/--non-interactive
-    option into ctx.obj, so both `<cli> --json status` (global, before the
-    subcommand) and `<cli> status --json` (local, after it) work the same
-    way. Keeps commands free of repeated try/except boilerplate.
+    Expected failures (`CliError`) are reported with their own code and
+    exit status. Anything else — a bug, a library exception nobody mapped
+    yet — becomes an `UNEXPECTED` error (exit 1) so a `--json` caller still
+    gets a parseable envelope; the traceback goes to stderr under
+    --verbose. Also merges any command-local --json/--quiet/--verbose/
+    --non-interactive option into ctx.obj, so both `<cli> --json status`
+    and `<cli> status --json` work the same way.
     """
 
     @functools.wraps(func)
@@ -109,5 +165,18 @@ def guard(func: Callable) -> Callable:
             return func(ctx, *args, **kwargs)
         except CliError as exc:
             emit_error(ctx, exc)
+        except (typer.Exit, typer.Abort):
+            raise  # already a controlled exit — don't wrap it
+        except Exception as exc:
+            if ctx.obj.get("verbose"):
+                human.err_console.print_exception()
+            emit_error(
+                ctx,
+                CliError(
+                    "UNEXPECTED",
+                    f"{type(exc).__name__}: {exc}",
+                    action="Re-run with --verbose for the traceback; if it persists, report it with that output.",
+                ),
+            )
 
     return wrapper

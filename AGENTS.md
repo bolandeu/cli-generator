@@ -41,14 +41,31 @@ uvx copier copy . /tmp/cli-gen-test \
   --data package_name=demotool --data project_name="Demo" \
   --data description="d" --data author_name="A" --data include_auth=true \
   --defaults --trust -q
-cd /tmp/cli-gen-test && uv sync -q && uv run ruff check . && uv run pytest -q
+cd /tmp/cli-gen-test && uv sync -q && uv run ruff check . && uv run ruff format --check . \
+  && uv run ty check && uv run pytest -q
 ```
 
 Also regenerate once with `--data include_auth=false` and run the same
-`uv sync -q && uv run ruff check . && uv run pytest -q` — this branch drops
-`commands/auth.py` and `credentials/` via `copier.yml`'s templated
-`_exclude`, and it's easy to change `cli.py.jinja`/`commands/`/tests in a way
-that only the `include_auth=true` branch was ever exercised with.
+loop — this branch drops `commands/auth.py`, `credentials/` and
+`tests/test_auth.py` via `copier.yml`'s templated `_exclude`, and it's easy
+to change `cli.py.jinja`/`commands/`/tests in a way that only the
+`include_auth=true` branch was ever exercised with.
+
+`ruff format --check` runs on generated projects with the template's
+`line-length = 120`. To format template sources in place, run it with that
+config explicitly — `template/pyproject.toml.jinja` isn't a real
+`pyproject.toml`, so a bare `ruff format template/` silently uses the
+88-column default and rewraps every file:
+
+```bash
+uvx ruff format --line-length 120 template/src template/scripts
+```
+
+For the distribution + release path (`scripts/release.py`, tag pinning),
+verify against a local bare remote rather than assuming: `git init --bare
+/tmp/remote.git`, add it as `origin` in the generated project, run
+`uv run scripts/release.py patch`, then
+`uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
 
 For a change touching `.claude-plugin/plugin.json`, also run:
 
@@ -84,8 +101,22 @@ before (missing answers file, wrong `copier.yml` location).
   `<cli> --flag <command>`).
 - `include_auth=false` must actually remove the auth surface, not just the
   `keyring` dependency: `copier.yml`'s `_exclude` drops
-  `commands/auth.py`/`credentials/`, and `cli.py.jinja` conditionally skips
-  importing/registering `auth`. If you touch either, regenerate with
+  `commands/auth.py`/`credentials/`/`tests/test_auth.py`, `cli.py.jinja`
+  conditionally skips importing/registering `auth`, and `doctor.py`
+  detects the module at runtime (`importlib.util.find_spec`) instead of
+  being templated. If you touch any of these, regenerate with
   `include_auth=false` and run the full verify loop — this combination
   previously went untested and silently shipped a `ModuleNotFoundError` on
   `keyring` for anyone who picked "no auth".
+- `_exclude` patterns in `copier.yml` match the **rendered** path
+  (`tests/test_auth.py`), not the template file name
+  (`tests/test_auth.py.jinja`) — a pattern with `.jinja` matches nothing
+  and the file is silently generated anyway.
+- Typer ≥ 0.27 no longer depends on `click` (it ships its own parser and
+  `typer.Exit`/`typer.Abort` in `typer.exceptions`). Don't `import click`
+  in template code — it isn't installed in generated projects. Related:
+  `no_args_is_help=True` exits 2, which is why `cli.py.jinja` and
+  `output.group()` implement help-on-no-args by hand.
+- `output.guard` must re-raise `typer.Exit`/`typer.Abort` before its
+  catch-all `except Exception` — both subclass `RuntimeError`, so a plain
+  catch-all would turn every controlled exit into an `UNEXPECTED` error.
