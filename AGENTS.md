@@ -120,3 +120,10 @@ before (missing answers file, wrong `copier.yml` location).
 - `output.guard` must re-raise `typer.Exit`/`typer.Abort` before its
   catch-all `except Exception` — both subclass `RuntimeError`, so a plain
   catch-all would turn every controlled exit into an `UNEXPECTED` error.
+- Template release tags must be valid PEP 440 versions (`v1.1.0`,
+  `v1.2.0rc1`). copier silently ignores anything else (`v1.1.0-test`) when
+  picking the latest version, so `copier update` reports nothing to do.
+- `copier update` refuses to run on a dirty tree, so every artifact a tool
+  in the generated project writes must be in `template/.gitignore`
+  (`.coverage` from pytest-cov was missed once and blocked updates).
+  When adding a dev tool, run it once and check `git status` is clean.
