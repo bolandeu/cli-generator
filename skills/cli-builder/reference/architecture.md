@@ -369,7 +369,11 @@ the template implements it):
   branches never touch the same line, so they never conflict. The gate
   (below) requires one whenever something user-visible changed since the
   last tag — tooling-only changes (`uv.lock`, `.github/`, `scripts/`,
-  `tests/`, `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`) need none,
+  `tests/`, `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, and
+  `pyproject.toml` when its `[project]` table — name, version,
+  dependencies, scripts, optional-dependencies — is unchanged: `[tool.*]`
+  and `[dependency-groups]` are tooling; compared with `tomllib` against
+  the last tag, or HEAD in the pre-commit hook) need none,
   so the changelog stays about the package; the pre-commit hook
   (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it

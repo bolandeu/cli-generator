@@ -98,6 +98,25 @@ def needs_fragment(path: str) -> bool:
     return not any(path == entry or (entry.endswith("/") and path.startswith(entry)) for entry in NO_FRAGMENT_NEEDED)
 
 
+def project_table_changed(old: str | None, new: str | None) -> bool:
+    """Whether pyproject.toml's [project] table differs — the package metadata users get.
+
+    Everything else in pyproject.toml ([tool.*], [dependency-groups], build
+    settings) is tooling and needs no changelog fragment (standard §3).
+    Unreadable or missing on either side counts as changed.
+    """
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # a pre-commit hook's python3 older than 3.11
+        return True
+    if old is None or new is None:
+        return True
+    try:
+        return tomllib.loads(old).get("project") != tomllib.loads(new).get("project")
+    except tomllib.TOMLDecodeError:
+        return True
+
+
 class StepFailed(Exception):
     def __init__(self, output: str) -> None:
         super().__init__(output)
@@ -155,6 +174,15 @@ def _changed_since(tag: str) -> list[str]:
     return sorted(set(tracked + untracked))
 
 
+def _tooling_only_pyproject(path: str, tag: str) -> bool:
+    if path != "pyproject.toml":
+        return False
+    old = subprocess.run(
+        ["git", "show", f"{tag}:pyproject.toml"], cwd=ROOT, text=True, capture_output=True, check=False
+    )
+    return not project_table_changed(old.stdout if old.returncode == 0 else None, (ROOT / path).read_text())
+
+
 def check_fragment() -> str:
     # Looks at the working tree, not commits: `towncrier check` only sees
     # committed files, and agents run --check before committing.
@@ -166,8 +194,10 @@ def check_fragment() -> str:
         changed = _changed_since(last)
         if not changed:
             return f"nothing changed since {last}"
-        if not any(needs_fragment(path) for path in changed):
-            return f"only tooling changed since {last} ({', '.join(NO_FRAGMENT_NEEDED)})"
+        if not any(needs_fragment(path) for path in changed if not _tooling_only_pyproject(path, last)):
+            return (
+                f"only tooling changed since {last} ({', '.join(NO_FRAGMENT_NEEDED)}, pyproject.toml outside [project])"
+            )
         since = f"since {last}"
     else:
         since = "and there is no release tag yet"

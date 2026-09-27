@@ -64,3 +64,34 @@ def test_release_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     config = {"gate_extras": ["browser"], "release_commit": "chore(release): v{version}"}
     monkeypatch.setattr(release, "_tool", lambda name: config if name == "cli-generator" else {})
     assert (release.gate_extras(), release.release_commit_message("1.2.3")) == (["browser"], "chore(release): v1.2.3")
+
+
+BASE_PYPROJECT = """
+[project]
+name = "x"
+dependencies = ["httpx>=0.27"]
+
+[tool.ruff]
+line-length = 120
+"""
+
+
+@pytest.mark.parametrize("script", [release, hook], ids=["release", "pre-commit"])
+@pytest.mark.parametrize(
+    ("new", "changed"),
+    [
+        (BASE_PYPROJECT.replace("line-length = 120", "line-length = 100"), False),  # [tool.*] is tooling
+        (BASE_PYPROJECT + '\n[tool.cli-generator]\ngate_extras = ["x"]\n', False),
+        (BASE_PYPROJECT.replace('"httpx>=0.27"', '"httpx>=0.28"'), True),  # dependencies reach users
+        (BASE_PYPROJECT.replace('name = "x"', 'name = "rb-x"'), True),
+        (BASE_PYPROJECT + '\n[project.scripts]\nx = "x.cli:main"\n', True),
+        ("not [valid toml", True),
+    ],
+)
+def test_pyproject_needs_a_fragment_only_when_project_changes(script: ModuleType, new: str, changed: bool) -> None:
+    assert script.project_table_changed(BASE_PYPROJECT, new) is changed
+
+
+@pytest.mark.parametrize("script", [release, hook], ids=["release", "pre-commit"])
+def test_missing_pyproject_side_counts_as_changed(script: ModuleType) -> None:
+    assert script.project_table_changed(None, BASE_PYPROJECT) is True
