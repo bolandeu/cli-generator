@@ -185,7 +185,7 @@ template, `_commit` is the template release it was last synced to):
    release can add a gate (coverage floor, a lint rule) that the
    project's existing code now fails — fix the code, don't lower the
    gate. Add a changelog fragment naming the template version
-   (`uv run towncrier create +template-vX.Y.Z.changed.md -c "..."`).
+   (`uv run towncrier create +template-update.changed.md -c "Template vX.Y.Z: ..."`).
 4. **Crossing template v1.1.0** (the release standard: version from the
    git tag, towncrier fragments). Before `copier update`: if the
    project's current `version = "X.Y.Z"` has no tag, tag the current
