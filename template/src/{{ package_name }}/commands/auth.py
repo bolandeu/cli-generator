@@ -1,65 +1,23 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
+from datetime import UTC, datetime
+
 import typer
-from rich.markup import escape
 
-from .. import output, providers
-from ..core.errors import CredentialsUnhealthy, InvalidArguments
-from ..core.version import DEV_VERSION, installed_version
-from ..credentials import health
-from ..credentials import manager as credentials
+from .. import output
+from ..core.errors import InvalidArguments
+from ..core.version import DEV_VERSION, cli_name, installed_version
 
-_CLI = __name__.split(".")[0]
+# `auth status` exists in every CLI (tools/docs/standard-release.md §8); a CLI
+# generated without credentials (no credentials/ package, no commands/login.py)
+# reports an empty `credentials` list and exits 0. Detected at runtime so this
+# file needs no template logic — same approach as doctor.py.
+_PACKAGE_NAME = __name__.split(".")[0]
+_HAS_CREDENTIALS = importlib.util.find_spec(f"{_PACKAGE_NAME}.credentials") is not None
 
-app = output.group("Manage credentials.")
-
-
-@app.command("login")
-@output.guard
-def login(
-    ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Provider/profile name."),
-    non_interactive: bool = output.NonInteractiveOption,
-    json_output: bool = output.JsonOption,
-    quiet: bool = output.QuietOption,
-) -> None:
-    """Store a credential for a provider.
-
-    Example: {cli} auth login --provider default
-    """
-    secret = credentials.read_secret_from_env(provider)
-    if secret is None:
-        if ctx.obj.get("non_interactive") or non_interactive:
-            raise InvalidArguments(
-                f"No credential found in environment for provider '{provider}' and --non-interactive was set."
-            )
-        secret = typer.prompt(f"Enter API key for '{provider}'", hide_input=True)
-    credentials.store_secret(provider, secret)
-    output.emit_success(
-        ctx,
-        {"provider": provider},
-        render_human=lambda d: output.human.echo(f"Stored credential for '{d['provider']}'."),
-    )
-
-
-@app.command("logout")
-@output.guard
-def logout(
-    ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Provider/profile name."),
-    json_output: bool = output.JsonOption,
-    quiet: bool = output.QuietOption,
-) -> None:
-    """Remove a stored credential.
-
-    Example: {cli} auth logout --provider default
-    """
-    credentials.delete_secret(provider)
-    output.emit_success(
-        ctx,
-        {"provider": provider},
-        render_human=lambda d: output.human.echo(f"Removed credential for '{d['provider']}'."),
-    )
+app = output.group("Credentials: report their health (and store them, if this CLI has any).")
 
 
 @app.command("status")
@@ -87,23 +45,20 @@ def auth_status(
 
     Example: {cli} auth status --check --json
     """
-    known = providers.all_providers()
-    selected = health.select(known, provider)
-    if provider is not None and not selected:
-        names = ", ".join(f"{cls.name}:<target>" if cls.per_target else cls.name for cls in known) or "none"
-        raise InvalidArguments(f"Unknown provider '{provider}' (known: {names}).")
-    payload = health.report(_CLI, installed_version() or DEV_VERSION, selected, check=check, only=provider)
-    problems = {entry["provider"]: entry["status"] for entry in payload["credentials"] if health.is_problem(entry)}
-    output.emit_report(ctx, payload, _render_status, CredentialsUnhealthy(problems) if problems else None)
+    tool, version = cli_name(), installed_version() or DEV_VERSION
+    if not _HAS_CREDENTIALS:
+        if provider is not None:
+            raise InvalidArguments(f"Unknown provider '{provider}' ({tool} stores no credentials).")
+        checked_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        payload = {"tool": tool, "version": version, "checked_at": checked_at, "credentials": []}
+        output.emit_report(ctx, payload, lambda _: output.human.echo(f"{tool} stores no credentials."), None)
+        return
+    health = importlib.import_module(f"{_PACKAGE_NAME}.credentials.health")
+    payload, problem = health.status(tool, version, check=check, only=provider)
+    output.emit_report(ctx, payload, health.render, problem)
 
 
-def _render_status(payload: dict) -> None:
-    if not payload["credentials"]:
-        output.human.echo("No providers with credentials.")
-    for entry in payload["credentials"]:
-        mark = {"ok": "[green]✓[/green]", "unchecked": "[dim]·[/dim]"}.get(entry["status"], "[red]✗[/red]")
-        optional = "" if entry["required"] else " (optional)"
-        detail = f" — {entry['message']}" if entry["message"] else ""
-        expires = f", expires {entry['expires_at']}" if entry["expires_at"] else ""
-        line = f"{entry['provider']}{optional}: {entry['status']} ({entry['source']}: {entry['source_ref']}){expires}{detail}"
-        output.human.echo(f"{mark} {escape(line)}")
+if importlib.util.find_spec(f"{_PACKAGE_NAME}.commands.login") is not None:
+    _login = importlib.import_module(f"{_PACKAGE_NAME}.commands.login")
+    app.command("login")(_login.login)
+    app.command("logout")(_login.logout)

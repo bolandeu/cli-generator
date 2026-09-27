@@ -1,5 +1,10 @@
 _subdirectory: template
 
+# Project-owned after generation: `copier update` must not merge template
+# prose into a README the project has rewritten.
+_skip_if_exists:
+  - "README.md"
+
 _exclude:
   - "copier.yaml"
   - "copier.yml"
@@ -9,7 +14,7 @@ _exclude:
   - ".git"
   - ".DS_Store"
   - ".svn"
-  - "{% if not include_auth %}src/{{ package_name }}/commands/auth.py{% endif %}"
+  - "{% if not include_auth %}src/{{ package_name }}/commands/login.py{% endif %}"
   - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
 
@@ -25,6 +30,15 @@ package_name:
   validator: >-
     {% if not (package_name | regex_search('^[a-z][a-z0-9_]*$')) %}
     package_name must be a valid snake_case Python identifier
+    {% endif %}
+
+cli_name:
+  type: str
+  help: "Command users type (the [project.scripts] name), if it differs from the package name (e.g. sitemap-xml for package rb_sitemap_xml)"
+  default: "{{ package_name | replace('_', '-') }}"
+  validator: >-
+    {% if not (cli_name | regex_search('^[a-z][a-z0-9_-]*$')) %}
+    cli_name must be lowercase letters, digits, '-' or '_'
     {% endif %}
 
 project_name:

@@ -114,15 +114,26 @@ before (missing answers file, wrong `copier.yml` location).
   `output.DryRunOption` etc. in sync if you add a new global option that
   commands should also accept locally (`<cli> <command> --flag`, not just
   `<cli> --flag <command>`).
-- `include_auth=false` must actually remove the auth surface, not just the
-  `keyring` dependency: `copier.yml`'s `_exclude` drops
-  `commands/auth.py`/`credentials/`/`tests/test_auth.py`, `cli.py.jinja`
-  conditionally skips importing/registering `auth`, and `doctor.py`
-  detects the module at runtime (`importlib.util.find_spec`) instead of
-  being templated. If you touch any of these, regenerate with
+- `include_auth=false` must remove the credential surface, not just the
+  `keyring` dependency — but keep `auth status` (standard §8: every CLI
+  has it, reporting empty `credentials`, exit 0). `copier.yml`'s `_exclude`
+  drops `commands/login.py`/`credentials/`/`tests/test_auth.py`;
+  `commands/auth.py` (group + `status`) always ships and, like
+  `doctor.py`, detects `credentials`/`commands.login` at runtime
+  (`importlib.util.find_spec`) instead of being templated. If you touch any of these, regenerate with
   `include_auth=false` and run the full verify loop — this combination
   previously went untested and silently shipped a `ModuleNotFoundError` on
   `keyring` for anyone who picked "no auth".
+- `README.md` is in `copier.yml`'s `_skip_if_exists`: generated once, never
+  merged on `copier update` (projects rewrite it). A template change meant
+  for existing projects' READMEs has to be described in SKILL.md's Update
+  mode instead.
+- The command name is `cli_name` (copier question; `[project.scripts]`),
+  which may differ from `package_name`. Runtime code gets it from
+  `core.version.cli_name()` (the installed console script), never from
+  `__name__`; keychain service, env var prefix and `.<package>/` stay on
+  the package name. Test with `--data package_name=rb_sitemap_xml --data
+  cli_name=sitemap-xml` when touching anything that names the command.
 - `_exclude` patterns in `copier.yml` match the **rendered** path
   (`tests/test_auth.py`), not the template file name
   (`tests/test_auth.py.jinja`) — a pattern with `.jinja` matches nothing

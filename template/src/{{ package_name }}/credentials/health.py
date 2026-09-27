@@ -3,7 +3,8 @@
 Its shape is a cross-tool contract — `tools-watch` reads it from every CLI
 without knowing any provider — so it is pinned by `tests/test_auth.py`, and
 changing it is a breaking change. Credential values never leave this
-module: they are used only to scrub messages.
+module: they are used only to scrub messages. Knows only `providers.Provider`:
+how a provider talks to its service (HTTP or not) is the provider's business.
 """
 
 from __future__ import annotations
@@ -11,8 +12,11 @@ from __future__ import annotations
 import concurrent.futures
 from datetime import UTC, datetime
 
-from ..core.errors import AuthRequired, ProviderError
-from ..providers import Health, HttpProvider, Provider
+from rich.markup import escape
+
+from .. import output, providers
+from ..core.errors import AuthRequired, CliError, CredentialsUnhealthy, InvalidArguments, ProviderError
+from ..providers import Health, Provider
 from . import manager
 
 CHECK_TIMEOUT = 10.0
@@ -40,13 +44,10 @@ def _scrub(message: str | None, secrets: list[str]) -> str | None:
 
 
 def _run_check(provider_cls: type[Provider], target: str | None) -> Health:
-    provider = provider_cls()
-    provider.target = target
-    if isinstance(provider, HttpProvider):
-        provider.timeout = min(provider.timeout, CHECK_TIMEOUT)
-        provider.retries = 0
+    """`health_check()` under a hard wall-clock limit; its exceptions mapped to statuses."""
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
+        provider = provider_cls.for_health_check(target)
         return pool.submit(provider.health_check).result(timeout=CHECK_TIMEOUT)
     except concurrent.futures.TimeoutError:
         return Health(status="unreachable", message=f"no answer within {CHECK_TIMEOUT:g} s")
@@ -67,12 +68,15 @@ def _run_check(provider_cls: type[Provider], target: str | None) -> Health:
 def _entry(provider_cls: type[Provider], check: bool, target: str | None = None) -> dict:
     name = f"{provider_cls.name}:{target}" if target else provider_cls.name
     fields = list(provider_cls.credential_fields)
-    located = manager.locate_fields(name, fields)
-    secrets = [value for value, _ in located.values()]
-    env_refs = [manager.env_var_name(name, field) for field in fields]
+    legacy = provider_cls.legacy_env
+    located = manager.locate_fields(name, fields, legacy_env=legacy)
+    secrets = [value for value, _, _ in located.values()]
+    env_refs = [
+        manager.env_var_name(name, field) + (f" (or {legacy[field]})" if field in legacy else "") for field in fields
+    ]
     keychain_ref = f"keychain service {manager.keychain_service(name)}"
     missing = [field for field in fields if field not in located]
-    sources = {source for _, source in located.values()}
+    sources = {source for _, source, _ in located.values()}
 
     entry: dict = {
         "provider": name,
@@ -90,8 +94,8 @@ def _entry(provider_cls: type[Provider], check: bool, target: str | None = None)
         return entry
 
     # Env vars override the keychain field by field; a mix is reported as env
-    # (what wins) with every place named in source_ref.
-    used_env = [manager.env_var_name(name, f) for f in fields if located[f][1] == "env"]
+    # (what wins) with every place named in source_ref (standard §8: no "mixed").
+    used_env = [located[f][2] for f in fields if located[f][1] == "env"]
     if sources == {"keychain"}:
         entry.update(source="keychain", source_ref=keychain_ref)
     else:
@@ -137,18 +141,43 @@ def _entries(provider_cls: type[Provider], check: bool, only: str | None) -> lis
     return [_entry(provider_cls, check, target) for target in targets]
 
 
-def select(providers: list[type[Provider]], only: str | None) -> list[type[Provider]]:
+def select(known: list[type[Provider]], only: str | None) -> list[type[Provider]]:
     """Providers `only` refers to: a provider name, or `<kind>:<target>` of a per-target one."""
     if only is None:
-        return providers
-    return [cls for cls in providers if cls.name == only or (cls.per_target and only.startswith(f"{cls.name}:"))]
+        return known
+    return [cls for cls in known if cls.name == only or (cls.per_target and only.startswith(f"{cls.name}:"))]
 
 
-def report(tool: str, version: str, providers: list[type[Provider]], *, check: bool, only: str | None = None) -> dict:
-    """The §8 report for `providers` (only those that declare credential fields)."""
+def report(tool: str, version: str, selected: list[type[Provider]], *, check: bool, only: str | None = None) -> dict:
+    """The §8 report for `selected` providers (only those that declare credential fields)."""
     return {
         "tool": tool,
         "version": version,
         "checked_at": _iso(_now()),
-        "credentials": [entry for cls in providers if cls.credential_fields for entry in _entries(cls, check, only)],
+        "credentials": [entry for cls in selected if cls.credential_fields for entry in _entries(cls, check, only)],
     }
+
+
+def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[dict, CliError | None]:
+    """What `auth status` emits: the report, and the problem (exit 3) if there is one."""
+    known = providers.all_providers()
+    selected = select(known, only)
+    if only is not None and not selected:
+        names = ", ".join(f"{cls.name}:<target>" if cls.per_target else cls.name for cls in known) or "none"
+        raise InvalidArguments(f"Unknown provider '{only}' (known: {names}).")
+    payload = report(tool, version, selected, check=check, only=only)
+    problems = {entry["provider"]: entry["status"] for entry in payload["credentials"] if is_problem(entry)}
+    return payload, CredentialsUnhealthy(problems) if problems else None
+
+
+def render(payload: dict) -> None:
+    """Human mode: one line per entry."""
+    if not payload["credentials"]:
+        output.human.echo("No providers with credentials.")
+    for entry in payload["credentials"]:
+        mark = {"ok": "[green]✓[/green]", "unchecked": "[dim]·[/dim]"}.get(entry["status"], "[red]✗[/red]")
+        optional = "" if entry["required"] else " (optional)"
+        detail = f" — {entry['message']}" if entry["message"] else ""
+        expires = f", expires {entry['expires_at']}" if entry["expires_at"] else ""
+        line = f"{entry['provider']}{optional}: {entry['status']} ({entry['source']}: {entry['source_ref']}){expires}{detail}"
+        output.human.echo(f"{mark} {escape(line)}")

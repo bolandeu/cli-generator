@@ -99,15 +99,20 @@ what every integration otherwise reinvents slightly differently:
 `providers.base.Provider`, which declares `name`, `credential_fields`
 (the field names it reads from `credentials.manager`; default
 `("api_key",)`, `()` for none), `required` (`False` for a provider the
-CLI works without) and `health_check() -> Health`: one cheap, read-only,
-non-billed call proving the credential works — usually
-`self.get_json("/me")`, then `return Health(expires_at=..., quota=...)`;
-let `AuthRequired`/`ProviderError` propagate. `providers.all_providers()`
-finds every concrete subclass defined under `providers/` by itself (no
-registry to forget; bases set `abstract = True`), and
-`tests/test_providers.py` fails for any that doesn't override
-`health_check()` or can't be constructed without arguments. This is what
-`auth status --check` runs (§4, "`auth status`").
+CLI works without), `legacy_env` (older env var names still honoured,
+field → name, after `<PACKAGE>_<PROVIDER>_<FIELD>`; annotate it
+`ClassVar[dict[str, str]]` in a subclass) and `health_check() -> Health`:
+one cheap, read-only, non-billed call proving the credential works, within
+10 s and without retries — for HTTP, `self.probe("/me")` makes exactly
+one such request; then `return Health(expires_at=..., quota=...)`; let
+`AuthRequired`/`ProviderError` propagate. `auth status` gets the instance
+from `for_health_check(target)` (`cls()` by default — override it when the
+constructor needs config), knows nothing about HTTP, and only enforces the
+10 s wall clock. `providers.all_providers()` finds every concrete subclass
+defined under `providers/` by itself (no registry to forget; bases set
+`abstract = True`), and `tests/test_providers.py` fails for any that
+doesn't override `health_check()`. This is what `auth status --check`
+runs (§4, "`auth status`").
 
 Non-HTTP integrations (a vendor SDK, a local binary, a database driver)
 still live under `providers/` and still speak the same error language,
@@ -195,7 +200,9 @@ Never invent a second storage mechanism for the "unusual" shape — extend
 
 ### `auth status` — the credentials health contract
 
-`<cli> auth status [--check] [--provider NAME] --json` reports every
+`<cli> auth status [--check] [--provider NAME] --json` exists in **every**
+CLI — one generated with `include_auth=false` reports `credentials: []`
+and exits 0 (no `login`/`logout` there) — and reports every
 provider with credentials in one fixed shape (shared across all our tools,
 `tools/docs/standard-release.md` §8; `tools-watch` reads it without
 knowing any provider):

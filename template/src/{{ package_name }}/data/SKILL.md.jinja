@@ -1,17 +1,17 @@
 ---
-name: {{ package_name }}
-description: Conventions for driving the {{ package_name }} CLI from an agent — install, JSON output, exit codes, credentials, destructive-command gating. Invoke when a task involves this project's operations.
+name: {{ cli_name }}
+description: Conventions for driving the {{ cli_name }} CLI from an agent — install, JSON output, exit codes, credentials, destructive-command gating. Invoke when a task involves this project's operations.
 ---
 
-# {{ package_name }}
+# {{ cli_name }}
 
-Everything command-specific is in the CLI itself — run `{{ package_name }}`
-with no arguments for version + command list, `{{ package_name }} <command>
+Everything command-specific is in the CLI itself — run `{{ cli_name }}`
+with no arguments for version + command list, `{{ cli_name }} <command>
 --help` for details. This document only covers what `--help` can't tell
-you. If you can run the CLI but not read files, `{{ package_name }} --ai`
+you. If you can run the CLI but not read files, `{{ cli_name }} --ai`
 prints this document.
 
-## Install (if `{{ package_name }} --version` fails)
+## Install (if `{{ cli_name }} --version` fails)
 
 ```bash
 {% if repository_url -%}
@@ -44,7 +44,7 @@ uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
   stdout is data only, stderr is diagnostics.
 - **Project-aware.** Commands find the project by walking up from the
   current directory, or take `--project PATH`. Not initialized →
-  `{{ package_name }} init --non-interactive`.
+  `{{ cli_name }} init --non-interactive`.
 - **`--non-interactive`** on anything that could prompt. It fails with a
   structured error instead of hanging.
 - **Credentials** live in the OS keychain or env vars
@@ -68,8 +68,8 @@ Read exit code → `error.code` → `error.action` (the concrete next command).
     0  ok
     1  general (UNEXPECTED = a bug: re-run with --verbose, report; ABORTED = user said no)
     2  invalid arguments
-    3  auth required          → {{ package_name }} auth login
-    4  project not initialized → {{ package_name }} init
+    3  auth required          → {{ cli_name }} auth login
+    4  project not initialized → {{ cli_name }} init
     5  provider error (network / external service; already retried) → retry later
     6  CLI too old for this project → uv tool upgrade {{ package_name }}
 

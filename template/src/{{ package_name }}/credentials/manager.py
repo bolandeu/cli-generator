@@ -82,29 +82,48 @@ def _stored(provider: str) -> dict[str, str]:
     return json.loads(stored_raw) if stored_raw else {}
 
 
-def get_credential(provider: str, *, env_fields: list[str] | None = None) -> dict[str, str] | None:
+def get_credential(
+    provider: str, *, env_fields: list[str] | None = None, legacy_env: dict[str, str] | None = None
+) -> dict[str, str] | None:
     """Resolve the full credential bag for a provider.
 
     Env vars win field-by-field over what's stored in the keychain, so CI
     can override a single field (e.g. a rotated token) without touching the
     rest. `env_fields` lets a multi-field provider (session cookies, host
     credentials, ...) declare its field names explicitly, so env vars are
-    checked even before anything has ever been stored.
+    checked even before anything has ever been stored. `legacy_env` maps a
+    field to an older env var name still honoured (`Provider.legacy_env`).
     """
     stored = _stored(provider)
-    fields_to_check = env_fields or list(stored.keys()) or ["api_key"]
-    merged = {**stored, **read_fields_from_env(provider, fields_to_check)}
+    fields = env_fields or list(stored.keys()) or ["api_key"]
+    located = _locate(provider, fields, legacy_env, stored)
+    merged = {**stored, **{field: value for field, (value, _, _) in located.items()}}
     return merged or None
 
 
-def locate_fields(provider: str, fields: list[str]) -> dict[str, tuple[str, str]]:
-    """Map each present field to (value, where it came from: "env" | "keychain").
+def locate_fields(
+    provider: str, fields: list[str], *, legacy_env: dict[str, str] | None = None
+) -> dict[str, tuple[str, str, str]]:
+    """Map each present field to (value, source "env" | "keychain", where: the env var or keychain service).
 
-    Same precedence as `get_credential`. For `auth status`, which reports the
-    source and must never print the value.
+    Precedence per field: `<PACKAGE>_<PROVIDER>_<FIELD>` env var, then the
+    field's legacy env var (`legacy_env`), then the keychain. For `auth
+    status`, which reports the source and must never print the value.
     """
-    located = {field: (value, "keychain") for field, value in _stored(provider).items() if field in fields}
-    located.update({field: (value, "env") for field, value in read_fields_from_env(provider, fields).items()})
+    return _locate(provider, fields, legacy_env, _stored(provider))
+
+
+def _locate(
+    provider: str, fields: list[str], legacy_env: dict[str, str] | None, stored: dict[str, str]
+) -> dict[str, tuple[str, str, str]]:
+    located: dict[str, tuple[str, str, str]] = {
+        field: (value, "keychain", _service_name(provider)) for field, value in stored.items() if field in fields
+    }
+    for field in fields:
+        for name in (_env_var_name(provider, field), (legacy_env or {}).get(field)):
+            if name and (value := os.environ.get(name)) is not None:
+                located[field] = (value, "env", name)
+                break
     return located
 
 

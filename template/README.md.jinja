@@ -6,7 +6,7 @@
 
 ```bash
 uv sync
-uv run {{ package_name }} --help
+uv run {{ cli_name }} --help
 uv run scripts/release.py --check   # the full gate (what releases and CI run)
 scripts/install_hooks.sh  # once per clone: git uses the versioned hooks in .githooks/
 uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
@@ -82,7 +82,7 @@ uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
 uv tool upgrade {{ package_name }}
 ```
 
-After install, the command `{{ package_name }}` is available globally, on
+After install, the command `{{ cli_name }}` is available globally, on
 macOS, Linux and Windows alike (see `architecture.md` in the cli-generator
 plugin for why: no shelling out, no hardcoded POSIX paths).
 
@@ -101,8 +101,8 @@ This project follows a fixed CLI architecture:
   and environment variables. Secrets never live in `.{{ package_name }}/config.toml`.
 - `src/{{ package_name }}/output/` — human (`rich`) and `--json` rendering.
 
-Run `{{ package_name }} doctor` to check environment/config/auth readiness, and
-`{{ package_name }} --help` for the full command surface. Every command supports
+Run `{{ cli_name }} doctor` to check environment/config/auth readiness, and
+`{{ cli_name }} --help` for the full command surface. Every command supports
 `--json` for machine/agent consumption; errors are structured (`error.code`,
 fixed exit codes, `error.action` telling you what to do next) and go to
 stderr in human mode, so stdout is always safe to pipe.
@@ -113,5 +113,5 @@ A project can require a minimum CLI version in its `.{{ package_name }}/config.t
 
 See `src/{{ package_name }}/data/SKILL.md` for the agent-facing usage guide
 bundled with this package — install it into an AI tool with
-`{{ package_name }} skill install`, or get it as plain text with
-`{{ package_name }} --ai` (works even without file access).
+`{{ cli_name }} skill install`, or get it as plain text with
+`{{ cli_name }} --ai` (works even without file access).

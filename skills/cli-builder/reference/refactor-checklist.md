@@ -79,7 +79,10 @@ order before moving to the next item.
     `[tool.uv] cache-keys`, runtime via `importlib.metadata`); a
     hand-edited `CHANGELOG.md` / `## [Unreleased]` section (→ towncrier
     config, the start marker above the newest release, unreleased entries
-    moved into `changelog.d/` fragments); a `scripts/release.py` that
+    moved into `changelog.d/` fragments — except for a package that has
+    **never been released** (no `v*` tag): when it gets its first tag
+    `vX.Y.Z`, rename `## [Unreleased]` to `## [X.Y.Z] - <date>` instead,
+    since those changes ship in that tag); a `scripts/release.py` that
     isn't the template's verbatim copy; a dependency on another of our
     tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
     + compatible range); a subprocess call to another of our CLIs without
@@ -103,7 +106,7 @@ order before moving to the next item.
     `scripts/release.py` (whose `--check` is the whole gate) and, if the
     repo keeps CI, its workflow (one `ubuntu-24.04` job running only
     `release.py --check`, lowest supported Python, current action
-    majors, `towncrier check` on PRs) and `dependabot.yml` (monthly, one
+    majors) and `dependabot.yml` (monthly, one
     group per ecosystem).
 
 12. **Installable from GitHub.**

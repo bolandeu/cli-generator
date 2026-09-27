@@ -45,7 +45,14 @@ function) is governed by these four rules instead
 ## Mode: Scaffold
 
 1. Clarify with the user (or infer from the task) before generating:
-   - `package_name` — snake_case, importable, becomes the shell command name.
+   - `package_name` — snake_case, importable Python package (and
+     distribution / `uv tool` name, keychain service, env var prefix,
+     `.<package>/` project dir).
+   - `cli_name` — the command users type; default `package_name` with
+     `_` → `-`. Set it when the command differs from the package
+     (`--data cli_name=sitemap-xml` for package `rb_sitemap_xml`). Runtime
+     code reads it from the installed console script
+     (`core.version.cli_name()`), never from `__name__`.
    - `project_name`, one-line `description`, `author_name`.
    - Whether it needs credentials (`include_auth`) — default yes if the task
      mentions any external API/provider.
@@ -69,7 +76,7 @@ function) is governed by these four rules instead
    uvx copier copy /absolute/path/to/this/plugin/repo <dest-dir> \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
-     --data include_auth=true \
+     --data cli_name=<command> --data include_auth=true \
      --data repository_url=https://github.com/<owner>/<repo>
    ```
 
@@ -181,7 +188,12 @@ template, `_commit` is the template release it was last synced to):
 1. `git status` must be clean — `copier update` refuses otherwise. Commit
    or stash, never delete.
 2. `uvx copier update --trust` (add `--defaults` to keep every previous
-   answer without prompting). It three-way-merges the template diff since
+   answer without prompting). A project from before template v1.2.1 has
+   no `cli_name` answer: its default is `package_name` with `_` → `-`,
+   which renames the command of a package with `_` in its name — pass
+   `--data cli_name=<the command it has today>` (see `[project.scripts]`)
+   unless renaming is intended. `README.md` is never touched by an update
+   (`_skip_if_exists`): it belongs to the project once generated. It three-way-merges the template diff since
    `_commit` with the project's own changes; business logic in
    `core/services.py`, `providers/`, extra commands and tests survive
    untouched. Conflicts land as `*.rej` files next to the file — resolve
@@ -201,7 +213,11 @@ template, `_commit` is the template release it was last synced to):
    drops `version =` for `dynamic = ["version"]`; in `CHANGELOG.md` keep
    the released sections, put `<!-- towncrier release notes start -->`
    right above the newest one, move anything under `## [Unreleased]` into
-   `changelog.d/` fragments and delete that heading; a hand-edited
+   `changelog.d/` fragments and delete that heading — **unless the package
+   has never been released** (no `v*` tag): then its first tag `vX.Y.Z`
+   already contains those changes, so rename `## [Unreleased]` to
+   `## [X.Y.Z] - <date>` (under the marker) instead of making fragments
+   that would repeat them in the next release; a hand-edited
    `scripts/release.py` is replaced by the template's verbatim. After:
    `uv lock`, re-run `scripts/install_hooks.sh` (git hooks now live in
    the versioned `.githooks/`), `uv run pytest --snapshot-update` once
