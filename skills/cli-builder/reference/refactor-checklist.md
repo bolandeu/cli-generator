@@ -84,7 +84,13 @@ order before moving to the next item.
     conventions an agent needs — install, `--json`, exit codes,
     credentials, dry-run/confirm — and *no* command list (commands come
     from docstrings via a bare `<cli>`; fail if any docstring is missing
-    or stale). Also fail if `pyproject.toml` has no coverage
+    or stale). Fail too if the --help contract isn't enforced
+    (`architecture.md` §5): no `tests/test_help.py` + `tests/snapshots/help/`
+    (copy the test, then `uv run pytest --snapshot-update` and read every
+    generated page — it's usually the first time anyone has), no
+    `.claude/settings.json` hooks + `scripts/check_command_docstrings.py`,
+    no versioned `.githooks/pre-commit`. Commands missing an `Example:`
+    line or a parameter `help=` are fixed here, not waived. Also fail if `pyproject.toml` has no coverage
     `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
     step — copy all three from the template, along with its CI workflow
     (one `ubuntu-24.04` job, lowest supported Python, current action

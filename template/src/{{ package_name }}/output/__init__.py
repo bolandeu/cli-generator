@@ -30,6 +30,8 @@ __all__ = [
     "vecho",
 ]
 
+_CLI_NAME = __name__.split(".")[0]
+
 # Reusable local options: attach to any command so `<cli> <command> --json`
 # works, on top of the global `<cli> --json <command>` handled by guard().
 JsonOption = typer.Option(False, "--json", help="Emit machine-readable JSON output.")
@@ -179,4 +181,7 @@ def guard(func: Callable) -> Callable:
                 ),
             )
 
+    # Docstrings are the --help text; `{cli}` in their `Example:` lines becomes
+    # this CLI's name, so template-born commands need no Jinja rendering.
+    wrapper.__doc__ = (func.__doc__ or "").replace("{cli}", _CLI_NAME) or None
     return wrapper

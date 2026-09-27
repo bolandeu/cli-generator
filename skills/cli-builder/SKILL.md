@@ -139,9 +139,11 @@ business logic).
      structural reference to copy specific files from (`core/errors.py`,
      `output/`, `credentials/manager.py` rarely need project-specific
      changes — copy them near-verbatim) — do not overwrite the target
-     directory with it. `scripts/` (the docstring-drift hook) rarely needs
-     project-specific changes either — copy it near-verbatim, then run
-     `scripts/install_hooks.sh` once in the target repo.
+     directory with it. `scripts/`, `.githooks/`, `.claude/settings.json`
+     and `tests/test_help.py` (the --help contract) rarely need
+     project-specific changes either — copy them near-verbatim, run
+     `scripts/install_hooks.sh` once in the target repo, then
+     `uv run pytest --snapshot-update` to create the help snapshots.
    - If the existing code is a small/ad-hoc script with little worth
      preserving beyond its core logic: scaffold fresh (Scaffold mode) into
      a new directory, then port the actual logic into
@@ -188,7 +190,11 @@ template, `_commit` is the template release it was last synced to):
    right above the newest one, move anything under `## [Unreleased]` into
    `changelog.d/` fragments and delete that heading; a hand-edited
    `scripts/release.py` is replaced by the template's verbatim. After:
-   `uv lock`, re-run `scripts/install_hooks.sh` (new changelog check),
+   `uv lock`, re-run `scripts/install_hooks.sh` (git hooks now live in
+   the versioned `.githooks/`), `uv run pytest --snapshot-update` once
+   (help snapshots are only rendered on `copier copy`) and read the
+   generated `tests/snapshots/help/` — fix any command the new
+   `test_help.py` contract flags (missing `Example:` line or `help=`),
    full verify loop, and once the tag is on GitHub check
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
@@ -328,12 +334,19 @@ skipped under time pressure — check them explicitly:
   URL, not a placeholder — see "Publish to GitHub". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
   project" premise in `reference/architecture.md`.
-- Run `scripts/install_hooks.sh` once per checkout (`.git/hooks/` isn't
-  versioned). It installs non-blocking pre-commit warnings: command
-  docstrings drifting from the code they document
-  (`scripts/check_command_docstrings.py` — those docstrings are the
-  `--help` text agents read) and a `src/` change with no changelog
-  fragment on the branch (`scripts/check_changelog_fragment.py`).
+- **Changed a command's behaviour → update its docstring in the same
+  commit**, then `uv run pytest --snapshot-update` and check the
+  `tests/snapshots/help/` diff reads right. The docstring and `help=`
+  strings are the `--help` text agents read. This is enforced, not
+  advisory (`architecture.md` §5): Claude Code PostToolUse/Stop hooks in
+  `.claude/settings.json`, the versioned git pre-commit in `.githooks/`
+  (`scripts/install_hooks.sh` once per clone; Claude sessions set it up
+  themselves), and blocking tests — each docstring has an
+  `Example: {cli} <command> ...` line, each parameter a `help=`, each
+  help page a snapshot. Don't bypass them: if a hook fires on a
+  behaviour-neutral refactor, say so rather than skipping it.
+- The pre-commit hook also warns (never blocks) on a `src/` change with
+  no changelog fragment on the branch (`scripts/check_changelog_fragment.py`).
 - Versions come only from git tags cut by `scripts/release.py`, the
   changelog only from `changelog.d/` fragments, dependencies on our other
   tools only by tag pin. SemVer is a promise about the CLI surface

@@ -152,6 +152,27 @@ then every command with the first line of its docstring; `<cli> <command>
 documentation — it can't drift from the code because it's rendered from
 it. Nothing else (SKILL.md, README) lists commands.
 
+Shape every command's help the same way:
+
+```python
+@output.guard
+def status(ctx: typer.Context, json_output: bool = output.JsonOption) -> None:
+    """Show the current project's status.        <- one-line summary (the bare-<cli> listing)
+
+    Optional paragraph: what it does, what it changes, when to use it.
+
+    Example: {cli} status --json                 <- required; `{cli}` becomes the CLI name
+    """
+```
+
+- Every parameter is a `typer.Option(...)`/`typer.Argument(...)` with a
+  non-empty `help=` (the shared `output.*Option` ones already have it).
+- Every group is created with `output.group("<description>")`.
+- Changing a command's behaviour means updating its docstring in the same
+  commit and refreshing `tests/snapshots/help/` with
+  `uv run pytest --snapshot-update`. Hooks and tests enforce all of this —
+  `architecture.md` §5.
+
 ## Two ways an agent gets usage docs without prior context
 
 1. `skills/<package_name>/data/SKILL.md` bundled into the installed package

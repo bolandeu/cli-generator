@@ -18,12 +18,11 @@ what CI runs (one Linux job on the lowest supported Python), followed by
 `scripts/release.py` runs the same gate on this machine before every
 release.
 
-Run `scripts/install_hooks.sh` once (`.git/hooks/` isn't versioned by git,
-so this is also needed again after a fresh clone). It installs a
-pre-commit hook that warns — never blocks — when a command's logic changed
-without its docstring changing too (that docstring is the `--help` text
-agents read as this CLI's API contract), and when `src/` changed with no
-changelog fragment on the branch.
+Run `scripts/install_hooks.sh` once per clone: it points git at the
+versioned hooks in `.githooks/` (Claude Code sessions do this themselves
+via `.claude/settings.json`). The pre-commit hook **blocks** a commit where
+a command's logic changed but its docstring didn't, and warns when `src/`
+changed with no changelog fragment on the branch.
 
 ## Architecture (do not violate)
 
@@ -82,9 +81,20 @@ require it.
 
 ## After changing the command surface
 
-Nothing to update by hand: agents discover commands from a bare
-`{{ package_name }}` / `--help`, which is rendered from the command
-docstrings — so the docstring *is* the API doc, keep it accurate (the
-pre-commit hook warns when it drifts). `src/{{ package_name }}/data/SKILL.md`
+Agents discover commands from a bare `{{ package_name }}` / `--help`,
+rendered from the command docstrings and `help=` strings — so the
+docstring *is* the API doc. **Changed a command's behaviour → update its
+docstring in the same commit**:
+
+- docstring = one-line summary, optional paragraph, and an
+  `Example: {cli} <command> ...` line (`output.guard` turns `{cli}` into
+  `{{ package_name }}`); every `typer.Option`/`Argument` has `help=`;
+- then `uv run pytest --snapshot-update` and read the diff in
+  `tests/snapshots/help/` — that diff is the user-visible change.
+
+Enforced: Claude Code hooks (`.claude/settings.json`: PostToolUse after
+editing a command file, Stop before ending the turn), the pre-commit hook,
+and `tests/test_help.py` in the gate. If a hook fires on a refactor that
+truly doesn't change behaviour, say so — don't bypass it silently. `src/{{ package_name }}/data/SKILL.md`
 deliberately lists no commands, only conventions; touch it only if a
 convention changes (a new exit code, a new credential rule).

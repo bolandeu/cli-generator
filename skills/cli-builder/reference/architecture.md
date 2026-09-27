@@ -195,11 +195,45 @@ errors, `--verbose` progress and `logging` all go to stderr
 which is where a provider's request/retry lines show up).
 
 A command function's docstring *is* its `--help` text (Typer renders it
-directly), which makes it easy to edit a command's body and forget the
-docstring is now stale. `scripts/check_command_docstrings.py`, installed as
-a pre-commit hook by `scripts/install_hooks.sh`, warns (never blocks) when
-that happens — `.git/hooks/` isn't versioned by git, so the install script
-is what makes the hook survive a fresh clone.
+directly), together with each parameter's `help=`. That help is the
+documentation agents and humans read, so it must always match the code.
+**Rule: change a command's behaviour → update its docstring in the same
+commit.** Enforced at three deterministic levels, one shared check
+(`scripts/check_command_docstrings.py`: a command is a function in
+`src/*/commands/*.py` decorated with `output.guard`; its "logic" is its
+signature + body without the docstring, compared with `HEAD`):
+
+1. **Claude Code hooks** (`.claude/settings.json`, versioned). PostToolUse
+   on `Edit|Write|MultiEdit` of a command file exits 2 with "update the
+   docstring of command X" when its logic changed and its docstring did
+   not; the Stop hook refuses to end the turn while any command in the
+   working tree is in that state (once per turn — `stop_hook_active`
+   lets the second attempt through, so a genuinely behaviour-neutral
+   refactor can't loop). SessionStart points git at `.githooks/`.
+2. **Blocking tests in the gate** (`tests/test_help.py`), walking the
+   app's command registry so a new command is covered automatically:
+   every command has a docstring with an `Example: <cli> <command> ...`
+   line, every `typer.Option`/`Argument` has non-empty `help=`, every
+   group has a description.
+3. **Help snapshots**: `<command> --help` for every command and group is
+   stored in `tests/snapshots/help/<command>.txt` (syrupy, fixed 100-column
+   rendering). Any help change fails until
+   `uv run pytest --snapshot-update` rewrites the file, so the new text
+   is in the diff reviewers see; a missing or orphaned snapshot fails too.
+   Snapshots contain the CLI's name, so copier renders them at `copier
+   copy` time (`_tasks`) instead of shipping them.
+
+Plus the git pre-commit hook in `.githooks/pre-commit` (versioned; active
+after `scripts/install_hooks.sh`, which sets `core.hooksPath`) runs the
+same check on the staged files and blocks the commit; for a change that
+truly doesn't alter behaviour: `SKIP_DOCSTRING_CHECK=1 git commit ...`.
+
+Write `{cli}` for the CLI's name in docstrings (`Example: {cli} status
+--json`): `output.guard` substitutes it, so commands stay plain `.py`
+files that survive a rename. syrupy over inline-snapshot: help pages are
+long multi-line text best reviewed as one file per command, which is
+syrupy's single-file extension; inline-snapshot keeps values inside the
+test source, and its external files are hash-named.
 
 ## 6. Non-interactive by default for automation
 

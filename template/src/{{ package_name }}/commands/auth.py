@@ -18,7 +18,10 @@ def login(
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Store a credential for a provider."""
+    """Store a credential for a provider.
+
+    Example: {cli} auth login --provider default
+    """
     secret = credentials.read_secret_from_env(provider)
     if secret is None:
         if ctx.obj.get("non_interactive") or non_interactive:
@@ -38,11 +41,14 @@ def login(
 @output.guard
 def logout(
     ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider"),
+    provider: str = typer.Option("default", "--provider", help="Provider/profile name."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Remove a stored credential."""
+    """Remove a stored credential.
+
+    Example: {cli} auth logout --provider default
+    """
     credentials.delete_secret(provider)
     output.emit_success(
         ctx,
@@ -55,11 +61,14 @@ def logout(
 @output.guard
 def auth_status(
     ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider"),
+    provider: str = typer.Option("default", "--provider", help="Provider/profile name."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Check whether a credential is available for a provider."""
+    """Check whether a credential is available for a provider.
+
+    Example: {cli} auth status --json
+    """
     authenticated = credentials.get_secret(provider) is not None
     output.emit_success(
         ctx,

@@ -40,10 +40,17 @@ rm -rf /tmp/cli-gen-test
 uvx copier copy . /tmp/cli-gen-test \
   --data package_name=demotool --data project_name="Demo" \
   --data description="d" --data author_name="A" --data include_auth=true \
-  --defaults --trust -q
+  --defaults --trust -q --vcs-ref HEAD
 cd /tmp/cli-gen-test && uv sync -q && uv run ruff check . && uv run ruff format --check . \
   && uv run ty check && uv run pytest -q
 ```
+
+`--vcs-ref HEAD` matters: without it copier renders the **latest release
+tag**, not your working tree, and the loop tests the old template. Dirty
+(uncommitted) changes are included with `HEAD` (copier warns
+`DirtyLocalWarning`). `copier copy` also runs `_tasks` — `pytest
+--snapshot-update` renders `tests/snapshots/help/` in the new project,
+which is why `--trust` is required.
 
 Also regenerate once with `--data include_auth=false` and run the same
 loop — this branch drops `commands/auth.py`, `credentials/` and
@@ -133,3 +140,10 @@ before (missing answers file, wrong `copier.yml` location).
   in the generated project writes must be in `template/.gitignore`
   (`.coverage` from pytest-cov was missed once and blocked updates).
   When adding a dev tool, run it once and check `git status` is clean.
+- Help snapshots (`tests/snapshots/help/*.txt`) are **not** shipped in
+  `template/`: they contain the CLI's name, and rich re-wraps lines around
+  it, so a snapshot rendered for `demotool` fails for a longer name. They
+  are rendered by `copier.yml`'s `_tasks` on `copier copy` only (on
+  `copier update` a project refreshes them itself — SKILL.md Update mode).
+  For the same reason template command docstrings write `{cli}`, which
+  `output.guard` substitutes, instead of becoming `.jinja` files.

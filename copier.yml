@@ -13,6 +13,12 @@ _exclude:
   - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
 
+# The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
+# around it, so they're rendered in the generated project, not shipped.
+_tasks:
+  - command: "uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py"
+    when: "{{ _copier_operation == 'copy' }}"
+
 package_name:
   type: str
   help: "Python-importable package/command name (snake_case, e.g. mycli)"

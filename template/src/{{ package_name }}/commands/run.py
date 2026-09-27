@@ -22,6 +22,8 @@ def run(
     acting, and — if the action is destructive/irreversible — call
     `output.require_confirmation(ctx, "...", confirm)` right before the
     change itself (never before the dry-run preview).
+
+    Example: {cli} run --dry-run
     """
     if output.is_dry_run(ctx):
         output.emit_success(

@@ -8,7 +8,8 @@
 uv sync
 uv run {{ package_name }} --help
 uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
-scripts/install_hooks.sh  # pre-commit warnings: stale --help docstrings, missing changelog fragment
+scripts/install_hooks.sh  # once per clone: git uses the versioned hooks in .githooks/
+uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
 ```
 
 `pytest` fails below the coverage floor in `pyproject.toml`; `ruff` includes
