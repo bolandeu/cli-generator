@@ -47,3 +47,8 @@ def test_package_changes_need_a_fragment(path: str) -> None:
 
 def test_gate_and_pre_commit_hook_agree() -> None:
     assert release.NO_FRAGMENT_NEEDED == hook.NO_FRAGMENT_NEEDED
+
+
+def test_release_follows_towncrier_config() -> None:
+    assert release.changelog_file() == "CHANGELOG.md"
+    assert release.FRAGMENTS.name == "changelog.d"

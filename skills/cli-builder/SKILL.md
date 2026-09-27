@@ -59,7 +59,9 @@ function) is governed by these four rules instead
      PyPI packages. Runtime code gets it from `_distribution.DIST_NAME`.
    - `project_name`, one-line `description`, `author_name`.
    - Whether it needs credentials (`include_auth`) — default yes if the task
-     mentions any external API/provider.
+     mentions any external API/provider. Only without credentials:
+     `include_providers=false` drops `providers/` for a CLI that calls no
+     external service.
    - `repository_url` — the GitHub URL this will live at. Decide it
      **now**, before generating, even though the repo itself is only
      created in the Publish step below: default to
@@ -248,7 +250,20 @@ template, `_commit` is the template release it was last synced to):
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
    report instead of working around it.
-5. If `_commit` is a bare commit hash rather than a tag, the project was
+5. **Changing `include_auth` / `include_providers`** (`--data
+   include_auth=false`): copier deletes the files the new answers no longer
+   generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
+   `providers/`, `tests/test_providers.py`) — **except files the project
+   edited**, which it keeps. After the update run `git status` and delete
+   such leftovers by hand, plus the help snapshots of commands that are
+   gone (`tests/snapshots/help/auth-login.txt`, `auth-logout.txt` —
+   `test_no_orphan_help_snapshots` names them), then the gate. A `credentials/` dir left holding
+   only `__pycache__` is harmless (the CLI looks for
+   `credentials/manager.py`, not the directory). A CLI without
+   credentials that doesn't use `providers/` answers
+   `include_providers=false` instead of deleting `providers/` — deleted
+   template files come back on the next update.
+6. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 

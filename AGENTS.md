@@ -128,8 +128,14 @@ before (missing answers file, wrong `copier.yml` location).
   has it, reporting empty `credentials`, exit 0). `copier.yml`'s `_exclude`
   drops `commands/login.py`/`credentials/`/`tests/test_auth.py`;
   `commands/auth.py` (group + `status`) always ships and, like
-  `doctor.py`, detects `credentials`/`commands.login` at runtime
-  (`importlib.util.find_spec`) instead of being templated. If you touch any of these, regenerate with
+  `doctor.py`, detects `credentials.manager`/`commands.login` at runtime
+  (`importlib.util.find_spec`) instead of being templated. Probe the
+  **module**, never the package: after `include_auth` true→false a
+  `credentials/` dir holding only `__pycache__` imports as a namespace
+  package and `find_spec("<pkg>.credentials")` wrongly succeeds.
+  `include_providers=false` (allowed only with `include_auth=false`) drops
+  `providers/` and `tests/test_providers.py`; nothing outside
+  `credentials/health.py` may import `providers`. If you touch any of these, regenerate with
   `include_auth=false` and run the full verify loop — this combination
   previously went untested and silently shipped a `ModuleNotFoundError` on
   `keyring` for anyone who picked "no auth".

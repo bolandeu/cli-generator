@@ -47,7 +47,13 @@ from pathlib import Path
 from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
-FRAGMENTS = ROOT / "changelog.d"
+
+
+def _towncrier() -> dict:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text()).get("tool", {}).get("towncrier", {})
+
+
+FRAGMENTS = ROOT / _towncrier().get("directory", "changelog.d")
 PARTS = ("patch", "minor", "major")
 COMMANDS = (
     ("uv lock --check", ("uv", "lock", "--check")),
@@ -98,6 +104,11 @@ def tags() -> list[tuple[int, int, int]]:
     result = subprocess.run(["git", "tag", "--list", "v*"], cwd=ROOT, text=True, capture_output=True, check=False)
     listed = result.stdout.split()  # not a git repo yet (fresh scaffold): no tags
     return sorted((int(m[1]), int(m[2]), int(m[3])) for t in listed if (m := TAG_RE.match(t)))
+
+
+def changelog_file() -> str:
+    """Where towncrier writes: `[tool.towncrier] filename` (default CHANGELOG.md)."""
+    return _towncrier().get("filename", "CHANGELOG.md")
 
 
 def fragments() -> list[Path]:
@@ -307,8 +318,10 @@ def main() -> None:
         fail(f"tag {tag} already exists")
     run_gate(version)
 
-    run("uv", "run", "towncrier", "build", "--version", version, "--yes")  # writes CHANGELOG.md, `git rm`s fragments
-    run("git", "add", "--all", "CHANGELOG.md", *(["changelog.d"] if FRAGMENTS.exists() else []))
+    run(
+        "uv", "run", "towncrier", "build", "--version", version, "--yes"
+    )  # writes changelog_file(), `git rm`s fragments
+    run("git", "add", "--all", changelog_file(), *([str(FRAGMENTS)] if FRAGMENTS.exists() else []))
     run("git", "commit", "-m", f"Release {tag}")
     run("git", "tag", "-a", tag, "-m", tag)
     print(f"Released {tag} locally. Push it (needs your confirmation): git push --follow-tags")

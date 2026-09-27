@@ -17,6 +17,8 @@ _exclude:
   - "{% if not include_auth %}src/{{ package_name }}/commands/login.py{% endif %}"
   - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
+  - "{% if not include_providers %}src/{{ package_name }}/providers{% endif %}"
+  - "{% if not include_providers %}tests/test_providers.py{% endif %}"
 
 # The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
 # around it, so they're rendered in the generated project, not shipped.
@@ -69,6 +71,16 @@ include_auth:
   type: bool
   help: "Include the credentials/auth module (keyring-backed)?"
   default: true
+
+include_providers:
+  type: bool
+  help: "Include providers/ (HttpProvider base for external APIs)? Only a CLI without credentials can do without it"
+  default: true
+  when: "{{ not include_auth }}"
+  validator: >-
+    {% if include_auth and not include_providers %}
+    include_auth needs include_providers (auth status checks providers)
+    {% endif %}
 
 repository_url:
   type: str

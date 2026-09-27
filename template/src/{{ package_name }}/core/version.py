@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import importlib.util
 from importlib.metadata import PackageNotFoundError, distribution, metadata
 from importlib.metadata import version as pkg_version
 
@@ -9,6 +10,19 @@ from .._distribution import DIST_NAME
 _PACKAGE_NAME = __name__.split(".")[0]
 
 DEV_VERSION = "0.0.0-dev"
+
+
+def module_exists(name: str) -> bool:
+    """Whether module `name` (dotted) can be imported, without importing it.
+
+    For optional parts a generated CLI may not have (`credentials.manager`,
+    `commands.login`): probe the module, never its package — a directory
+    left holding only `__pycache__` still imports as a namespace package.
+    """
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ModuleNotFoundError:  # a parent package is missing entirely
+        return False
 
 
 @functools.cache
