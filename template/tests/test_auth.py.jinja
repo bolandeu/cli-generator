@@ -15,7 +15,8 @@ from {{ package_name }}.providers import Health, HttpProvider, Quota
 
 from .test_cli import invoke, invoke_json
 
-PREFIX = "{{ package_name.upper() }}"
+CLI = "{{ package_name }}"
+PREFIX = CLI.upper()
 GOOD, BAD = "good-secret-123", "bad-secret-456"
 
 
@@ -33,9 +34,9 @@ def fake_keyring(monkeypatch: pytest.MonkeyPatch):
     def fake_delete_password(service: str, username: str) -> None:
         store.pop((service, username), None)
 
-    monkeypatch.setattr("{{ package_name }}.credentials.manager.keyring.set_password", fake_set_password)
-    monkeypatch.setattr("{{ package_name }}.credentials.manager.keyring.get_password", fake_get_password)
-    monkeypatch.setattr("{{ package_name }}.credentials.manager.keyring.delete_password", fake_delete_password)
+    monkeypatch.setattr(credentials.keyring, "set_password", fake_set_password)
+    monkeypatch.setattr(credentials.keyring, "get_password", fake_get_password)
+    monkeypatch.setattr(credentials.keyring, "delete_password", fake_delete_password)
     return store
 
 
@@ -203,12 +204,12 @@ def test_keychain_and_mixed_sources(demo_providers) -> None:
     _, payload, _ = status("--check", extra=None)
     entries = by_provider(payload)
     assert (entries["demo"]["source"], entries["demo"]["status"]) == ("keychain", "ok")
-    assert entries["demo"]["source_ref"] == "keychain service {{ package_name }}:demo"
+    assert entries["demo"]["source_ref"] == f"keychain service {CLI}:demo"
 
     result = invoke("auth", "status", "--json", env={f"{PREFIX}_EXTRA_API_KEY": GOOD})
     extra = by_provider(json.loads(result.stdout))["extra"]
     assert extra["source"] == "env"
-    assert extra["source_ref"] == f"{PREFIX}_EXTRA_API_KEY; rest from keychain service {{ package_name }}:extra"
+    assert extra["source_ref"] == f"{PREFIX}_EXTRA_API_KEY; rest from keychain service {CLI}:extra"
 
 
 def test_provider_filter_and_unknown_provider(demo_providers) -> None:
@@ -256,7 +257,7 @@ def test_env_var_works_when_keyring_is_unavailable(monkeypatch: pytest.MonkeyPat
     def broken_get_password(service: str, username: str) -> str | None:
         raise keyring.errors.NoKeyringError("no backend")
 
-    monkeypatch.setattr("{{ package_name }}.credentials.manager.keyring.get_password", broken_get_password)
+    monkeypatch.setattr(credentials.keyring, "get_password", broken_get_password)
     monkeypatch.setattr(providers, "all_providers", lambda: [Demo])
     code, payload, _ = status(demo=GOOD)
     assert (code, by_provider(payload)["demo"]["source"]) == (0, "env")
