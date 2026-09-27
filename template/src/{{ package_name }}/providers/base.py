@@ -32,7 +32,8 @@ class Provider:
     """Base for every external integration, whatever its transport.
 
     A concrete provider sets `name` and `credential_fields` (the field names
-    it reads via `credentials.manager`; `()` if it needs none) and must
+    it reads via `credentials.manager` under `credential_name`; `()` if it
+    needs none), `required` and `per_target` where they differ, and must
     implement `health_check()` — `tests/test_providers.py` fails for any
     provider that doesn't. It must be constructible with no arguments:
     `auth status --check` instantiates every provider found in this package.
@@ -48,6 +49,17 @@ class Provider:
     # False for a provider the CLI works without: its missing credential is
     # reported but doesn't fail `auth status` (a wrong one still does).
     required: ClassVar[bool] = True
+    # True when the credential is per target (a site, host, account): one
+    # stored credential per target, named "<name>:<target>" — e.g.
+    # `auth login --provider deploy:example.com`. `auth status` reports each
+    # stored target separately and sets `target` before `health_check()`.
+    per_target: ClassVar[bool] = False
+    target: str | None = None
+
+    @property
+    def credential_name(self) -> str:
+        """The key to read this provider's credential under in `credentials.manager`."""
+        return f"{self.name}:{self.target}" if self.per_target and self.target else self.name
 
     def health_check(self) -> Health:
         """One cheap, read-only, non-billed call proving the credential works.

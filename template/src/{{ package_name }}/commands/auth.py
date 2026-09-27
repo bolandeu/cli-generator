@@ -69,7 +69,9 @@ def auth_status(
     check: bool = typer.Option(
         False, "--check", help="Also make one cheap read-only call per provider (10 s timeout) to prove each works."
     ),
-    provider: str | None = typer.Option(None, "--provider", help="Report only this provider (default: all)."),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Report only this provider, or one target as <kind>:<target> (default: all)."
+    ),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
@@ -78,19 +80,19 @@ def auth_status(
     Without --check only presence is reported (status `unchecked` or `missing`).
     Exits 0 when every required provider is ok/unchecked (an optional one may be
     missing), 3 when any required provider has a problem or any credential is
-    invalid/expired, 2 on a usage error. The --json shape is a cross-tool contract:
+    invalid/expired, 2 on a usage error. A per-target provider (one credential per
+    site/host/account) gets one entry per stored target, named `<kind>:<target>`. The --json shape is a cross-tool contract:
     `tool`, `version`, `checked_at`, `credentials[]` with `provider`, `required`,
     `fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.
 
     Example: {cli} auth status --check --json
     """
-    selected = providers.all_providers()
-    if provider is not None:
-        selected = [cls for cls in selected if cls.name == provider]
-        if not selected:
-            known = ", ".join(cls.name for cls in providers.all_providers()) or "none"
-            raise InvalidArguments(f"Unknown provider '{provider}' (known: {known}).")
-    payload = health.report(_CLI, installed_version() or DEV_VERSION, selected, check=check)
+    known = providers.all_providers()
+    selected = health.select(known, provider)
+    if provider is not None and not selected:
+        names = ", ".join(f"{cls.name}:<target>" if cls.per_target else cls.name for cls in known) or "none"
+        raise InvalidArguments(f"Unknown provider '{provider}' (known: {names}).")
+    payload = health.report(_CLI, installed_version() or DEV_VERSION, selected, check=check, only=provider)
     problems = {entry["provider"]: entry["status"] for entry in payload["credentials"] if health.is_problem(entry)}
     output.emit_report(ctx, payload, _render_status, CredentialsUnhealthy(problems) if problems else None)
 

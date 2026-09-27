@@ -82,7 +82,8 @@ order before moving to the next item.
     moved into `changelog.d/` fragments); a `scripts/release.py` that
     isn't the template's verbatim copy; a dependency on another of our
     tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
-    + compatible range).
+    + compatible range); a subprocess call to another of our CLIs without
+    a `core.deps.require_cli(...)` minimum-version check.
 
 11. **Bundled agent skill + quality gates.**
     Fail if there's no `src/<package_name>/data/SKILL.md` (bundled as

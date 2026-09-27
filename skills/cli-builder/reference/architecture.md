@@ -221,6 +221,16 @@ knowing any provider):
   other status or any credential is `invalid`/`expired`; `2` usage error.
   On `3` the envelope is `ok: false` + `error.code: CREDENTIALS_UNHEALTHY`
   **plus** the full report — a report is data even when it finds problems.
+- **Per-target providers** (`per_target = True`, e.g. `name = "deploy"`):
+  one credential per site/host/account stored as `<kind>:<target>`
+  (`auth login --provider deploy:example.com`), and one report entry per
+  stored target, `provider: "deploy:example.com"`, each checked with its
+  own credential (`self.credential_name` in `auth_headers()`; `auth status`
+  sets `self.target`). Targets are listed from an index the credential
+  manager keeps in the keychain (keyring can't enumerate); an env-only
+  target is reported when asked for by name (`--provider deploy:x.com`;
+  env var `<CLI>_DEPLOY_X_COM_API_KEY` — non-alphanumerics become `_`).
+  No stored target → one `deploy` entry, `missing`.
 - The shape is pinned by `tests/test_auth.py`; changing it is a breaking
   change (§8, SemVer). Implementation: `credentials/health.py`.
 
@@ -327,17 +337,21 @@ the template implements it):
   `changelog.d/+<slug>.<type>.md` (`uv run towncrier create +<slug>.<type>.md
   -c "..."`; type = added/changed/deprecated/removed/fixed/security). Two
   branches never touch the same line, so they never conflict. CI runs
-  `towncrier check` on pull requests; the pre-commit hook
+  the gate (below) requires one whenever anything but `uv.lock` /
+  `.github/` changed since the last tag; the pre-commit hook
   (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
   runs only this, the root agent's `tools-watch` runs it too: `uv lock
   --check`, ruff check, ruff format --check, ty, pytest, a changelog
-  fragment present whenever anything changed since the last tag (checked
-  in the working tree — `towncrier check` only sees commits), and
+  fragment present whenever anything but `uv.lock` / `.github/` changed
+  since the last tag (checked in the working tree — `towncrier check` only
+  sees commits; lock/CI-only changes are Dependabot's and need none),
   `uv build` + install of the wheel into a throwaway venv where
-  `<cli> --version` must equal the built version and `<cli> --help` must
-  work. The first failing step stops it, named, with its output.
+  `<cli> --version` must equal the wheel's METADATA version and
+  `<cli> --help` must work, and `osv-scanner --lockfile=uv.lock` when
+  osv-scanner is installed (skipped with a notice otherwise; `brew install
+  osv-scanner`). The first failing step stops it, named, with its output.
 - **`release.py patch|minor|major`** is the only way a version moves: on a
   clean `main` not behind its upstream, it runs the same gate (building
   the wheel as the new version via `UV_DYNAMIC_VERSIONING_BYPASS`, since
@@ -347,15 +361,17 @@ the template implements it):
   the user confirms. The template's copy is canonical: every repo
   following the standard uses it verbatim.
 - **CI is optional**: one `ubuntu-24.04` job on the lowest supported
-  Python running `release.py --check` (+ OSV-Scanner). Delete the
-  workflow to save Actions minutes; nothing depends on it.
+  Python that installs osv-scanner and runs `release.py --check` —
+  nothing else of its own. Delete the workflow to save Actions minutes;
+  nothing depends on it.
 - **Versions mean compatibility (SemVer).** Removing/renaming/changing
   anything public — Python API, CLI commands or flags, the `--json` shape,
-  exit codes or error codes (`conventions.md`) — is a major bump; a new
-  feature with old behaviour intact is minor; a fix is patch. While at
-  `0.x`, **minor counts as breaking** (`0.2 → 0.3` may break,
-  `0.2.1 → 0.2.2` must not). Deprecate first (warning + a `deprecated`
-  fragment), remove in the next breaking release.
+  exit codes or error codes, the `auth status` report (`conventions.md`)
+  — is a major bump; a new feature with old behaviour intact is minor; a
+  fix is patch. While at `0.x` (Cargo convention): fixes **and**
+  compatible features are patch, anything breaking is minor
+  (`0.2 → 0.3`). Deprecate first (warning + a `deprecated` fragment),
+  remove in the next breaking release. Tables: `conventions.md`.
 
 A tag is what makes `uv tool install "git+<url>@v1.2.0"` reproducible on
 another machine and what `--version` / `doctor` report; cut one whenever a
@@ -380,9 +396,11 @@ yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1
 - Bumping the pin is one commit: `tag = "vNEW"` + `uv lock
   --upgrade-package <name>` + the full gate.
 - A CLI that shells out to another CLI (not imports it) declares the
-  minimum version it needs and checks `<other> --version` at runtime,
-  failing with a clear `CliError` (what's installed, what's needed, the
-  `uv tool upgrade` command) rather than a confusing downstream error.
+  minimum version it needs and checks it at runtime before the first
+  call: `exe = core.deps.require_cli("serp", "0.3.0")`, then run `exe`.
+  A missing or older CLI fails with `DEPENDENCY_TOO_OLD` (exit 1: what's
+  installed, what's needed, the `uv tool upgrade` command) instead of a
+  confusing downstream error; a `0.0.0…` dev build is accepted.
 
 ## 9. Every package ships its own agent skill
 

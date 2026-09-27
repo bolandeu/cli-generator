@@ -75,7 +75,7 @@ changed with no changelog fragment on the branch.
 - **SemVer is a promise about the CLI surface.** Removing/renaming/changing
   commands, flags, the `--json` shape, exit or error codes is breaking —
   major, or **minor while at `0.x`**. A new feature with old behaviour
-  intact is minor; a fix is patch. Deprecate first
+  intact is minor (**patch while at `0.x`**); a fix is patch. Deprecate first
   (warning + a `deprecated` fragment), remove in the next breaking release.
 - **Depending on another of our tools**: pin by tag in `[tool.uv.sources]`
   (`{ git = "...", tag = "vX.Y.Z" }`) with a compatible range in

@@ -13,9 +13,10 @@ uv run pytest --snapshot-update  # after changing a command's help; review tests
 ```
 
 `pytest` fails below the coverage floor in `pyproject.toml`; `ruff` includes
-the security (`S`) rules; CI (optional — it only repeats `release.py --check`) additionally scans `uv.lock` for known
-vulnerabilities (OSV-Scanner) — the same as `osv-scanner --lockfile=uv.lock`
-locally.
+the security (`S`) rules; the gate also scans `uv.lock` for known
+vulnerabilities when `osv-scanner` is installed (`brew install osv-scanner`),
+and says it skipped the scan otherwise. CI is optional and only repeats
+`release.py --check`.
 
 ## Release
 
@@ -24,7 +25,7 @@ Each change adds a changelog fragment instead of editing `CHANGELOG.md`:
 
 ```bash
 uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."
-uv run scripts/release.py patch   # or minor / major (SemVer; at 0.x minor = breaking)
+uv run scripts/release.py patch   # or minor / major (SemVer; at 0.x: patch = fix/feature, minor = breaking)
 git push --follow-tags
 ```
 

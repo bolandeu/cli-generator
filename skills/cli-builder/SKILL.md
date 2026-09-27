@@ -90,7 +90,12 @@ function) is governed by these four rules instead
      Each provider declares `credential_fields` and `required`, and
      implements `health_check()` — one cheap read-only call (the test
      suite fails without it); that is what `auth status --check`
-     reports in the cross-tool shape (`architecture.md` §4).
+     reports in the cross-tool shape (`architecture.md` §4). One
+     credential per site/host/account → `per_target = True`, read it
+     under `self.credential_name`.
+   - Calling another of our CLIs as a subprocess? Get its path with
+     `core.deps.require_cli("<cli>", "<min version>")` first — it fails
+     with `DEPENDENCY_TOO_OLD` instead of a confusing downstream error.
    - Wire the real work into `commands/run.py`, replacing the placeholder.
    - Any new command group (`<cli> thing list|add`) is created with
      `output.group("...")`, never `typer.Typer(...)`, so a bare
@@ -309,8 +314,8 @@ sitting installable-from-nowhere without asking.
    runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
    towncrier, commits `Release vX.Y.Z` and tags — then prints
    `git push --follow-tags`, which needs the user's confirmation. Pick the
-   part by SemVer (`architecture.md` §8: at `0.x` a breaking change is a
-   minor bump). There is no `version =` to edit and no `[Unreleased]`
+   part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
+   features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
    section — one fragment per change, `release.py` when it should ship.
    `uv tool upgrade <package_name>` moves other machines forward.
 
@@ -344,8 +349,8 @@ skipped under time pressure — check them explicitly:
   docstring is its documentation (that's what a bare `<cli>` renders).
 - The quality gates are part of the package, not of CI alone:
   `fail_under` coverage in `pyproject.toml` (raise it, never lower it),
-  ruff's `S` (security) rules, and the OSV-Scanner step in CI over
-  `uv.lock`. `uv run scripts/release.py --check` runs every gate locally
+  ruff's `S` (security) rules, and the osv-scanner audit of `uv.lock`
+  (a gate step when osv-scanner is installed; CI installs it). `uv run scripts/release.py --check` runs every gate locally
   and is what an agent runs before each commit. A refactored project gets all three.
 - The package is installable with `uv tool install "git+<repo-url>"` and
   its README.md + bundled SKILL.md carry that exact command with the real

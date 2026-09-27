@@ -60,7 +60,7 @@ class Demo(HttpProvider):
     expires_at: datetime | None = None
 
     def auth_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {credentials.get_secret(self.name)}"}
+        return {"Authorization": f"Bearer {credentials.get_secret(self.credential_name)}"}
 
     def health_check(self) -> Health:
         data = self.get_json(self.path)
@@ -232,6 +232,54 @@ def test_no_providers_is_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(providers, "all_providers", lambda: [])
     code, payload = invoke_json("auth", "status")
     assert (code, payload["credentials"]) == (0, [])
+
+
+# --- per-target providers: one entry per stored target --------------------------
+
+
+class Deploy(Demo):
+    name = "deploy"
+    per_target = True
+
+
+@pytest.fixture
+def deploy_provider(monkeypatch: pytest.MonkeyPatch, fake_keyring):
+    monkeypatch.setattr(providers, "all_providers", lambda: [Deploy])
+    monkeypatch.setattr(Demo, "path", "/me")
+    monkeypatch.setattr(Demo, "expires_at", None)
+    return fake_keyring
+
+
+def test_per_target_reports_each_stored_target(deploy_provider) -> None:
+    credentials.store_credential("deploy:a.example.com", {"api_key": GOOD})
+    credentials.store_credential("deploy:b.example.com", {"api_key": BAD})
+    code, payload, _ = status("--check")
+    entries = by_provider(payload)
+    assert list(entries) == ["deploy:a.example.com", "deploy:b.example.com"]
+    assert (entries["deploy:a.example.com"]["status"], entries["deploy:b.example.com"]["status"]) == ("ok", "invalid")
+    assert entries["deploy:a.example.com"]["source_ref"] == f"keychain service {CLI}:deploy:a.example.com"
+    assert code == 3
+
+    code, payload, _ = status("--check", "--provider", "deploy:a.example.com")
+    assert (code, list(by_provider(payload))) == (0, ["deploy:a.example.com"])
+
+    credentials.delete_credential("deploy:b.example.com")
+    assert list(by_provider(status()[1])) == ["deploy:a.example.com"]
+
+
+def test_per_target_env_only_target_by_name(deploy_provider) -> None:
+    target_env = {f"{PREFIX}_DEPLOY_C_EXAMPLE_COM_API_KEY": GOOD}
+    result = invoke("auth", "status", "--check", "--provider", "deploy:c.example.com", "--json", env=target_env)
+    entry = by_provider(json.loads(result.stdout))["deploy:c.example.com"]
+    assert (result.exit_code, entry["source"], entry["status"]) == (0, "env", "ok")
+    assert entry["source_ref"] == f"{PREFIX}_DEPLOY_C_EXAMPLE_COM_API_KEY"
+
+
+def test_per_target_with_no_targets_is_missing(deploy_provider) -> None:
+    code, payload, _ = status()
+    entry = by_provider(payload)["deploy"]
+    assert (code, entry["status"]) == (3, "missing")
+    assert "deploy:<target>" in entry["message"]
 
 
 # --- login / logout --------------------------------------------------------------

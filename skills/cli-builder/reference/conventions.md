@@ -53,6 +53,7 @@ per project when one of these fits:
 | `PROJECT_NOT_INITIALIZED`      | 4    | `services.require_project_root` |
 | `PROVIDER_ERROR`               | 5    | `providers.HttpProvider` after retries; carries `provider` and `status` |
 | `CLI_TOO_OLD`                  | 6    | `services.load_config` when installed < `cli.min_version` |
+| `DEPENDENCY_TOO_OLD`           | 1    | `core.deps.require_cli` when another CLI this one calls is missing or older than needed |
 | `CREDENTIALS_UNHEALTHY`        | 3    | `auth status` when a required credential isn't ok, or any is invalid/expired (envelope also carries the full report) |
 | `CREDENTIAL_STORE_UNAVAILABLE` | 1    | `credentials.manager` on write/delete when the keychain is unusable |
 | `ABORTED`                      | 1    | the user answered "no" to `require_confirmation` |
@@ -112,11 +113,22 @@ Everything in this file is public API: the envelope shape, error codes,
 exit codes, global options, command names and flags. Versions follow
 SemVer against that surface (`architecture.md` §8):
 
-| Change | Bump | While at `0.x` |
-|---|---|---|
-| bug fix, no surface change | patch | patch |
-| new command/flag/field, old behaviour intact | minor | minor or patch — never breaking either way |
-| anything removed, renamed or changed: command, flag, `--json` shape, exit code, error code | major | minor (at `0.x` minor = breaking) |
+Everything above also includes the `auth status` report (`architecture.md`
+§4). From `1.0.0` on:
+
+| Change | Bump |
+|---|---|
+| bug fix, no surface change | patch `1.2.1` |
+| new command/flag/field, old behaviour intact | minor `1.3.0` |
+| anything removed, renamed or changed: command, flag, `--json` shape, exit code, error code | major `2.0.0` |
+
+While at `0.x` (Cargo/uv convention — matches the `>=0.2,<0.3` pins other
+tools use for us):
+
+| Change | Bump |
+|---|---|
+| bug fix **or** new command/flag/field, old behaviour intact | patch `0.2.1 → 0.2.2` |
+| anything removed, renamed or changed (breaking) | minor `0.2 → 0.3` |
 
 Deprecate before removing: keep the old form working with a warning on
 stderr, add a `deprecated` changelog fragment, remove it in the next

@@ -11,9 +11,11 @@ Gate steps, in order — the first failure stops everything and prints that
 step's name and output:
 
     uv lock --check · ruff check · ruff format --check · ty check · pytest ·
-    changelog fragment (at least one in changelog.d/ when anything changed
-    since the last tag) · build + install the wheel into a throwaway venv,
-    `<cli> --version` must print the version being built, `<cli> --help` must work
+    changelog fragment (at least one in changelog.d/ when anything but
+    uv.lock / .github/ changed since the last tag) · build + install the wheel
+    into a throwaway venv, `<cli> --version` must print the version being
+    built, `<cli> --help` must work · osv-scanner over uv.lock (skipped with a
+    notice when osv-scanner isn't installed)
 
 The version lives only in git tags (`vX.Y.Z`, read at build time by
 uv-dynamic-versioning); a release bumps the last `v*` tag by `part`. Releasing
@@ -28,10 +30,12 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import tomllib
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import NoReturn
@@ -92,6 +96,13 @@ def run_command(argv: tuple[str, ...]) -> str:
     return ""
 
 
+def _changed_since(tag: str) -> list[str]:
+    """Files that differ from `tag`: committed, staged, unstaged and untracked."""
+    tracked = run("git", "diff", "--name-only", tag, capture=True).splitlines()
+    untracked = run("git", "ls-files", "--others", "--exclude-standard", capture=True).splitlines()
+    return sorted(set(tracked + untracked))
+
+
 def check_fragment() -> str:
     # Looks at the working tree, not commits: `towncrier check` only sees
     # committed files, and agents run --check before committing.
@@ -100,9 +111,12 @@ def check_fragment() -> str:
     versions = tags()
     if versions:
         last = "v{}.{}.{}".format(*versions[-1])
-        at_tag = run("git", "rev-parse", "HEAD", capture=True) == run("git", "rev-list", "-n1", last, capture=True)
-        if at_tag and not run("git", "status", "--porcelain", capture=True):
+        changed = _changed_since(last)
+        if not changed:
             return f"nothing changed since {last}"
+        # Dependabot's lock/CI bumps aren't user-visible changes.
+        if all(path == "uv.lock" or path.startswith(".github/") for path in changed):
+            return f"only uv.lock / .github/ changed since {last}"
         since = f"since {last}"
     else:
         since = "and there is no release tag yet"
@@ -111,6 +125,25 @@ def check_fragment() -> str:
         '  uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."\n'
         "  (type: added/changed/deprecated/removed/fixed/security)"
     )
+
+
+def check_vulnerabilities() -> str:
+    scanner = shutil.which("osv-scanner")
+    if scanner is None:
+        return "skipped: osv-scanner not installed (brew install osv-scanner)"
+    step_output(scanner, "--lockfile=uv.lock")
+    return "no known vulnerabilities in uv.lock"
+
+
+def _wheel_version(wheel: Path) -> str:
+    """`Version:` from the wheel's METADATA — what importlib.metadata (and so `--version`) reports.
+
+    Not the file name: it normalizes the local part (`+0814724` -> `+814724`).
+    """
+    with zipfile.ZipFile(wheel) as archive:
+        name = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+        metadata = archive.read(name).decode()
+    return next(line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.startswith("Version:"))
 
 
 def check_installed_wheel(version: str | None) -> str:
@@ -123,7 +156,7 @@ def check_installed_wheel(version: str | None) -> str:
         dist, venv = Path(tmp) / "dist", Path(tmp) / "venv"
         step_output("uv", "build", "--wheel", "--out-dir", str(dist), env=env)
         wheel = next(dist.glob("*.whl"))
-        built = wheel.name.split("-")[1]
+        built = _wheel_version(wheel)
         if version is not None and built != version:
             raise StepFailed(f"built {wheel.name}, expected version {version}")
         if tags() and built.startswith("0.0.0"):
@@ -147,6 +180,7 @@ def run_gate(version: str | None) -> None:
         *((name, lambda argv=argv: run_command(argv)) for name, argv in COMMANDS),
         ("changelog fragment", check_fragment),
         ("build + install wheel", lambda: check_installed_wheel(version)),
+        ("vulnerability audit", check_vulnerabilities),
     ]
     for name, step in steps:
         print(f"release: {name} ...", end=" ", flush=True)

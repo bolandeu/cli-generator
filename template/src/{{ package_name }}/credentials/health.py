@@ -39,8 +39,9 @@ def _scrub(message: str | None, secrets: list[str]) -> str | None:
     return message
 
 
-def _run_check(provider_cls: type[Provider]) -> Health:
+def _run_check(provider_cls: type[Provider], target: str | None) -> Health:
     provider = provider_cls()
+    provider.target = target
     if isinstance(provider, HttpProvider):
         provider.timeout = min(provider.timeout, CHECK_TIMEOUT)
         provider.retries = 0
@@ -63,8 +64,9 @@ def _run_check(provider_cls: type[Provider]) -> Health:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-def _entry(provider_cls: type[Provider], check: bool) -> dict:
-    name, fields = provider_cls.name, list(provider_cls.credential_fields)
+def _entry(provider_cls: type[Provider], check: bool, target: str | None = None) -> dict:
+    name = f"{provider_cls.name}:{target}" if target else provider_cls.name
+    fields = list(provider_cls.credential_fields)
     located = manager.locate_fields(name, fields)
     secrets = [value for value, _ in located.values()]
     env_refs = [manager.env_var_name(name, field) for field in fields]
@@ -99,7 +101,7 @@ def _entry(provider_cls: type[Provider], check: bool) -> dict:
     if not check:
         entry["status"] = "unchecked"
         return entry
-    health = _run_check(provider_cls)
+    health = _run_check(provider_cls, target)
     status = health.status
     if status == "ok" and health.expires_at and health.expires_at <= _now():
         status = "expired"
@@ -118,11 +120,35 @@ def is_problem(entry: dict) -> bool:
     return entry["required"] and entry["status"] not in HEALTHY
 
 
-def report(tool: str, version: str, providers: list[type[Provider]], *, check: bool) -> dict:
+def _entries(provider_cls: type[Provider], check: bool, only: str | None) -> list[dict]:
+    if not provider_cls.per_target:
+        return [_entry(provider_cls, check)]
+    # One entry per stored target ("<kind>:<target>"); none stored yet is
+    # reported as the bare kind, `missing` — required or not, as declared.
+    prefix = f"{provider_cls.name}:"
+    if only is not None and only.startswith(prefix):
+        targets = [only.removeprefix(prefix)]  # asked for by name: stored or env-only, it gets checked
+    else:
+        targets = [name.removeprefix(prefix) for name in manager.stored_names() if name.startswith(prefix)]
+    if not targets:
+        entry = _entry(provider_cls, check=False)
+        entry["message"] = f"no {provider_cls.name} targets stored ('auth login --provider {prefix}<target>')"
+        return [entry]
+    return [_entry(provider_cls, check, target) for target in targets]
+
+
+def select(providers: list[type[Provider]], only: str | None) -> list[type[Provider]]:
+    """Providers `only` refers to: a provider name, or `<kind>:<target>` of a per-target one."""
+    if only is None:
+        return providers
+    return [cls for cls in providers if cls.name == only or (cls.per_target and only.startswith(f"{cls.name}:"))]
+
+
+def report(tool: str, version: str, providers: list[type[Provider]], *, check: bool, only: str | None = None) -> dict:
     """The §8 report for `providers` (only those that declare credential fields)."""
     return {
         "tool": tool,
         "version": version,
         "checked_at": _iso(_now()),
-        "credentials": [_entry(cls, check) for cls in providers if cls.credential_fields],
+        "credentials": [entry for cls in providers if cls.credential_fields for entry in _entries(cls, check, only)],
     }
