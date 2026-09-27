@@ -71,23 +71,29 @@ function) is governed by these four rules instead
      the start instead of an `<owner>/<repo>` placeholder to chase later.
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
-2. Generate the skeleton with copier, pointing it at this plugin's repo
-   root (its `copier.yml` has `_subdirectory: template`, so copier finds
-   the actual template files under `template/` automatically — no
-   `--subdirectory` flag needed):
+2. Generate the skeleton with copier from **`gh:bolandeu/cli-generator`** —
+   the single template source: it becomes `_src_path` in the project's
+   `.copier-answers.yml`, so every later `copier update` pulls released
+   tags from GitHub on any machine (never a local path or the
+   `~/.claude/skills/cli-generator` symlink). Its `copier.yml` has
+   `_subdirectory: template`, so no `--subdirectory` flag is needed:
 
    ```bash
-   uvx copier copy /absolute/path/to/this/plugin/repo <dest-dir> \
+   uvx copier copy gh:bolandeu/cli-generator <dest-dir> --trust \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
      --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
      --data repository_url=https://github.com/<owner>/<repo>
    ```
 
-   `gh:bolandeu/cli-generator` works as the template source in place of
-   the local path (copier clones it; use `--vcs-ref vX.Y.Z` to pin a
-   template release — `copier update` in the generated project later
-   moves between those tags).
+   Copier picks the latest release tag; `--vcs-ref vX.Y.Z` pins one. A
+   local checkout of this repo as the source is only for testing a
+   template change before it is released (see this repo's AGENTS.md). An
+   existing project with another `_src_path` switches by editing that one
+   line to `_src_path: gh:bolandeu/cli-generator` (commit
+   `chore(copier): template source gh:bolandeu/cli-generator`), then
+   `uvx copier update --trust --defaults --pretend` must say "Updating to
+   template version …".
 3. Implement the real logic:
    - Business logic goes in `src/<package_name>/core/services.py` (or new
      modules under `core/`), never inside `commands/*.py`. Commands stay
