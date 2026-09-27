@@ -11,8 +11,9 @@ Gate steps, in order — the first failure stops everything and prints that
 step's name and output:
 
     uv lock --check · ruff check · ruff format --check · ty check · pytest ·
-    changelog fragment (at least one in changelog.d/ when anything but
-    uv.lock / .github/ changed since the last tag) · build the wheel and install
+    changelog fragment (at least one in changelog.d/ when anything user-visible
+    changed since the last tag — not uv.lock, .github/, scripts/, tests/,
+    .githooks/, .claude/, AGENTS.md, CLAUDE.md) · build the wheel and install
     it into a throwaway venv with exactly the uv.lock dependency set (`uv export`,
     then the wheel with --no-deps, then `uv pip check` — never resolving from
     an index, so git-sourced deps can't be swapped for a same-named PyPI
@@ -56,6 +57,16 @@ COMMANDS = (
     ("pytest", ("uv", "run", "pytest")),
 )
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+
+# Changes that never need a changelog fragment (standard §3): they don't
+# change what users of the package get. Keep this list identical in
+# scripts/release.py and scripts/check_changelog_fragment.py (a test checks).
+NO_FRAGMENT_NEEDED = ("uv.lock", ".github/", "scripts/", "tests/", ".githooks/", ".claude/", "AGENTS.md", "CLAUDE.md")
+
+
+def needs_fragment(path: str) -> bool:
+    """Whether a change to `path` (repo-relative, POSIX) is user-visible enough to need a fragment."""
+    return not any(path == entry or (entry.endswith("/") and path.startswith(entry)) for entry in NO_FRAGMENT_NEEDED)
 
 
 class StepFailed(Exception):
@@ -119,9 +130,8 @@ def check_fragment() -> str:
         changed = _changed_since(last)
         if not changed:
             return f"nothing changed since {last}"
-        # Dependabot's lock/CI bumps aren't user-visible changes.
-        if all(path == "uv.lock" or path.startswith(".github/") for path in changed):
-            return f"only uv.lock / .github/ changed since {last}"
+        if not any(needs_fragment(path) for path in changed):
+            return f"only tooling changed since {last} ({', '.join(NO_FRAGMENT_NEEDED)})"
         since = f"since {last}"
     else:
         since = "and there is no release tag yet"

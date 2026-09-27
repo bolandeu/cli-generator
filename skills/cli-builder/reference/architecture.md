@@ -345,17 +345,21 @@ the template implements it):
   `CHANGELOG.md` between releases — every user-visible change adds
   `changelog.d/+<slug>.<type>.md` (`uv run towncrier create +<slug>.<type>.md
   -c "..."`; type = added/changed/deprecated/removed/fixed/security). Two
-  branches never touch the same line, so they never conflict. CI runs
-  the gate (below) requires one whenever anything but `uv.lock` /
-  `.github/` changed since the last tag; the pre-commit hook
+  branches never touch the same line, so they never conflict. The gate
+  (below) requires one whenever something user-visible changed since the
+  last tag — tooling-only changes (`uv.lock`, `.github/`, `scripts/`,
+  `tests/`, `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`) need none,
+  so the changelog stays about the package; the pre-commit hook
   (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
   runs only this, the root agent's `tools-watch` runs it too: `uv lock
   --check`, ruff check, ruff format --check, ty, pytest, a changelog
-  fragment present whenever anything but `uv.lock` / `.github/` changed
-  since the last tag (checked in the working tree — `towncrier check` only
-  sees commits; lock/CI-only changes are Dependabot's and need none),
+  fragment present whenever anything user-visible changed since the last
+  tag (checked in the working tree — `towncrier check` only sees commits;
+  the tooling-only paths above need none — `NO_FRAGMENT_NEEDED`, the same
+  list in `release.py` and `check_changelog_fragment.py`, pinned by
+  `tests/test_scripts.py`),
   `uv build` + install of the wheel into a throwaway venv where
   `<cli> --version` must equal the wheel's METADATA version and
   `<cli> --help` must work (a library without a console script: every
