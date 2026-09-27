@@ -95,16 +95,34 @@ what every integration otherwise reinvents slightly differently:
 `transport` is a test seam for `httpx.MockTransport` — the template's
 `tests/test_providers.py` shows the pattern.
 
+**Every provider implements `health_check()`.** `HttpProvider` extends
+`providers.base.Provider`, which declares `name`, `credential_fields`
+(the field names it reads from `credentials.manager`; default
+`("api_key",)`, `()` for none), `required` (`False` for a provider the
+CLI works without) and `health_check() -> Health`: one cheap, read-only,
+non-billed call proving the credential works — usually
+`self.get_json("/me")`, then `return Health(expires_at=..., quota=...)`;
+let `AuthRequired`/`ProviderError` propagate. `providers.all_providers()`
+finds every concrete subclass defined under `providers/` by itself (no
+registry to forget; bases set `abstract = True`), and
+`tests/test_providers.py` fails for any that doesn't override
+`health_check()` or can't be constructed without arguments. This is what
+`auth status --check` runs (§4, "`auth status`").
+
 Non-HTTP integrations (a vendor SDK, a local binary, a database driver)
 still live under `providers/` and still speak the same error language,
-they just don't get the base class. The contract is the same mappings,
-done at the provider boundary so nothing above it ever sees a vendor
+subclassing `Provider` directly. The contract is the same mappings, done
+at the provider boundary so nothing above it ever sees a vendor
 exception:
 
 ```python
 # providers/ffmpeg.py — sketch, not in the template
-class FfmpegProvider:
+class FfmpegProvider(Provider):
     name = "ffmpeg"
+    credential_fields = ()  # no credential: not listed by `auth status`
+
+    def health_check(self) -> Health:
+        return Health() if shutil.which("ffmpeg") else Health("unreachable", message="ffmpeg not on PATH")
 
     def transcode(self, src: Path, dst: Path) -> None:
         exe = shutil.which("ffmpeg")
@@ -174,6 +192,37 @@ provider *and* per-site deploy credentials) — that's normal, not a
 special case; each is just a different `provider` key in the same store.
 Never invent a second storage mechanism for the "unusual" shape — extend
 `credentials/manager.py`'s field-bag, don't bypass it.
+
+### `auth status` — the credentials health contract
+
+`<cli> auth status [--check] [--provider NAME] --json` reports every
+provider with credentials in one fixed shape (shared across all our tools,
+`tools/docs/standard-release.md` §8; `tools-watch` reads it without
+knowing any provider):
+
+```json
+{"ok": true, "tool": "serp", "version": "0.3.0", "checked_at": "2026-09-27T12:00:00Z",
+ "credentials": [{"provider": "xmlriver", "required": true, "fields": ["user", "token"],
+   "source": "env", "source_ref": "SERP_XMLRIVER_USER, SERP_XMLRIVER_TOKEN", "status": "ok",
+   "expires_at": null, "quota": {"remaining": 1840, "limit": null, "unit": "requests"}, "message": null}]}
+```
+
+- `source`: `env` | `keychain` | `file` | `missing`; `source_ref` names env
+  vars / keychain service / file — **never a value** (messages are scrubbed
+  of credential values too). Env overriding part of a keychain credential
+  reports `env` with both places in `source_ref`.
+- `status`: `missing` / `unchecked` without `--check`; with it, the
+  provider's `health_check()` (10 s hard timeout, no retries) gives `ok`,
+  or `AuthRequired` → `invalid`, `ProviderError`/timeout → `unreachable`,
+  a past `expires_at` → `expired`, and the provider may return
+  `quota_exhausted` itself.
+- Exit `0` when every required provider is `ok`/`unchecked` (an optional
+  one may be `missing`/`unreachable`); `3` when a required one has any
+  other status or any credential is `invalid`/`expired`; `2` usage error.
+  On `3` the envelope is `ok: false` + `error.code: CREDENTIALS_UNHEALTHY`
+  **plus** the full report — a report is data even when it finds problems.
+- The shape is pinned by `tests/test_auth.py`; changing it is a breaking
+  change (§8, SemVer). Implementation: `credentials/health.py`.
 
 ## 5. AI-first output
 

@@ -53,6 +53,7 @@ per project when one of these fits:
 | `PROJECT_NOT_INITIALIZED`      | 4    | `services.require_project_root` |
 | `PROVIDER_ERROR`               | 5    | `providers.HttpProvider` after retries; carries `provider` and `status` |
 | `CLI_TOO_OLD`                  | 6    | `services.load_config` when installed < `cli.min_version` |
+| `CREDENTIALS_UNHEALTHY`        | 3    | `auth status` when a required credential isn't ok, or any is invalid/expired (envelope also carries the full report) |
 | `CREDENTIAL_STORE_UNAVAILABLE` | 1    | `credentials.manager` on write/delete when the keychain is unusable |
 | `ABORTED`                      | 1    | the user answered "no" to `require_confirmation` |
 | `UNEXPECTED`                   | 1    | `output.guard` — any exception nobody mapped |
@@ -128,7 +129,8 @@ breaking release.
 <cli> status [--json]
 <cli> doctor [--json]
 <cli> config get|set|list
-<cli> auth login|logout|status
+<cli> auth login|logout
+<cli> auth status [--check] [--provider NAME] [--json]   # fixed shape: architecture.md §4
 <cli> skill install [--tool claude-code|agents] [--project]
 <cli> run
 <cli> --ai

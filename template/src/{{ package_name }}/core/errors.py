@@ -50,6 +50,17 @@ class AuthRequired(CliError):
         )
 
 
+class CredentialsUnhealthy(CliError):
+    def __init__(self, problems: dict[str, str]) -> None:
+        listed = ", ".join(f"{provider} ({status})" for provider, status in problems.items())
+        super().__init__(
+            "CREDENTIALS_UNHEALTHY",
+            f"{len(problems)} credential(s) need attention: {listed}.",
+            action=f"See each entry's `message`; store a credential with '{_CLI} auth login --provider <name>'.",
+            exit_code=3,
+        )
+
+
 class InvalidArguments(CliError):
     def __init__(self, message: str) -> None:
         super().__init__("INVALID_ARGUMENTS", message, exit_code=2)

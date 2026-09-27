@@ -37,7 +37,13 @@ order before moving to the next item.
    help with exit 0 (`output.group`), not a "Missing command" error.
    External calls go through a `providers.HttpProvider` subclass so
    network/HTTP failures come out as `PROVIDER_ERROR` / `AUTH_REQUIRED`
-   instead of a `requests` traceback.
+   instead of a `requests` traceback. Every provider (a `providers.Provider`
+   subclass) implements `health_check()`, and a CLI with credentials has
+   `auth status [--check] --json` in the exact shape of
+   `architecture.md` §4 — copy `credentials/health.py`, the command and
+   the shape test from the template; fail on any other status command
+   format, on a status that prints values, or on placeholder credentials
+   stored just to make it green.
 
 6. **`doctor` command exists.**
    Fail if there's no single command that checks environment/config/auth

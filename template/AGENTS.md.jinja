@@ -32,6 +32,11 @@ changed with no changelog fragment on the branch.
   subclass `providers.HttpProvider` (retries, timeouts and the mapping of
   401/429/5xx/network errors onto `AuthRequired`/`ProviderError` are done
   there once); never call `httpx` directly from `core/` or `commands/`.
+  Every provider sets `name`, `credential_fields`, `required` and
+  implements `health_check()` (one cheap, read-only, non-billed call —
+  `tests/test_providers.py` fails without it). `auth status --check --json`
+  runs those checks; its JSON shape is a cross-tool contract pinned by
+  `tests/test_auth.py` — changing it is a breaking change.
 - `credentials/` — secrets via OS keychain + env vars. Never write a secret
   to `.{{ package_name }}/config.toml` or any other project-local file.
 - `output/` — every command supports both human and `--json` output via

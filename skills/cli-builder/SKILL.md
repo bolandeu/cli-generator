@@ -87,6 +87,10 @@ function) is governed by these four rules instead
      429/5xx, timeouts and network errors onto the CLI's error codes and
      retries what's safe; don't re-implement that per project. The
      credential comes from `credentials.manager` inside `auth_headers()`.
+     Each provider declares `credential_fields` and `required`, and
+     implements `health_check()` — one cheap read-only call (the test
+     suite fails without it); that is what `auth status --check`
+     reports in the cross-tool shape (`architecture.md` §4).
    - Wire the real work into `commands/run.py`, replacing the placeholder.
    - Any new command group (`<cli> thing list|add`) is created with
      `output.group("...")`, never `typer.Typer(...)`, so a bare
@@ -195,6 +199,12 @@ template, `_commit` is the template release it was last synced to):
    (help snapshots are only rendered on `copier copy`) and read the
    generated `tests/snapshots/help/` — fix any command the new
    `test_help.py` contract flags (missing `Example:` line or `help=`),
+   implement `health_check()` on every existing provider (plus
+   `credential_fields`/`required`) — `test_providers.py` names the ones
+   missing it. `auth status` now emits the §8 report instead of
+   `{"provider", "authenticated"}`: a breaking change for the CLI's own
+   callers, so release it as a breaking bump (minor at `0.x`) with a
+   `changed` fragment. Then the
    full verify loop, and once the tag is on GitHub check
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
@@ -318,7 +328,9 @@ skipped under time pressure — check them explicitly:
 - External services are reached only through a `providers.HttpProvider`
   subclass (or a `providers/` module raising the same `ProviderError` /
   `AuthRequired`) — never `httpx`/`requests` calls sprinkled through
-  `core/` or `commands/`.
+  `core/` or `commands/`. Each implements `health_check()`, and
+  `auth status [--check] --json` keeps the exact §8 shape (a shape change
+  is a breaking change); it never prints a credential value.
 - No secret ever gets written to project-local config (`.{{package}}/config.toml`
   is safe to commit). Secrets only live in the OS keychain or env vars.
 - `doctor` and the bundled `data/SKILL.md` are not optional extras —

@@ -44,6 +44,17 @@ def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
     return result
 
 
+def _stored(provider: str) -> dict[str, str]:
+    try:
+        stored_raw = keyring.get_password(_service_name(provider), provider)
+    except keyring.errors.KeyringError as exc:
+        # A missing/locked keychain (headless Linux, CI) must not block the
+        # env-var path — that's the whole point of having a fallback.
+        log.warning("OS credential store unavailable (%s); using environment variables only", exc)
+        return {}
+    return json.loads(stored_raw) if stored_raw else {}
+
+
 def get_credential(provider: str, *, env_fields: list[str] | None = None) -> dict[str, str] | None:
     """Resolve the full credential bag for a provider.
 
@@ -53,17 +64,29 @@ def get_credential(provider: str, *, env_fields: list[str] | None = None) -> dic
     credentials, ...) declare its field names explicitly, so env vars are
     checked even before anything has ever been stored.
     """
-    try:
-        stored_raw = keyring.get_password(_service_name(provider), provider)
-    except keyring.errors.KeyringError as exc:
-        # A missing/locked keychain (headless Linux, CI) must not block the
-        # env-var path — that's the whole point of having a fallback.
-        log.warning("OS credential store unavailable (%s); using environment variables only", exc)
-        stored_raw = None
-    stored: dict[str, str] = json.loads(stored_raw) if stored_raw else {}
+    stored = _stored(provider)
     fields_to_check = env_fields or list(stored.keys()) or ["api_key"]
     merged = {**stored, **read_fields_from_env(provider, fields_to_check)}
     return merged or None
+
+
+def locate_fields(provider: str, fields: list[str]) -> dict[str, tuple[str, str]]:
+    """Map each present field to (value, where it came from: "env" | "keychain").
+
+    Same precedence as `get_credential`. For `auth status`, which reports the
+    source and must never print the value.
+    """
+    located = {field: (value, "keychain") for field, value in _stored(provider).items() if field in fields}
+    located.update({field: (value, "env") for field, value in read_fields_from_env(provider, fields).items()})
+    return located
+
+
+def env_var_name(provider: str, field: str) -> str:
+    return _env_var_name(provider, field)
+
+
+def keychain_service(provider: str) -> str:
+    return _service_name(provider)
 
 
 def store_backend() -> str | None:
