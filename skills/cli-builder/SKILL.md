@@ -102,15 +102,17 @@ function) is governed by these four rules instead
    - Depending on another of our tools? Pin it by release tag in
      `[tool.uv.sources]` (`tag = "vX.Y.Z"`, never `branch = "main"` or a
      committed `path =`) — `architecture.md` §8, "Depending on another tool".
-4. Verify before calling it done — every check CI will run, in the same
-   order:
+4. Verify before calling it done — the whole gate is one command, the
+   same one every release and CI run (`architecture.md` §8):
    ```bash
-   cd <dest-dir> && uv sync && uv run ruff check . && uv run ruff format --check . \
-     && uv run ty check && uv run pytest && uv run <package_name> doctor
+   cd <dest-dir> && uv sync && uv run scripts/release.py --check && uv run <package_name> doctor
    ```
-   `uv sync` writes `uv.lock` — it's committed (CI runs `uv lock --check`).
-   `pytest` enforces the coverage floor from `pyproject.toml`; a new
-   command without tests fails here, which is the intended nudge.
+   It runs `uv lock --check`, ruff check + format, ty, pytest (coverage
+   floor, help contract + snapshots, `auth status` shape), the changelog
+   fragment check, and builds + installs the wheel into a throwaway venv
+   to run `<cli> --version`/`--help`; the first failing step is named with
+   its output. `uv sync` writes `uv.lock` — it's committed. **Run
+   `release.py --check` before every commit**, not only at the end.
 5. Publish — follow "Publish to GitHub" below. Scaffolding is local
    until the user says otherwise: do not `git init`/create a remote/push
    before they've answered that section's question.
@@ -260,7 +262,10 @@ sitting installable-from-nowhere without asking.
    gh repo create <owner>/<repo> --private --source=. --remote=origin --push
    git push origin v0.1.0   # --push sends the branch only; the tag must reach GitHub too
    ```
-   Then try to make the CI gates unskippable — a ruleset that requires
+   CI is optional (it only repeats `release.py --check`; the local gate is
+   authoritative) — if the user wants to save Actions minutes on a
+   private repo, delete `.github/workflows/ci.yml` and skip the ruleset.
+   If CI stays, try to make it unskippable — a ruleset that requires
    the `test` check (the only CI job) to pass and forbids force-pushes on
    `main`:
    ```bash
@@ -301,7 +306,7 @@ sitting installable-from-nowhere without asking.
    project.
 7. **Releases after that**: `uv run scripts/release.py patch|minor|major`
    from a clean, up-to-date `main` with fragments in `changelog.d/`. It
-   runs the gate, bumps the last tag, assembles `CHANGELOG.md` with
+   runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
    towncrier, commits `Release vX.Y.Z` and tags — then prints
    `git push --follow-tags`, which needs the user's confirmation. Pick the
    part by SemVer (`architecture.md` §8: at `0.x` a breaking change is a
@@ -340,7 +345,8 @@ skipped under time pressure — check them explicitly:
 - The quality gates are part of the package, not of CI alone:
   `fail_under` coverage in `pyproject.toml` (raise it, never lower it),
   ruff's `S` (security) rules, and the OSV-Scanner step in CI over
-  `uv.lock`. A refactored project gets all three.
+  `uv.lock`. `uv run scripts/release.py --check` runs every gate locally
+  and is what an agent runs before each commit. A refactored project gets all three.
 - The package is installable with `uv tool install "git+<repo-url>"` and
   its README.md + bundled SKILL.md carry that exact command with the real
   URL, not a placeholder — see "Publish to GitHub". A CLI that only runs

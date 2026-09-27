@@ -43,6 +43,8 @@ uvx copier copy . /tmp/cli-gen-test \
   --defaults --trust -q --vcs-ref HEAD
 cd /tmp/cli-gen-test && uv sync -q && uv run ruff check . && uv run ruff format --check . \
   && uv run ty check && uv run pytest -q
+# and, after `git init && git add -A && git commit -m i && git tag -a v0.1.0 -m v0.1.0`:
+uv run scripts/release.py --check   # the full gate generated projects actually use
 ```
 
 `--vcs-ref HEAD` matters: without it copier renders the **latest release

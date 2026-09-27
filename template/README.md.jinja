@@ -7,13 +7,13 @@
 ```bash
 uv sync
 uv run {{ package_name }} --help
-uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
+uv run scripts/release.py --check   # the full gate (what releases and CI run)
 scripts/install_hooks.sh  # once per clone: git uses the versioned hooks in .githooks/
 uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
 ```
 
 `pytest` fails below the coverage floor in `pyproject.toml`; `ruff` includes
-the security (`S`) rules; CI additionally scans `uv.lock` for known
+the security (`S`) rules; CI (optional — it only repeats `release.py --check`) additionally scans `uv.lock` for known
 vulnerabilities (OSV-Scanner) — the same as `osv-scanner --lockfile=uv.lock`
 locally.
 
@@ -29,7 +29,7 @@ git push --follow-tags
 ```
 
 `release.py` refuses off `main`, on a dirty tree or behind the remote, runs
-the full gate, assembles `CHANGELOG.md` from `changelog.d/`, commits
+the full gate (the same as `--check`; any failing step aborts the release), assembles `CHANGELOG.md` from `changelog.d/`, commits
 `Release vX.Y.Z` and tags it; pushing is left to you.
 
 ## Install

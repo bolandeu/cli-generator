@@ -1,8 +1,9 @@
 name: CI
 
-# One Linux job on the lowest supported Python keeps private repos inside the
-# free Actions minutes; the full gate also runs locally on the Mac before a
-# release (scripts/release.py). See tools/docs/standard-release.md §6.
+# Optional (tools/docs/standard-release.md §6): the authoritative gate is the
+# local `uv run scripts/release.py --check`, which every release runs anyway.
+# If kept, CI is one Linux job on the lowest supported Python repeating it on
+# a clean machine — delete this file to save Actions minutes on a private repo.
 on:
   push:
     branches: [main]
@@ -15,32 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # tags for the version (uv-dynamic-versioning), base branch for towncrier check
+          fetch-depth: 0 # tags: the build's version comes from them
       - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           python-version: "3.11" # lowest from requires-python
-      - run: uv lock --check
-      - run: uv sync
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run ty check
-      - run: uv run pytest
-      - name: Changelog fragment present
-        # Dependabot's grouped bumps aren't user-visible changes and can't add a fragment.
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        run: uv run towncrier check --compare-with origin/${{ '{{' }} github.base_ref {{ '}}' }}
 
-      # The distribution path — the same build+install `uv tool install "git+..."`
-      # performs on a user's machine. Catches packaging mistakes (missing
-      # package data, broken entry point) that `uv run` never notices.
-      - name: Install as a tool
-        run: |
-          uv tool install .
-          echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
-      - run: {{ package_name }} --version
-      - run: {{ package_name }} --ai
-      - run: {{ package_name }} doctor
+      # Everything: lock, lint, format, types, tests (incl. help snapshots and
+      # the auth status shape), changelog fragment, wheel build + install +
+      # `{{ package_name }} --version` / `--help`.
+      - run: uv run scripts/release.py --check
 
       # Known vulnerabilities in the locked dependency set (OSV-Scanner reads
       # uv.lock natively). Dependabot opens the upgrade PRs; this is what

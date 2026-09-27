@@ -5,7 +5,10 @@ refactors existing ones onto one shared architecture (Python + uv + Typer,
 project-aware config, OS-keychain credentials, dual human/JSON output,
 AI-readable errors, an `HttpProvider` base for external APIs, enforced
 `min_version`, versions from git tags + towncrier changelog fragments per
-the shared release standard, CI that proves `uv tool install` works).
+the shared release standard, one local gate — `scripts/release.py --check` —
+that also proves the built wheel installs and reports the right version,
+`auth status --check --json` in a cross-tool shape, and an enforced
+`--help` contract).
 
 ## Layout
 

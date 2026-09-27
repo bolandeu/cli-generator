@@ -98,8 +98,10 @@ order before moving to the next item.
     no versioned `.githooks/pre-commit`. Commands missing an `Example:`
     line or a parameter `help=` are fixed here, not waived. Also fail if `pyproject.toml` has no coverage
     `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
-    step — copy all three from the template, along with its CI workflow
-    (one `ubuntu-24.04` job, lowest supported Python, current action
+    step — copy all three from the template, along with
+    `scripts/release.py` (whose `--check` is the whole gate) and, if the
+    repo keeps CI, its workflow (one `ubuntu-24.04` job running only
+    `release.py --check`, lowest supported Python, current action
     majors, `towncrier check` on PRs) and `dependabot.yml` (monthly, one
     group per ecosystem).
 

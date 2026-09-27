@@ -329,13 +329,26 @@ the template implements it):
   branches never touch the same line, so they never conflict. CI runs
   `towncrier check` on pull requests; the pre-commit hook
   (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
-- **`scripts/release.py patch|minor|major`** is the only way a version
-  moves: on a clean `main` not behind its upstream, it runs the full gate
-  (ruff check, ruff format --check, ty, pytest), bumps the last `v*` tag,
-  runs `towncrier build`, commits `Release vX.Y.Z` and creates the
-  annotated tag. It does **not** push — it prints `git push --follow-tags`,
-  which the user confirms. The template's copy is canonical: every repo
+- **`scripts/release.py` is the authoritative gate.** `--check` runs it
+  without releasing — agents run it before every commit, CI (optional)
+  runs only this, the root agent's `tools-watch` runs it too: `uv lock
+  --check`, ruff check, ruff format --check, ty, pytest, a changelog
+  fragment present whenever anything changed since the last tag (checked
+  in the working tree — `towncrier check` only sees commits), and
+  `uv build` + install of the wheel into a throwaway venv where
+  `<cli> --version` must equal the built version and `<cli> --help` must
+  work. The first failing step stops it, named, with its output.
+- **`release.py patch|minor|major`** is the only way a version moves: on a
+  clean `main` not behind its upstream, it runs the same gate (building
+  the wheel as the new version via `UV_DYNAMIC_VERSIONING_BYPASS`, since
+  the tag doesn't exist yet), bumps the last `v*` tag, runs
+  `towncrier build`, commits `Release vX.Y.Z` and creates the annotated
+  tag. It does **not** push — it prints `git push --follow-tags`, which
+  the user confirms. The template's copy is canonical: every repo
   following the standard uses it verbatim.
+- **CI is optional**: one `ubuntu-24.04` job on the lowest supported
+  Python running `release.py --check` (+ OSV-Scanner). Delete the
+  workflow to save Actions minutes; nothing depends on it.
 - **Versions mean compatibility (SemVer).** Removing/renaming/changing
   anything public — Python API, CLI commands or flags, the `--json` shape,
   exit codes or error codes (`conventions.md`) — is a major bump; a new
