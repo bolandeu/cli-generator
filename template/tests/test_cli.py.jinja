@@ -47,6 +47,17 @@ def test_distribution_name_is_declared_once() -> None:
     assert declaring == ["_distribution.py"]
 
 
+def test_version_falls_back_to_legacy_distribution_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    from {{ package_name }}.core import version
+
+    installed = version.installed_version()
+    monkeypatch.setattr(version, "DIST_NAME", "no-such-distribution-xyz")
+    monkeypatch.setattr(version, "DIST_NAME_LEGACY", DIST_NAME)  # an install made under the old name
+    assert version.installed_version() == installed
+    monkeypatch.setattr(version, "DIST_NAME_LEGACY", None)
+    assert version.installed_version() is None
+
+
 def test_distribution_name_matches_pyproject() -> None:
     """_distribution.DIST_NAME is how importlib.metadata finds this package; it must equal [project] name."""
     pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())

@@ -13,10 +13,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
+{%- if private_deps %}
+    # Private git dependencies (our other repos): git fetches them through gh with
+    # a fine-grained read-only token saved as the repo secret GITHUB_READ_TOKEN
+    # (Contents: read on those repos). Without the secret this job fails at uv sync.
+    env:
+      GH_TOKEN: ${{ '{{' }} secrets.GITHUB_READ_TOKEN {{ '}}' }}
+{%- endif %}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0 # tags: the build's version comes from them
+{%- if private_deps %}
+      - name: Git credentials for private dependencies
+        run: gh auth setup-git
+{%- endif %}
       # Lowest Python allowed by requires-python (">=3.11" -> 3.11), so CI tests
       # the oldest interpreter users may have, not whatever is newest.
       - name: Lowest supported Python

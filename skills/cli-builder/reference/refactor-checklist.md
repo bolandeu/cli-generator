@@ -83,7 +83,14 @@ order before moving to the next item.
     **never been released** (no `v*` tag): when it gets its first tag
     `vX.Y.Z`, rename `## [Unreleased]` to `## [X.Y.Z] - <date>` instead,
     since those changes ship in that tag); a `scripts/release.py` that
-    isn't the template's verbatim copy; a dependency on another of our
+    isn't the template's verbatim copy; `ruff check --fix` run without
+    re-checking imports afterwards (F401's autofix deletes "unused"
+    imports that are really re-exports a lazy `from … import` inside a
+    function relies on — after any autofix, import every module or run the
+    full test suite; standard §11); `ty` failing on warnings (the template
+    sets `[tool.ty.terminal] error-on-warning = false`; downgrade what
+    legacy code can't fix yet per rule, `[tool.ty.rules] <rule> = "warn"`,
+    instead of blanket ignores); a dependency on another of our
     tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
     + compatible range); a subprocess call to another of our CLIs without
     a `core.deps.require_cli(...)` minimum-version check; a distribution

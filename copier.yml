@@ -19,6 +19,7 @@ _exclude:
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
   - "{% if not include_providers %}src/{{ package_name }}/providers{% endif %}"
   - "{% if not include_providers %}tests/test_providers.py{% endif %}"
+  - "{% if not include_ci %}.github/workflows{% endif %}"
 
 # The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
 # around it, so they're rendered in the generated project, not shipped.
@@ -52,6 +53,11 @@ dist_name:
     dist_name must be lowercase letters, digits, '.', '-' or '_'
     {% endif %}
 
+dist_name_legacy:
+  type: str
+  help: "Previous distribution name while renaming to dist_name (standard §10) — installs made under it keep reporting their version; blank when not renaming"
+  default: ""
+
 project_name:
   type: str
   help: "Display name for the project"
@@ -81,6 +87,17 @@ include_providers:
     {% if include_auth and not include_providers %}
     include_auth needs include_providers (auth status checks providers)
     {% endif %}
+
+include_ci:
+  type: bool
+  help: "Generate the GitHub Actions workflow? CI is optional (standard §6) — the local gate release.py --check is the check"
+  default: true
+
+private_deps:
+  type: bool
+  help: "Does it depend on our private git repos? CI then needs a GITHUB_READ_TOKEN repo secret (standard §9)"
+  default: false
+  when: "{{ include_ci }}"
 
 repository_url:
   type: str

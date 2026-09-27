@@ -120,6 +120,12 @@ source = ["src"]
 fail_under = 90
 show_missing = true
 
+[tool.ty.terminal]
+# Only errors fail the gate; recent ty (>= 0.0.84) otherwise exits 1 on warnings too.
+# Legacy code that can't be fixed yet: downgrade specific rules instead of
+# ignoring them, e.g. [tool.ty.rules] possibly-unbound-attribute = "warn".
+error-on-warning = false
+
 [tool.ruff]
 line-length = 120
 

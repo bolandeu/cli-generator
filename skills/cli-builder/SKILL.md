@@ -288,10 +288,14 @@ template, `_commit` is the template release it was last synced to):
 The command (`cli_name`) and the import package don't change; only
 `[project] name` does. For an existing package:
 
-1. `uvx copier update --trust --defaults --data dist_name=rb-<slug>` (or
-   edit `[project] name` by hand in a non-template repo), then `uv lock`.
-   `src/<package>/_distribution.py` must carry the same name —
-   `tests/test_cli.py` fails otherwise.
+1. `uvx copier update --trust --defaults --data dist_name=rb-<slug>
+   --data dist_name_legacy=<old name>` (or edit `[project] name` by hand in
+   a non-template repo), then `uv lock`. `src/<package>/_distribution.py`
+   must carry the same name — `tests/test_cli.py` fails otherwise.
+   `DIST_NAME_LEGACY` makes an install still registered under the old name
+   report its real version instead of `0.0.0`/none until it is
+   reinstalled (standard §10); clear it (`--data dist_name_legacy=`) in a
+   later release once every machine has the new name.
 2. It is a **breaking change** for consumers: breaking bump (minor at
    `0.x`) with a `changed` fragment naming the old and new names.
 3. Every consumer, in the same wave: rename the dependency and its
@@ -350,8 +354,12 @@ sitting installable-from-nowhere without asking.
    git push origin v0.1.0   # --push sends the branch only; the tag must reach GitHub too
    ```
    CI is optional (it only repeats `release.py --check`; the local gate is
-   authoritative) — if the user wants to save Actions minutes on a
-   private repo, delete `.github/workflows/ci.yml` and skip the ruleset.
+   authoritative) — to save Actions minutes on a private repo, generate
+   (or update) with `--data include_ci=false` and skip the ruleset. A tool
+   depending on our **private** repos needs `--data private_deps=true`
+   plus a repo secret `GITHUB_READ_TOKEN` (fine-grained, Contents: read on
+   those repos) — without it CI can't fetch them (standard §9); ask the
+   user to create the secret, never handle the token yourself.
    If CI stays, try to make it unskippable — a ruleset that requires
    the `test` check (the only CI job) to pass and forbids force-pushes on
    `main`:
@@ -448,8 +456,11 @@ skipped under time pressure — check them explicitly:
   (`scripts/install_hooks.sh` once per clone; Claude sessions set it up
   themselves), and blocking tests — each docstring has an
   `Example: {cli} <command> ...` line, each parameter a `help=`, each
-  help page a snapshot. Don't bypass them: if a hook fires on a
-  behaviour-neutral refactor, say so rather than skipping it.
+  help page a snapshot. Don't bypass them: for a behaviour-neutral edit
+  (a lint or type fix inside a command) keep the body AST-identical with
+  `# noqa` / `# ty: ignore[...]` comments; never `SKIP_DOCSTRING_CHECK`
+  (humans only). Every command is wrapped in `@output.guard` — the help
+  contract test fails otherwise.
 - The pre-commit hook also warns (never blocks) on a `src/` change with
   no changelog fragment on the branch (`scripts/check_changelog_fragment.py`).
 - Versions come only from git tags cut by `scripts/release.py`, the

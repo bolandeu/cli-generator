@@ -306,8 +306,16 @@ signature + body without the docstring, compared with `HEAD`):
 
 Plus the git pre-commit hook in `.githooks/pre-commit` (versioned; active
 after `scripts/install_hooks.sh`, which sets `core.hooksPath`) runs the
-same check on the staged files and blocks the commit; for a change that
-truly doesn't alter behaviour: `SKIP_DOCSTRING_CHECK=1 git commit ...`.
+same check on the staged files and blocks the commit. For a change that
+truly doesn't alter behaviour an **agent** keeps the command body
+AST-identical — a lint/type fix goes in as a `# noqa` / `# ty: ignore[...]`
+comment, which doesn't change the AST — instead of the
+`SKIP_DOCSTRING_CHECK=1 git commit ...` escape; that one is for humans (an
+auto-mode classifier rightly blocks it as a bypass). A command is any
+function decorated with `output.guard` or registered with
+`@<app>.command(...)`, and `tests/test_help.py` requires every registered
+command to be wrapped in `output.guard` (JSON error envelope, local
+`--json`, the `{cli}` substitution).
 
 Write `{cli}` for the CLI's name in docstrings (`Example: {cli} status
 --json`): `output.guard` substitutes it, so commands stay plain `.py`
@@ -379,7 +387,10 @@ the template implements it):
   top-level package imports and `importlib.metadata.version()` equals the
   built version), and `osv-scanner --lockfile=uv.lock` when
   osv-scanner is installed (skipped with a notice otherwise; `brew install
-  osv-scanner`). The first failing step stops it, named, with its output.
+  osv-scanner`). The first failing step stops it, named, with its output,
+  and a last line `release: code failed` (exit 1) — or `release: audit
+  failed` (exit 3) when only the vulnerability audit failed, so
+  `tools-watch` can tell "broken code" from "bump a dependency".
 - **`release.py patch|minor|major`** is the only way a version moves: on a
   clean `main` not behind its upstream, it runs the same gate (building
   the wheel as the new version via `UV_DYNAMIC_VERSIONING_BYPASS`, since
