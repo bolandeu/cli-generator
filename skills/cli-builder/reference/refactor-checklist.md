@@ -61,13 +61,22 @@ order before moving to the next item.
    on a specific shell's builtins. Replace with `pathlib`/`shutil`; use
    `platformdirs` for user-level config location.
 
-10. **Version compatibility declared — and enforced.**
+10. **Version compatibility declared — and enforced; releases per the
+    standard.**
     Fail if a project consuming this CLI has no way to declare
-    `min_version`, or declares it but nothing checks it. Add `[cli]
-    min_version` to the project config model, `services.check_cli_compat`
-    to `load_config`, and `scripts/release.py` + `CHANGELOG.md` so the
-    version actually moves (a static `version = "0.1.0"` forever makes the
-    check meaningless).
+    `min_version`, or declares it but nothing checks it — add `[cli]
+    min_version` to the project config model and `services.check_cli_compat`
+    to `load_config`. Also fail on any of these (`architecture.md` §8):
+    a `version =` line in `pyproject.toml` or a hard-coded version string
+    (→ tag the current version first if untagged, `git tag -a vX.Y.Z -m
+    vX.Y.Z <sha>`, then `dynamic = ["version"]` + uv-dynamic-versioning +
+    `[tool.uv] cache-keys`, runtime via `importlib.metadata`); a
+    hand-edited `CHANGELOG.md` / `## [Unreleased]` section (→ towncrier
+    config, the start marker above the newest release, unreleased entries
+    moved into `changelog.d/` fragments); a `scripts/release.py` that
+    isn't the template's verbatim copy; a dependency on another of our
+    tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
+    + compatible range).
 
 11. **Bundled agent skill + quality gates.**
     Fail if there's no `src/<package_name>/data/SKILL.md` (bundled as
@@ -77,7 +86,10 @@ order before moving to the next item.
     from docstrings via a bare `<cli>`; fail if any docstring is missing
     or stale). Also fail if `pyproject.toml` has no coverage
     `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
-    job — copy all three from the template.
+    step — copy all three from the template, along with its CI workflow
+    (one `ubuntu-24.04` job, lowest supported Python, current action
+    majors, `towncrier check` on PRs) and `dependabot.yml` (monthly, one
+    group per ecosystem).
 
 12. **Installable from GitHub.**
     Fail if `uv tool install "git+<repo-url>"` doesn't produce a working

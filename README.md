@@ -4,8 +4,8 @@ Claude Code plugin: a `cli-builder` skill that scaffolds new CLI tools or
 refactors existing ones onto one shared architecture (Python + uv + Typer,
 project-aware config, OS-keychain credentials, dual human/JSON output,
 AI-readable errors, an `HttpProvider` base for external APIs, enforced
-`min_version`, tagged releases, CI that proves `uv tool install` works on
-three OSes).
+`min_version`, versions from git tags + towncrier changelog fragments per
+the shared release standard, CI that proves `uv tool install` works).
 
 ## Layout
 

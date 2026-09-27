@@ -8,7 +8,7 @@
 uv sync
 uv run {{ package_name }} --help
 uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
-scripts/install_hooks.sh  # installs a pre-commit hook warning on stale --help docstrings
+scripts/install_hooks.sh  # pre-commit warnings: stale --help docstrings, missing changelog fragment
 ```
 
 `pytest` fails below the coverage floor in `pyproject.toml`; `ruff` includes
@@ -18,13 +18,18 @@ locally.
 
 ## Release
 
+The version is the git tag (`vX.Y.Z`) — `pyproject.toml` has no `version =`.
+Each change adds a changelog fragment instead of editing `CHANGELOG.md`:
+
 ```bash
-uv run scripts/release.py patch   # or minor / major
+uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."
+uv run scripts/release.py patch   # or minor / major (SemVer; at 0.x minor = breaking)
+git push --follow-tags
 ```
 
-Bumps the version in `pyproject.toml`, dates the `## [Unreleased]` section
-of `CHANGELOG.md`, commits, tags `v<version>` and pushes. Keep the changelog
-current as you work; the release script only stamps it.
+`release.py` refuses off `main`, on a dirty tree or behind the remote, runs
+the full gate, assembles `CHANGELOG.md` from `changelog.d/`, commits
+`Release vX.Y.Z` and tags it; pushing is left to you.
 
 ## Install
 
@@ -45,8 +50,8 @@ uv tool install "git+https://github.com/<owner>/<repo>.git"
 {%- endif %}
 ```
 
-Pin a release by appending `@v<version>` (a tag cut by `scripts/release.py`)
-to the URL, or a branch/commit the same way. This is also how an AI agent
+Pin a release by appending `@vX.Y.Z` (a tag cut by `scripts/release.py`)
+to the URL. This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
 yet — see `src/{{ package_name }}/data/SKILL.md`.
 

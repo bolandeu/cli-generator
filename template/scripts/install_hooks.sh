@@ -9,7 +9,9 @@ hook_path="$repo_root/.git/hooks/pre-commit"
 
 cat > "$hook_path" <<'EOF'
 #!/usr/bin/env bash
-python3 "$(git rev-parse --show-toplevel)/scripts/check_command_docstrings.py"
+root="$(git rev-parse --show-toplevel)"
+python3 "$root/scripts/check_command_docstrings.py"
+python3 "$root/scripts/check_changelog_fragment.py"
 exit 0
 EOF
 

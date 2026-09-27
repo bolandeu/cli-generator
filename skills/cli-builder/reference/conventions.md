@@ -105,6 +105,22 @@ external state — see `architecture.md` §10. Any such command must accept
 both; `output.is_dry_run`/`output.require_confirmation` implement the
 check, don't hand-roll it per command.
 
+## What counts as a breaking change
+
+Everything in this file is public API: the envelope shape, error codes,
+exit codes, global options, command names and flags. Versions follow
+SemVer against that surface (`architecture.md` §8):
+
+| Change | Bump | While at `0.x` |
+|---|---|---|
+| bug fix, no surface change | patch | patch |
+| new command/flag/field, old behaviour intact | minor | minor or patch — never breaking either way |
+| anything removed, renamed or changed: command, flag, `--json` shape, exit code, error code | major | minor (at `0.x` minor = breaking) |
+
+Deprecate before removing: keep the old form working with a warning on
+stderr, add a `deprecated` changelog fragment, remove it in the next
+breaking release.
+
 ## Command surface every generated CLI starts with
 
 ```

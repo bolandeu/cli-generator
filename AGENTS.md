@@ -63,9 +63,15 @@ uvx ruff format --line-length 120 template/src template/scripts
 
 For the distribution + release path (`scripts/release.py`, tag pinning),
 verify against a local bare remote rather than assuming: `git init --bare
-/tmp/remote.git`, add it as `origin` in the generated project, run
-`uv run scripts/release.py patch`, then
+/tmp/remote.git`, add it as `origin` in the generated project, commit,
+`git tag -a v0.1.0 -m v0.1.0` (`uv run <cli> --version` must now print
+`0.1.0`, not `0.0.0…`), push `main` with `-u`, add a fragment
+(`uv run towncrier create +x.fixed.md -c x`), commit, run
+`uv run scripts/release.py patch`, `git push --follow-tags`, then
 `uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
+The release process itself is specified in
+`~/Projects/tools/docs/standard-release.md` (owned by the tools/ root
+agent) — change it there first, then here.
 
 For a change touching `.claude-plugin/plugin.json`, also run:
 

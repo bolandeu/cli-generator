@@ -91,7 +91,13 @@ function) is governed by these four rules instead
    - Any new command group (`<cli> thing list|add`) is created with
      `output.group("...")`, never `typer.Typer(...)`, so a bare
      `<cli> thing` prints help instead of a usage error.
-   - Add a `CHANGELOG.md` entry under `## [Unreleased]` for what you built.
+   - Record what you built as a changelog fragment, never by editing
+     `CHANGELOG.md`: `uv run towncrier create +<slug>.added.md -c "..."`
+     (types: added/changed/deprecated/removed/fixed/security;
+     `reference/architecture.md` §8).
+   - Depending on another of our tools? Pin it by release tag in
+     `[tool.uv.sources]` (`tag = "vX.Y.Z"`, never `branch = "main"` or a
+     committed `path =`) — `architecture.md` §8, "Depending on another tool".
 4. Verify before calling it done — every check CI will run, in the same
    order:
    ```bash
@@ -170,8 +176,24 @@ template, `_commit` is the template release it was last synced to):
 3. Run the full verify loop (Scaffold step 4). Read the diff: a template
    release can add a gate (coverage floor, a lint rule) that the
    project's existing code now fails — fix the code, don't lower the
-   gate. Add a `CHANGELOG.md` entry naming the template version.
-4. If `_commit` is a bare commit hash rather than a tag, the project was
+   gate. Add a changelog fragment naming the template version
+   (`uv run towncrier create +template-vX.Y.Z.changed.md -c "..."`).
+4. **Crossing template v1.1.0** (the release standard: version from the
+   git tag, towncrier fragments). Before `copier update`: if the
+   project's current `version = "X.Y.Z"` has no tag, tag the current
+   `main` commit with it (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`) — otherwise
+   the next build reports `0.0.0`. During the merge: `pyproject.toml`
+   drops `version =` for `dynamic = ["version"]`; in `CHANGELOG.md` keep
+   the released sections, put `<!-- towncrier release notes start -->`
+   right above the newest one, move anything under `## [Unreleased]` into
+   `changelog.d/` fragments and delete that heading; a hand-edited
+   `scripts/release.py` is replaced by the template's verbatim. After:
+   `uv lock`, re-run `scripts/install_hooks.sh` (new changelog check),
+   full verify loop, and once the tag is on GitHub check
+   `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
+   `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
+   report instead of working around it.
+5. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 
@@ -211,16 +233,19 @@ sitting installable-from-nowhere without asking.
 3. **Preconditions.** `gh auth status` must succeed — if it doesn't, ask
    the user to run `gh auth login` themselves; never handle tokens on
    their behalf. If the directory isn't a git repo yet (Scaffold mode):
-   `git init -b main && git add -A && git commit -m "Initial commit"`.
+   `git init -b main && git add -A && git commit -m "Initial commit"`,
+   then tag it — the version comes from the tag, and `release.py` needs
+   one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
    In Refactor mode you're on a feature branch — pushing that branch is
    fine, merging it is the user's call. If the repo already has an
    `origin` remote, skip step 4 entirely.
 4. **Create and push in one step:**
    ```bash
    gh repo create <owner>/<repo> --private --source=. --remote=origin --push
+   git push origin v0.1.0   # --push sends the branch only; the tag must reach GitHub too
    ```
    Then try to make the CI gates unskippable — a ruleset that requires
-   the `test` and `audit` checks to pass and forbids force-pushes on
+   the `test` check (the only CI job) to pass and forbids force-pushes on
    `main`:
    ```bash
    gh api -X POST repos/<owner>/<repo>/rulesets --input - <<'JSON'
@@ -228,7 +253,7 @@ sitting installable-from-nowhere without asking.
     "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
     "rules":[{"type":"non_fast_forward"},{"type":"deletion"},
              {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,
-              "required_status_checks":[{"context":"test"},{"context":"audit"}]}}]}
+              "required_status_checks":[{"context":"test"}]}}]}
    JSON
    ```
    On a personal free plan GitHub refuses this for **private** repos
@@ -246,8 +271,10 @@ sitting installable-from-nowhere without asking.
    every other machine (and every agent reading the bundled SKILL.md)
    will run:
    ```bash
-   uv tool install --reinstall "git+https://github.com/<owner>/<repo>.git" && <package_name> --version
+   uv tool install --reinstall "git+https://github.com/<owner>/<repo>.git@v0.1.0" && <package_name> --version
    ```
+   It must print `0.1.0`, not `0.0.0` — `0.0.0` means the build saw no
+   tag (not pushed, or uv's checkout lacks tag info); stop and report it.
    (`--reinstall` because step 1 installed the same tool from the local
    path.) For a private repo this works over plain HTTPS because
    `gh auth login` also configured git's credential helper; on a machine
@@ -256,13 +283,15 @@ sitting installable-from-nowhere without asking.
    `git+ssh://git@github.com/<owner>/<repo>.git`. Both are documented in
    the generated README.md and SKILL.md — don't re-explain them per
    project.
-7. **Cut the first release** once the user is happy with what's on
-   `main`: `uv run scripts/release.py minor` (→ `v0.2.0`; `patch` for a
-   fix). It bumps `pyproject.toml`, dates the changelog, commits, tags
-   and pushes. From then on `uv tool install "git+…@v0.2.0"` is
-   reproducible anywhere and `uv tool upgrade <package_name>` moves other
-   machines forward. Later work: entries under `## [Unreleased]` as you
-   go, `release.py` when it should ship — never edit `version =` by hand.
+7. **Releases after that**: `uv run scripts/release.py patch|minor|major`
+   from a clean, up-to-date `main` with fragments in `changelog.d/`. It
+   runs the gate, bumps the last tag, assembles `CHANGELOG.md` with
+   towncrier, commits `Release vX.Y.Z` and tags — then prints
+   `git push --follow-tags`, which needs the user's confirmation. Pick the
+   part by SemVer (`architecture.md` §8: at `0.x` a breaking change is a
+   minor bump). There is no `version =` to edit and no `[Unreleased]`
+   section — one fragment per change, `release.py` when it should ship.
+   `uv tool upgrade <package_name>` moves other machines forward.
 
 ## Non-negotiables (apply in both modes)
 
@@ -292,18 +321,23 @@ skipped under time pressure — check them explicitly:
   docstring is its documentation (that's what a bare `<cli>` renders).
 - The quality gates are part of the package, not of CI alone:
   `fail_under` coverage in `pyproject.toml` (raise it, never lower it),
-  ruff's `S` (security) rules, and the `audit` CI job (OSV-Scanner over
-  `uv.lock`). A refactored project gets all three.
+  ruff's `S` (security) rules, and the OSV-Scanner step in CI over
+  `uv.lock`. A refactored project gets all three.
 - The package is installable with `uv tool install "git+<repo-url>"` and
   its README.md + bundled SKILL.md carry that exact command with the real
   URL, not a placeholder — see "Publish to GitHub". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
   project" premise in `reference/architecture.md`.
 - Run `scripts/install_hooks.sh` once per checkout (`.git/hooks/` isn't
-  versioned). It installs a non-blocking pre-commit warning
-  (`scripts/check_command_docstrings.py`) for command docstrings drifting
-  from the code they document — those docstrings are the `--help` text
-  agents read.
+  versioned). It installs non-blocking pre-commit warnings: command
+  docstrings drifting from the code they document
+  (`scripts/check_command_docstrings.py` — those docstrings are the
+  `--help` text agents read) and a `src/` change with no changelog
+  fragment on the branch (`scripts/check_changelog_fragment.py`).
+- Versions come only from git tags cut by `scripts/release.py`, the
+  changelog only from `changelog.d/` fragments, dependencies on our other
+  tools only by tag pin. SemVer is a promise about the CLI surface
+  (flags, `--json` shape, exit/error codes) — `architecture.md` §8.
 - Prefer `pathlib`/`shutil`/`platformdirs` over shelling out or hardcoded
   POSIX paths — the whole point is that it runs unmodified on macOS, Linux
   and Windows.

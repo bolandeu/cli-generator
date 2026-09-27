@@ -13,14 +13,17 @@ uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run
 ```
 
 Before calling anything done, that last line must pass — it's exactly
-what CI runs on Linux/macOS/Windows, followed by `uv tool install .` to
-prove the package still installs as a tool.
+what CI runs (one Linux job on the lowest supported Python), followed by
+`uv tool install .` to prove the package still installs as a tool.
+`scripts/release.py` runs the same gate on this machine before every
+release.
 
 Run `scripts/install_hooks.sh` once (`.git/hooks/` isn't versioned by git,
 so this is also needed again after a fresh clone). It installs a
 pre-commit hook that warns — never blocks — when a command's logic changed
-without its docstring changing too, since that docstring is the `--help`
-text agents read as this CLI's API contract.
+without its docstring changing too (that docstring is the `--help` text
+agents read as this CLI's API contract), and when `src/` changed with no
+changelog fragment on the branch.
 
 ## Architecture (do not violate)
 
@@ -50,13 +53,32 @@ text agents read as this CLI's API contract.
 
 ## Releasing
 
-Never edit `version =` in `pyproject.toml` by hand. Add a line under
-`## [Unreleased]` in `CHANGELOG.md` with each change, and when it should
-ship run `uv run scripts/release.py patch|minor|major` from a clean
-`main` — it bumps the version, dates the changelog, commits, tags
-`v<version>` and pushes. Projects pin the CLI they need via
-`[cli] min_version` in their config, so a change a project depends on
-needs a release before that project can require it.
+- **Version = git tag.** There is no `version =` in `pyproject.toml`;
+  uv-dynamic-versioning reads the latest `vX.Y.Z` tag at build time. Don't
+  add one back, don't hard-code a version string anywhere.
+- **Changelog = fragments.** Don't edit `CHANGELOG.md`. Every user-visible
+  change adds one fragment:
+  `uv run towncrier create +<slug>.<type>.md -c "One or two sentences."`
+  (type: added/changed/deprecated/removed/fixed/security). CI fails a PR
+  without one.
+- **Release** from a clean, up-to-date `main`:
+  `uv run scripts/release.py patch|minor|major` — gate, towncrier build,
+  commit `Release vX.Y.Z`, annotated tag. It prints the push command;
+  pushing needs the user's confirmation.
+- **SemVer is a promise about the CLI surface.** Removing/renaming/changing
+  commands, flags, the `--json` shape, exit or error codes is breaking —
+  major, or **minor while at `0.x`**. A new feature with old behaviour
+  intact is minor; a fix is patch. Deprecate first
+  (warning + a `deprecated` fragment), remove in the next breaking release.
+- **Depending on another of our tools**: pin by tag in `[tool.uv.sources]`
+  (`{ git = "...", tag = "vX.Y.Z" }`) with a compatible range in
+  `dependencies` (`>=0.2,<0.3`) — never `branch = "main"`, never a
+  committed `path =`. Bump = new tag + `uv lock --upgrade-package <name>`
+  + full gate, one commit.
+
+Projects pin the CLI they need via `[cli] min_version` in their config, so
+a change a project depends on needs a release before that project can
+require it.
 
 ## After changing the command surface
 

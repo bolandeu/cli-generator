@@ -32,8 +32,8 @@ uv tool install "git+https://github.com/<owner>/<repo>.git"
 ```
 
 No PyPI publish step is needed for this to work — `uv tool install`
-resolves and builds directly from the git URL. Pin a version by appending
-`@<tag-or-branch>`. This is wired into every generated package
+resolves and builds directly from the git URL. Pin a release by appending
+`@vX.Y.Z` (a tag cut by `scripts/release.py`, see §8). This is wired into every generated package
 automatically: the `repository_url` copier question fills in this exact
 command in both `README.md` (for the human) and
 `src/{{ package_name }}/data/SKILL.md` (for an agent that finds the skill
@@ -226,15 +226,67 @@ bound, not a pin — projects outlive any single CLI release, and an
 upgrade is always the fix. A bare source run (nothing installed, not even
 editable) has no version and skips the check.
 
-For `min_version` to mean anything, versions have to actually move:
-`version` in `pyproject.toml` is bumped only by `scripts/release.py
-patch|minor|major`, which also dates the `## [Unreleased]` section of
-`CHANGELOG.md`, commits, tags `v<version>` and pushes with tags. Add
-changelog entries as you go, not at release time. A tag is what makes
-`uv tool install "git+<url>@v1.2.0"` reproducible on another machine
-and what `--version` / `doctor` report — between releases every machine
-on `main` says the same version, so cut one whenever a project's
-`min_version` needs to be able to refer to the change.
+For `min_version` to mean anything, versions have to actually move — and
+the rules for that are the shared release standard
+(`~/Projects/tools/docs/standard-release.md`; this section is its summary,
+the template implements it):
+
+- **The version is the git tag.** `pyproject.toml` has no `version =`
+  line: `dynamic = ["version"]` with `uv-dynamic-versioning` reads the
+  latest `vX.Y.Z` tag at build time (no tag in reach → `0.0.0`, which
+  `check_cli_compat` treats as a dev build and skips). Runtime code reads
+  it with `importlib.metadata.version(...)` (`core/version.py`), never a
+  hard-coded string. `[tool.uv] cache-keys` includes git commit + tags so
+  `uv run` rebuilds when a tag moves. A new repo is tagged `v0.1.0` on its
+  first commit.
+- **The changelog is assembled from fragments.** Nobody edits
+  `CHANGELOG.md` between releases — every user-visible change adds
+  `changelog.d/+<slug>.<type>.md` (`uv run towncrier create +<slug>.<type>.md
+  -c "..."`; type = added/changed/deprecated/removed/fixed/security). Two
+  branches never touch the same line, so they never conflict. CI runs
+  `towncrier check` on pull requests; the pre-commit hook
+  (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
+- **`scripts/release.py patch|minor|major`** is the only way a version
+  moves: on a clean `main` not behind its upstream, it runs the full gate
+  (ruff check, ruff format --check, ty, pytest), bumps the last `v*` tag,
+  runs `towncrier build`, commits `Release vX.Y.Z` and creates the
+  annotated tag. It does **not** push — it prints `git push --follow-tags`,
+  which the user confirms. The template's copy is canonical: every repo
+  following the standard uses it verbatim.
+- **Versions mean compatibility (SemVer).** Removing/renaming/changing
+  anything public — Python API, CLI commands or flags, the `--json` shape,
+  exit codes or error codes (`conventions.md`) — is a major bump; a new
+  feature with old behaviour intact is minor; a fix is patch. While at
+  `0.x`, **minor counts as breaking** (`0.2 → 0.3` may break,
+  `0.2.1 → 0.2.2` must not). Deprecate first (warning + a `deprecated`
+  fragment), remove in the next breaking release.
+
+A tag is what makes `uv tool install "git+<url>@v1.2.0"` reproducible on
+another machine and what `--version` / `doctor` report; cut one whenever a
+project's `min_version` needs to be able to refer to the change.
+
+### Depending on another tool
+
+A CLI that imports another of our packages pins it to a released tag and
+allows compatible updates — never `branch = "main"`, never a bare git URL,
+never a committed `path =`:
+
+```toml
+[project]
+dependencies = ["yandex-oauth>=0.2,<0.3"]
+
+[tool.uv.sources]
+yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1" }
+```
+
+- Working against an unreleased provider locally: `uv pip install -e
+  ../<provider>` in your venv, uncommitted.
+- Bumping the pin is one commit: `tag = "vNEW"` + `uv lock
+  --upgrade-package <name>` + the full gate.
+- A CLI that shells out to another CLI (not imports it) declares the
+  minimum version it needs and checks `<other> --version` at runtime,
+  failing with a clear `CliError` (what's installed, what's needed, the
+  `uv tool upgrade` command) rather than a confusing downstream error.
 
 ## 9. Every package ships its own agent skill
 
