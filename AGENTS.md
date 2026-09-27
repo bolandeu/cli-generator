@@ -91,6 +91,17 @@ install the git copy; a plain `uv pip install <wheel>` gets PyPI's 1.x
 (that is the bug the step prevents — the step fails with "installed from a
 package index instead of their git source" if it ever regresses).
 
+For a change to `template/.github/workflows/ci.yml.jinja`, check every
+`uses:` tag exists — some actions publish no floating major tag (there is
+no `astral-sh/setup-uv@v10`, only `v10.x.y`; that shipped in v1.1.0–v1.2.5
+and broke CI in every generated repo):
+
+```bash
+grep -oE 'uses: [^ ]+@[^ ]+' template/.github/workflows/ci.yml.jinja | sed 's/uses: //' |
+  while IFS=@ read -r action tag; do repo=$(echo "$action" | cut -d/ -f1-2)
+    gh api "repos/$repo/git/ref/tags/$tag" -q .ref >/dev/null 2>&1 && echo "ok $action@$tag" || echo "MISSING $action@$tag"; done
+```
+
 For a change touching `.claude-plugin/plugin.json`, also run:
 
 ```bash

@@ -176,6 +176,17 @@ subcommand: `<cli> --json status`) and a local option on every leaf command
 form a given CLI accepts. See the template's `output.guard`/`output.JsonOption`
 for how this is kept from being copy-pasted per command.
 
+## Language of help and output
+
+Command help (docstrings, `help=`), human-mode messages and `error.message` /
+`action` are written in **English** in the template. A project may translate
+its own commands' help and human output (e.g. Russian for Russian-speaking
+users) — consistently across the whole CLI, not command by command. Never
+translate anything machine-read: JSON keys, enum values (`status: "ok"`,
+`source: "env"`), `error.code`, exit codes, command and flag names. The
+template's `auth status` text stays English unless the project translates it
+like any other command (its snapshot will show the change).
+
 ## Discovery: a bare `<cli>` is the command reference
 
 `<cli>` with no arguments prints `<name> <version> — <description>`,

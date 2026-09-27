@@ -99,6 +99,10 @@ showcontent = true
 # Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
 commands = ["src/{{ package_name }}/commands/*.py"]
+# scripts/release.py: extras to install before ruff/ty/pytest in the gate, and
+# the release commit message (e.g. for Conventional Commits hooks).
+# gate_extras = ["browser"]
+# release_commit = "chore(release): v{version}"
 
 [tool.pytest.ini_options]
 addopts = "--cov --cov-report=term-missing:skip-covered"

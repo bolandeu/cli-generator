@@ -100,8 +100,11 @@ what every integration otherwise reinvents slightly differently:
 (the field names it reads from `credentials.manager`; default
 `("api_key",)`, `()` for none), `required` (`False` for a provider the
 CLI works without), `legacy_env` (older env var names still honoured,
-field → name, after `<PACKAGE>_<PROVIDER>_<FIELD>`; annotate it
-`ClassVar[dict[str, str]]` in a subclass) and `health_check() -> Health`:
+field → name, looked up **after the keychain** unless `legacy_env_first`;
+annotate it `ClassVar[dict[str, str]]` in a subclass), `shared_namespaces`
+(other CLIs whose stored credential this provider may read, after its
+own: `("serp",)` for a tool using serp's key — read-only), and
+`health_check() -> Health`:
 one cheap, read-only, non-billed call proving the credential works, within
 10 s and without retries, guaranteed by the provider's **own client
 timeout** (no watchdog thread — it can't be killed and blocks interpreter
@@ -167,7 +170,17 @@ the CLI, or point it at a project explicitly without changing cwd.
 | Secrets                     | OS keychain via `keyring`, or env var       | Never |
 
 Credential resolution order: CLI argument → environment variable → OS
-keychain → (never falls back to project or global config for secrets).
+keychain → legacy env var name if the provider declares one (never falls
+back to project or global config for secrets).
+
+**Namespace = the command name** (`cli_name`), not the Python package:
+keychain service `<cli>:<provider>`, env var `<CLI>_<PROVIDER>_<FIELD>` with
+every non-alphanumeric → `_` (`serp` → `SERP_XMLRIVER_API_KEY`, even though
+the package is `rb_serp`; `sitemap-xml` → `SITEMAP_XML_…`). That's what a
+user knows, and it stays put if the package is renamed. A provider reads
+another tool's namespace via `shared_namespaces` and uses
+`Provider.credential()`, which applies all of these options — so no
+project needs its own copy of `credentials/manager.py` or `health.py`.
 
 ### Credential shape: a named field-bag per `provider`, not one opaque string
 

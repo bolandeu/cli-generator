@@ -212,8 +212,13 @@ template, `_commit` is the template release it was last synced to):
    project once generated. It three-way-merges the template diff since
    `_commit` with the project's own changes; business logic in
    `core/services.py`, `providers/`, extra commands and tests survive
-   untouched. Conflicts land as `*.rej` files next to the file — resolve
-   each by hand, then delete the `.rej`.
+   untouched. Conflicts land as `*.rej` files (or inline conflict markers)
+   — resolve **hunk by hunk**, keeping the project's commands, providers
+   and settings and taking the template's structural changes. Never
+   resolve by taking one side wholesale (`git checkout --theirs/--ours`,
+   copying the template file over): that silently deletes the project's
+   own commands or the template's fixes. Delete each `.rej` afterwards and
+   check `git diff` reads as intended before the gate.
 3. Run the full verify loop (Scaffold step 4). Read the diff: a template
    release can add a gate (coverage floor, a lint rule) that the
    project's existing code now fails — fix the code, don't lower the
@@ -250,7 +255,18 @@ template, `_commit` is the template release it was last synced to):
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
    report instead of working around it.
-5. **Changing `include_auth` / `include_providers`** (`--data
+5. **Crossing template v1.2.6** (credential namespace = command name).
+   Keychain service and env vars moved from the package name to
+   `cli_name` (`rb_serp` → `serp`: `SERP_XMLRIVER_API_KEY`). If the two
+   differ and the project didn't already override this, credentials stored
+   under the old package namespace aren't found any more: either set
+   `shared_namespaces = ("<old package name>",)` on the affected providers
+   for a transition, or re-run `<cli> auth login` and rename env vars. If
+   the project had patched `credentials/manager.py`/`health.py` to do this
+   by hand, take the template's version (hunk by hunk) and drop the patch —
+   `shared_namespaces`, `legacy_env` and `legacy_env_first` cover the usual
+   reasons for those forks.
+6. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -263,7 +279,7 @@ template, `_commit` is the template release it was last synced to):
    credentials that doesn't use `providers/` answers
    `include_providers=false` instead of deleting `providers/` — deleted
    template files come back on the next update.
-6. If `_commit` is a bare commit hash rather than a tag, the project was
+7. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 

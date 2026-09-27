@@ -28,6 +28,11 @@ uv-dynamic-versioning); a release bumps the last `v*` tag by `part`. Releasing
 refuses off `main`, on a dirty tree, when `main` is behind its upstream, or
 with no fragments. It never pushes: it prints the push command for you.
 
+Settings in pyproject.toml `[tool.cli-generator]` (so the script itself stays
+verbatim): `gate_extras = ["x"]` runs ruff/ty/pytest with those extras
+installed; `release_commit = "chore(release): v{version}"` sets the release
+commit message (default "Release v{version}").
+
 Canonical copy: cli-generator `template/scripts/release.py`. Other repos
 copy it verbatim instead of editing it.
 """
@@ -49,8 +54,22 @@ from typing import NoReturn
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _tool(name: str) -> dict:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text()).get("tool", {}).get(name, {})
+
+
 def _towncrier() -> dict:
-    return tomllib.loads((ROOT / "pyproject.toml").read_text()).get("tool", {}).get("towncrier", {})
+    return _tool("towncrier")
+
+
+def gate_extras() -> list[str]:
+    """`[tool.cli-generator] gate_extras`: optional-dependency extras the gate installs, so their tests run."""
+    return list(_tool("cli-generator").get("gate_extras", []))
+
+
+def release_commit_message(version: str) -> str:
+    """`[tool.cli-generator] release_commit` (e.g. "chore(release): v{version}" for Conventional Commits)."""
+    return _tool("cli-generator").get("release_commit", "Release v{version}").format(version=version)
 
 
 FRAGMENTS = ROOT / _towncrier().get("directory", "changelog.d")
@@ -119,6 +138,8 @@ def fragments() -> list[Path]:
 
 
 def run_command(argv: tuple[str, ...]) -> str:
+    if argv[:2] == ("uv", "run"):  # run lint/types/tests with the configured extras installed
+        argv = ("uv", "run", *(arg for extra in gate_extras() for arg in ("--extra", extra)), *argv[2:])
     step_output(*argv)
     return ""
 
@@ -322,7 +343,7 @@ def main() -> None:
         "uv", "run", "towncrier", "build", "--version", version, "--yes"
     )  # writes changelog_file(), `git rm`s fragments
     run("git", "add", "--all", changelog_file(), *([str(FRAGMENTS)] if FRAGMENTS.exists() else []))
-    run("git", "commit", "-m", f"Release {tag}")
+    run("git", "commit", "-m", release_commit_message(version))
     run("git", "tag", "-a", tag, "-m", tag)
     print(f"Released {tag} locally. Push it (needs your confirmation): git push --follow-tags")
     print(f'Then pin it anywhere with: uv tool install "git+<repo-url>@{tag}"')
