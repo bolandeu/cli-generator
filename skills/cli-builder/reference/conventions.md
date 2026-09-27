@@ -29,6 +29,24 @@ seen one of these CLIs already knows how every other one behaves.
 `action` is optional but should be present whenever there's a concrete next
 command the caller (human or agent) can run to unblock itself.
 
+## JSON report envelope (data that can also be a problem)
+
+A command whose output is a report — `auth status` (§8 of the release
+standard), a health or audit command — emits the data **whether or not** it
+found a problem, via `output.emit_report(ctx, payload, render_human, problem)`:
+
+```json
+{"ok": true,  "tool": "mycli", "credentials": [...]}
+{"ok": false, "error": {"code": "CREDENTIALS_UNHEALTHY", "message": "...", "action": "..."},
+ "tool": "mycli", "credentials": [...]}
+```
+
+`problem=None` → exactly the success envelope. A `CliError` → `ok: false`,
+the standard `error` object **next to** the full payload, and the process
+exits with that error's exit code. Don't hand-roll this per command: a
+consumer (`tools-watch`) relies on `ok` meaning "exit code 0" and on the
+report fields being there in both cases.
+
 ## Exit codes (fixed across all generated CLIs)
 
 ```
@@ -181,6 +199,14 @@ def status(ctx: typer.Context, json_output: bool = output.JsonOption) -> None:
 
 - Every parameter is a `typer.Option(...)`/`typer.Argument(...)` with a
   non-empty `help=` (the shared `output.*Option` ones already have it).
+- Prefer a literal docstring. A computed help text is allowed only as a
+  module-level `command.__doc__ = f"..."` right after the function (the
+  docstring check reads that expression; `{cli}` isn't substituted there —
+  use `cli_name()` in the f-string). Setting `__doc__` anywhere else
+  (inside a function, via a decorator, in another module) is not allowed:
+  the hooks can't see it.
+- Commands live in `src/<package>/commands/*.py`; a different layout sets
+  `[tool.cli-generator] commands = ["<glob>", ...]` in `pyproject.toml`.
 - Every group is created with `output.group("<description>")`.
 - Changing a command's behaviour means updating its docstring in the same
   commit and refreshing `tests/snapshots/help/` with

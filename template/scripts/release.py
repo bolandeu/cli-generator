@@ -14,7 +14,9 @@ step's name and output:
     changelog fragment (at least one in changelog.d/ when anything but
     uv.lock / .github/ changed since the last tag) · build + install the wheel
     into a throwaway venv, `<cli> --version` must print the version being
-    built, `<cli> --help` must work · osv-scanner over uv.lock (skipped with a
+    built, `<cli> --help` must work (a library without a console script:
+    every top-level package imports and importlib.metadata reports that
+    version) · osv-scanner over uv.lock (skipped with a
     notice when osv-scanner isn't installed)
 
 The version lives only in git tags (`vX.Y.Z`, read at build time by
@@ -146,6 +148,27 @@ def _wheel_version(wheel: Path) -> str:
     return next(line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.startswith("Version:"))
 
 
+def _check_library(python: Path, wheel: Path, dist: str, built: str) -> str:
+    """No console script (a library): import every top-level package, compare importlib.metadata's version."""
+    with zipfile.ZipFile(wheel) as archive:
+        tops = sorted(
+            {
+                name.split("/")[0].removesuffix(".py")
+                for name in archive.namelist()
+                if not name.split("/")[0].endswith((".dist-info", ".data")) and (name.endswith(".py") or "/" in name)
+            }
+        )
+    code = (
+        "import importlib, importlib.metadata as m\n"
+        f"for name in {tops!r}: importlib.import_module(name)\n"
+        f"print(m.version({dist!r}))"
+    )
+    reported = step_output(str(python), "-c", code).splitlines()[-1].strip()
+    if reported != built:
+        raise StepFailed(f"importlib.metadata.version({dist!r}) is {reported!r}, but the wheel is version {built}")
+    return f"{wheel.name}; imports {', '.join(tops)}; importlib.metadata version = {reported}"
+
+
 def check_installed_wheel(version: str | None) -> str:
     """Build the wheel (as `version` if given), install it into a throwaway venv, run the CLI."""
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
@@ -165,7 +188,7 @@ def check_installed_wheel(version: str | None) -> str:
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         step_output("uv", "pip", "install", "--quiet", "--python", str(python), str(wheel))
         if script is None:
-            return f"{wheel.name} installs (no console script to run)"
+            return _check_library(python, wheel, project["name"], built)
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
         printed = step_output(str(exe), "--version").splitlines()
         reported = printed[-1].strip() if printed else ""

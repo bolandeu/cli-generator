@@ -103,12 +103,14 @@ CLI works without), `legacy_env` (older env var names still honoured,
 field → name, after `<PACKAGE>_<PROVIDER>_<FIELD>`; annotate it
 `ClassVar[dict[str, str]]` in a subclass) and `health_check() -> Health`:
 one cheap, read-only, non-billed call proving the credential works, within
-10 s and without retries — for HTTP, `self.probe("/me")` makes exactly
-one such request; then `return Health(expires_at=..., quota=...)`; let
+10 s and without retries, guaranteed by the provider's **own client
+timeout** (no watchdog thread — it can't be killed and blocks interpreter
+exit): for HTTP, `self.probe("/me")` makes exactly one request with a 10 s
+httpx timeout; a non-HTTP provider passes `credentials.health.CHECK_TIMEOUT`
+to what it calls; then `return Health(expires_at=..., quota=...)`; let
 `AuthRequired`/`ProviderError` propagate. `auth status` gets the instance
 from `for_health_check(target)` (`cls()` by default — override it when the
-constructor needs config), knows nothing about HTTP, and only enforces the
-10 s wall clock. `providers.all_providers()` finds every concrete subclass
+constructor needs config) and knows nothing about HTTP. `providers.all_providers()` finds every concrete subclass
 defined under `providers/` by itself (no registry to forget; bases set
 `abstract = True`), and `tests/test_providers.py` fails for any that
 doesn't override `health_check()`. This is what `auth status --check`
@@ -219,7 +221,7 @@ knowing any provider):
   of credential values too). Env overriding part of a keychain credential
   reports `env` with both places in `source_ref`.
 - `status`: `missing` / `unchecked` without `--check`; with it, the
-  provider's `health_check()` (10 s hard timeout, no retries) gives `ok`,
+  provider's `health_check()` (10 s client timeout, no retries) gives `ok`,
   or `AuthRequired` → `invalid`, `ProviderError`/timeout → `unreachable`,
   a past `expires_at` → `expired`, and the provider may return
   `quota_exhausted` itself.
@@ -356,7 +358,9 @@ the template implements it):
   sees commits; lock/CI-only changes are Dependabot's and need none),
   `uv build` + install of the wheel into a throwaway venv where
   `<cli> --version` must equal the wheel's METADATA version and
-  `<cli> --help` must work, and `osv-scanner --lockfile=uv.lock` when
+  `<cli> --help` must work (a library without a console script: every
+  top-level package imports and `importlib.metadata.version()` equals the
+  built version), and `osv-scanner --lockfile=uv.lock` when
   osv-scanner is installed (skipped with a notice otherwise; `brew install
   osv-scanner`). The first failing step stops it, named, with its output.
 - **`release.py patch|minor|major`** is the only way a version moves: on a
