@@ -82,6 +82,15 @@ The release process itself is specified in
 `~/Projects/tools/docs/standard-release.md` (owned by the tools/ root
 agent) — change it there first, then here.
 
+For a change to the gate's "build + install wheel" step, re-run the
+dependency-confusion check: a local git package named like an existing
+PyPI package (`yandex-oauth`, version 0.2.1, tag `v0.2.1`), added to a
+generated project as `"yandex-oauth>=0.2"` + `[tool.uv.sources] yandex-oauth
+= { git = "file://…", tag = "v0.2.1" }`. `release.py --check` must pass and
+install the git copy; a plain `uv pip install <wheel>` gets PyPI's 1.x
+(that is the bug the step prevents — the step fails with "installed from a
+package index instead of their git source" if it ever regresses).
+
 For a change touching `.claude-plugin/plugin.json`, also run:
 
 ```bash
@@ -128,6 +137,14 @@ before (missing answers file, wrong `copier.yml` location).
   merged on `copier update` (projects rewrite it). A template change meant
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
+- Three names: `package_name` (import, keychain, env prefix, project dir),
+  `cli_name` (command) and `dist_name` (`[project] name`, default
+  `rb-<slug>`, standard §10). The distribution name is rendered into
+  `src/<pkg>/_distribution.py` (`DIST_NAME`) because an editable install
+  can't be mapped from package to distribution at runtime
+  (`packages_distributions()` returns nothing for it); every
+  `importlib.metadata` lookup uses `DIST_NAME`, and `tests/test_cli.py`
+  checks it equals `[project] name`.
 - The command name is `cli_name` (copier question; `[project.scripts]`),
   which may differ from `package_name`. Runtime code gets it from
   `core.version.cli_name()` (the installed console script), never from

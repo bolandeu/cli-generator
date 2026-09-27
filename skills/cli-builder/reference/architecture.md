@@ -408,7 +408,11 @@ yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1
   --upgrade-package <name>` + the full gate.
 - A CLI that shells out to another CLI (not imports it) declares the
   minimum version it needs and checks it at runtime before the first
-  call: `exe = core.deps.require_cli("serp", "0.3.0")`, then run `exe`.
+  call: `exe = core.deps.require_cli("serp", "0.3.0",
+  install_url="https://github.com/bolandeu/serp")`, then run `exe`. With
+  `install_url` a missing CLI's `action` is a runnable
+  `uv tool install --reinstall "git+<url>@v0.3.0"`; without it the action
+  names what to install, never a `<…>` placeholder.
   A missing or older CLI fails with `DEPENDENCY_TOO_OLD` (exit 1: what's
   installed, what's needed, the `uv tool upgrade` command) instead of a
   confusing downstream error; a `0.0.0…` dev build is accepted.

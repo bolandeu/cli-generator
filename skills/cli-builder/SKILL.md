@@ -45,14 +45,18 @@ function) is governed by these four rules instead
 ## Mode: Scaffold
 
 1. Clarify with the user (or infer from the task) before generating:
-   - `package_name` — snake_case, importable Python package (and
-     distribution / `uv tool` name, keychain service, env var prefix,
-     `.<package>/` project dir).
-   - `cli_name` — the command users type; default `package_name` with
-     `_` → `-`. Set it when the command differs from the package
-     (`--data cli_name=sitemap-xml` for package `rb_sitemap_xml`). Runtime
-     code reads it from the installed console script
-     (`core.version.cli_name()`), never from `__name__`.
+   Three names, deliberately separate (standard §10):
+   - `package_name` — the Python import package; for a new tool
+     `rb_<slug>` (`rb_serp`). Also the keychain service, env var prefix and
+     `.<package>/` project dir.
+   - `cli_name` — the command users type; default `<slug>` (`package_name`
+     without `rb_`, `_` → `-`: `serp`). Runtime code reads it from the
+     installed console script (`core.version.cli_name()`), never from
+     `__name__`.
+   - `dist_name` — the distribution (`[project] name`, what `uv tool
+     install/upgrade` and other tools' dependencies use); default
+     `rb-<slug>` (`rb-serp`). Generic names collide with other people's
+     PyPI packages. Runtime code gets it from `_distribution.DIST_NAME`.
    - `project_name`, one-line `description`, `author_name`.
    - Whether it needs credentials (`include_auth`) — default yes if the task
      mentions any external API/provider.
@@ -76,7 +80,7 @@ function) is governed by these four rules instead
    uvx copier copy /absolute/path/to/this/plugin/repo <dest-dir> \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
-     --data cli_name=<command> --data include_auth=true \
+     --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
      --data repository_url=https://github.com/<owner>/<repo>
    ```
 
@@ -101,7 +105,7 @@ function) is governed by these four rules instead
      credential per site/host/account → `per_target = True`, read it
      under `self.credential_name`.
    - Calling another of our CLIs as a subprocess? Get its path with
-     `core.deps.require_cli("<cli>", "<min version>")` first — it fails
+     `core.deps.require_cli("<cli>", "<min version>", install_url="<its repo URL>")` first — it fails
      with `DEPENDENCY_TOO_OLD` instead of a confusing downstream error.
    - Wire the real work into `commands/run.py`, replacing the placeholder.
    - Any new command group (`<cli> thing list|add`) is created with
@@ -192,8 +196,12 @@ template, `_commit` is the template release it was last synced to):
    no `cli_name` answer: its default is `package_name` with `_` → `-`,
    which renames the command of a package with `_` in its name — pass
    `--data cli_name=<the command it has today>` (see `[project.scripts]`)
-   unless renaming is intended. `README.md` is never touched by an update
-   (`_skip_if_exists`): it belongs to the project once generated. It three-way-merges the template diff since
+   unless renaming is intended. Before template v1.2.3 there is no
+   `dist_name` answer either: the default `rb-<slug>` **renames the
+   distribution** — see "Renaming the distribution" below; to keep the old
+   name pass `--data dist_name=<current [project] name>`. `README.md` is
+   never touched by an update (`_skip_if_exists`): it belongs to the
+   project once generated. It three-way-merges the template diff since
    `_commit` with the project's own changes; business logic in
    `core/services.py`, `providers/`, extra commands and tests survive
    untouched. Conflicts land as `*.rej` files next to the file — resolve
@@ -237,6 +245,25 @@ template, `_commit` is the template release it was last synced to):
 5. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
+
+### Renaming the distribution (standard §10: `rb-<slug>`)
+
+The command (`cli_name`) and the import package don't change; only
+`[project] name` does. For an existing package:
+
+1. `uvx copier update --trust --defaults --data dist_name=rb-<slug>` (or
+   edit `[project] name` by hand in a non-template repo), then `uv lock`.
+   `src/<package>/_distribution.py` must carry the same name —
+   `tests/test_cli.py` fails otherwise.
+2. It is a **breaking change** for consumers: breaking bump (minor at
+   `0.x`) with a `changed` fragment naming the old and new names.
+3. Every consumer, in the same wave: rename the dependency and its
+   `[tool.uv.sources]` key (`"yandex-oauth>=0.2,<0.3"` →
+   `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { git = …, tag = … }`),
+   `uv lock`, gate, release.
+4. Machines with the tool installed: `uv tool uninstall <old name>` first,
+   then `uv tool install "rb-<slug> @ git+<repo-url>@vX.Y.Z"` — otherwise
+   two tools claim the same command. Mention this in the release fragment.
 
 ## Publish to GitHub (both modes)
 

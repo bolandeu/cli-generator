@@ -12,8 +12,11 @@ step's name and output:
 
     uv lock --check · ruff check · ruff format --check · ty check · pytest ·
     changelog fragment (at least one in changelog.d/ when anything but
-    uv.lock / .github/ changed since the last tag) · build + install the wheel
-    into a throwaway venv, `<cli> --version` must print the version being
+    uv.lock / .github/ changed since the last tag) · build the wheel and install
+    it into a throwaway venv with exactly the uv.lock dependency set (`uv export`,
+    then the wheel with --no-deps, then `uv pip check` — never resolving from
+    an index, so git-sourced deps can't be swapped for a same-named PyPI
+    package), `<cli> --version` must print the version being
     built, `<cli> --help` must work (a library without a console script:
     every top-level package imports and importlib.metadata reports that
     version) · osv-scanner over uv.lock (skipped with a
@@ -169,6 +172,22 @@ def _check_library(python: Path, wheel: Path, dist: str, built: str) -> str:
     return f"{wheel.name}; imports {', '.join(tops)}; importlib.metadata version = {reported}"
 
 
+def _check_vcs_sources(python: Path, requirements: Path) -> None:
+    """Every `name @ git+...` in the locked set must be installed from git, not from an index."""
+    names = [line.split(" @ ", 1)[0].strip() for line in requirements.read_text().splitlines() if " @ git+" in line]
+    if not names:
+        return
+    code = (
+        "import importlib.metadata as m, json\n"
+        f"for name in {names!r}:\n"
+        "    raw = m.distribution(name).read_text('direct_url.json')\n"
+        "    print(name, 'git' if raw and 'vcs_info' in json.loads(raw) else 'INDEX')"
+    )
+    wrong = [line.split()[0] for line in step_output(str(python), "-c", code).splitlines() if line.endswith("INDEX")]
+    if wrong:
+        raise StepFailed(f"installed from a package index instead of their git source: {', '.join(wrong)}")
+
+
 def check_installed_wheel(version: str | None) -> str:
     """Build the wheel (as `version` if given), install it into a throwaway venv, run the CLI."""
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
@@ -186,7 +205,21 @@ def check_installed_wheel(version: str | None) -> str:
             raise StepFailed(f"built version {built}: the build saw no v* tag (uv-dynamic-versioning fell back)")
         step_output("uv", "venv", "--quiet", str(venv))
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        step_output("uv", "pip", "install", "--quiet", "--python", str(python), str(wheel))
+        # Never `uv pip install <wheel>` alone: a wheel's metadata has no
+        # [tool.uv.sources], so our git-only deps (yandex-oauth @ tag) would be
+        # resolved from PyPI — where an unrelated package of the same name
+        # lives (dependency confusion). Install exactly the locked set (git
+        # sources included), then the wheel without resolving anything, then
+        # check the wheel's requirements are met by what's installed.
+        requirements = Path(tmp) / "requirements.txt"
+        step_output(
+            "uv", "export", "--frozen", "--no-dev", "--no-emit-project", "--no-hashes", "--quiet",
+            "--output-file", str(requirements),
+        )  # fmt: skip
+        step_output("uv", "pip", "install", "--quiet", "--python", str(python), "-r", str(requirements))
+        step_output("uv", "pip", "install", "--quiet", "--no-deps", "--python", str(python), str(wheel))
+        step_output("uv", "pip", "check", "--python", str(python))
+        _check_vcs_sources(python, requirements)
         if script is None:
             return _check_library(python, wheel, project["name"], built)
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)

@@ -79,7 +79,7 @@ uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
 **Update** an installed copy to the latest commit:
 
 ```bash
-uv tool upgrade {{ package_name }}
+uv tool upgrade {{ dist_name }}
 ```
 
 After install, the command `{{ cli_name }}` is available globally, on
@@ -109,7 +109,7 @@ stderr in human mode, so stdout is always safe to pipe.
 
 A project can require a minimum CLI version in its `.{{ package_name }}/config.toml`
 (`[cli] min_version = "..."`); an older install refuses with exit 6 and
-`uv tool upgrade {{ package_name }}` fixes it.
+`uv tool upgrade {{ dist_name }}` fixes it.
 
 See `src/{{ package_name }}/data/SKILL.md` for the agent-facing usage guide
 bundled with this package — install it into an AI tool with

@@ -26,7 +26,7 @@ _tasks:
 
 package_name:
   type: str
-  help: "Python-importable package/command name (snake_case, e.g. mycli)"
+  help: "Python import package (snake_case). Standard §10 for new tools: rb_<slug>, e.g. rb_serp"
   validator: >-
     {% if not (package_name | regex_search('^[a-z][a-z0-9_]*$')) %}
     package_name must be a valid snake_case Python identifier
@@ -35,10 +35,19 @@ package_name:
 cli_name:
   type: str
   help: "Command users type (the [project.scripts] name), if it differs from the package name (e.g. sitemap-xml for package rb_sitemap_xml)"
-  default: "{{ package_name | replace('_', '-') }}"
+  default: "{{ package_name | regex_replace('^rb_', '') | replace('_', '-') }}"
   validator: >-
     {% if not (cli_name | regex_search('^[a-z][a-z0-9_-]*$')) %}
     cli_name must be lowercase letters, digits, '-' or '_'
+    {% endif %}
+
+dist_name:
+  type: str
+  help: "Distribution name ([project] name; what `uv tool install` and dependencies use). Standard §10: rb-<slug> for import package rb_<slug>"
+  default: "rb-{{ package_name | regex_replace('^rb_', '') | replace('_', '-') }}"
+  validator: >-
+    {% if not (dist_name | regex_search('^[a-z][a-z0-9._-]*$')) %}
+    dist_name must be lowercase letters, digits, '.', '-' or '_'
     {% endif %}
 
 project_name:

@@ -21,7 +21,7 @@ uv tool install "git+https://github.com/<owner>/<repo>.git"
 {%- endif %}
 ```
 
-Same command on macOS, Linux and Windows; `uv tool upgrade {{ package_name }}`
+Same command on macOS, Linux and Windows; `uv tool upgrade {{ dist_name }}`
 updates it. Do not run from source unless asked to develop the CLI.
 
 The repository may be private. On an auth error (`Authentication failed`,
@@ -71,6 +71,6 @@ Read exit code → `error.code` → `error.action` (the concrete next command).
     3  auth required          → {{ cli_name }} auth login
     4  project not initialized → {{ cli_name }} init
     5  provider error (network / external service; already retried) → retry later
-    6  CLI too old for this project → uv tool upgrade {{ package_name }}
+    6  CLI too old for this project → uv tool upgrade {{ dist_name }}
 
 Only exit 5 is worth an automatic retry.
