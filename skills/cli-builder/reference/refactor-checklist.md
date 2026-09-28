@@ -93,7 +93,10 @@ order before moving to the next item.
     instead of blanket ignores); a dependency on another of our
     tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
     + compatible range); a subprocess call to another of our CLIs without
-    a `core.deps.require_cli(...)` minimum-version check; a distribution
+    a `core.deps.require_cli(...)` minimum-version check; a program the
+    code runs (`shutil.which`, `subprocess` with a literal program, `npx`,
+    another CLI) missing from `[[tool.rb.external]]` in `pyproject.toml`
+    (standard §12 — the gate names each one); a distribution
     name (`[project] name`) without the `rb-` prefix (standard §10 → rename
     to `rb-<slug>` per SKILL.md "Renaming the distribution": breaking bump,
     consumers follow, old tool uninstalled; command and import names stay).

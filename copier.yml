@@ -19,6 +19,8 @@ _exclude:
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
   - "{% if not include_providers %}src/{{ package_name }}/providers{% endif %}"
   - "{% if not include_providers %}tests/test_providers.py{% endif %}"
+  - "{% if not (include_providers and include_http_provider) %}src/{{ package_name }}/providers/http.py{% endif %}"
+  - "{% if not (include_providers and include_http_provider) %}tests/test_http_provider.py{% endif %}"
   - "{% if not include_ci %}.github/workflows{% endif %}"
 
 # The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
@@ -87,6 +89,12 @@ include_providers:
     {% if include_auth and not include_providers %}
     include_auth needs include_providers (auth status checks providers)
     {% endif %}
+
+include_http_provider:
+  type: bool
+  help: "Include providers/http.py (HttpProvider: shared httpx client, retries, error mapping, the 10 s health probe)? No if no provider speaks HTTP"
+  default: true
+  when: "{{ include_providers }}"
 
 include_ci:
   type: bool

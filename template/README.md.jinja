@@ -46,14 +46,14 @@ PyPI publish needed:**
 
 ```bash
 {% if repository_url -%}
-uv tool install "git+{{ repository_url }}.git"
+uv tool install "{{ dist_name }} @ git+{{ repository_url }}.git@vX.Y.Z"
 {%- else -%}
-uv tool install "git+https://github.com/<owner>/<repo>.git"
+uv tool install "{{ dist_name }} @ git+https://github.com/<owner>/<repo>.git@vX.Y.Z"
 {%- endif %}
 ```
 
-Pin a release by appending `@vX.Y.Z` (a tag cut by `scripts/release.py`)
-to the URL. This is also how an AI agent
+Replace `vX.Y.Z` with the latest release tag (a tag cut by
+`scripts/release.py`; never install a branch). This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
 yet — see `src/{{ package_name }}/data/SKILL.md`.
 
@@ -70,9 +70,9 @@ or use the SSH form instead of HTTPS:
 
 ```bash
 {% if repository_url -%}
-uv tool install "git+ssh://git@github.com/{{ repository_url | replace('https://github.com/', '') }}.git"
+uv tool install "{{ dist_name }} @ git+ssh://git@github.com/{{ repository_url | replace('https://github.com/', '') }}.git@vX.Y.Z"
 {%- else -%}
-uv tool install "git+ssh://git@github.com/<owner>/<repo>.git"
+uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@vX.Y.Z"
 {%- endif %}
 ```
 

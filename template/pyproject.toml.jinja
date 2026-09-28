@@ -12,7 +12,9 @@ dependencies = [
     "rich>=13.7",
     "platformdirs>=4.2",
     "tomli-w>=1.0",
+{%- if include_providers and include_http_provider %}
     "httpx>=0.27",
+{%- endif %}
     "packaging>=24.0",
 {%- if include_auth %}
     "keyring>=25.0",
@@ -45,6 +47,10 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ package_name }}"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# The installed CLI reads [[tool.rb.external]] from here (core/deps.py).
+"pyproject.toml" = "{{ package_name }}/_pyproject.toml"
 
 [dependency-groups]
 dev = [
@@ -94,6 +100,17 @@ showcontent = true
 directory = "security"
 name = "Security"
 showcontent = true
+
+# External (non-Python) dependencies — every CLI this tool runs (require_cli,
+# shutil.which, subprocess with a literal program, npx). The gate checks this
+# list against the code both ways; doctor and require_cli read it at runtime;
+# the tools/ root builds docs/external-deps.md from it (standard §12).
+# [[tool.rb.external]]
+# name = "ffmpeg"
+# required = true               # false: the tool works without it (doctor stays healthy)
+# min_version = "6.0"           # optional
+# check = "ffmpeg -version"     # prints the version; default "<name> --version"
+# why = "transcodes the downloaded videos"
 
 [tool.cli-generator]
 # Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)

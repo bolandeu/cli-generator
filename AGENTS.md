@@ -155,7 +155,9 @@ before (missing answers file, wrong `copier.yml` location).
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
 - Optional generated parts are copier questions, not deletions:
-  `include_auth`, `include_providers` (only without auth), `include_ci`,
+  `include_auth`, `include_providers` (only without auth),
+  `include_http_provider` (drops `providers/http.py`,
+  `tests/test_http_provider.py` and `httpx`), `include_ci`,
   `private_deps` (CI job env `GH_TOKEN` from the `GITHUB_READ_TOKEN`
   secret + `gh auth setup-git`), `dist_name_legacy` (rename transition).
   Render each branch once when you touch the workflow or `copier.yml`.

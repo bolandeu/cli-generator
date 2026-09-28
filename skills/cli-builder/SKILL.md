@@ -112,6 +112,13 @@ function) is governed by these four rules instead
      reports in the cross-tool shape (`architecture.md` §4). One
      credential per site/host/account → `per_target = True`, read it
      under `self.credential_name`.
+   - Running any program `uv` can't install (`ffmpeg`, `git`, `npx`,
+     another CLI)? Declare it in `pyproject.toml` `[[tool.rb.external]]`
+     (name, required, min_version, check, why) — the gate fails on an
+     undeclared or unused one — and reach it through `core.deps.require_cli`.
+   - An integration that doesn't speak HTTP: `--data include_http_provider=false`
+     drops `providers/http.py` and the `httpx` dependency; subclass
+     `providers.Provider` directly.
    - Calling another of our CLIs as a subprocess? Get its path with
      `core.deps.require_cli("<cli>", "<min version>", install_url="<its repo URL>")` first — it fails
      with `DEPENDENCY_TOO_OLD` instead of a confusing downstream error.
@@ -266,7 +273,15 @@ template, `_commit` is the template release it was last synced to):
    by hand, take the template's version (hunk by hunk) and drop the patch —
    `shared_namespaces`, `legacy_env` and `legacy_env_first` cover the usual
    reasons for those forks.
-6. **Changing `include_auth` / `include_providers`** (`--data
+6. **Crossing template v1.2.9.** The gate gains an "external
+   dependencies" step: declare in `[[tool.rb.external]]` every program the
+   code runs (the step names each one) — including other CLIs called via
+   `require_cli`, whose `min_version` can then move into the registry.
+   `providers/http.py` is optional now: a project whose providers don't use
+   `HttpProvider` updates with `--data include_http_provider=false` (and
+   drops `httpx`); one that imports `providers.HttpProvider` keeps working
+   (lazy export) but new code imports `from .http import HttpProvider`.
+7. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -279,7 +294,7 @@ template, `_commit` is the template release it was last synced to):
    credentials that doesn't use `providers/` answers
    `include_providers=false` instead of deleting `providers/` — deleted
    template files come back on the next update.
-7. If `_commit` is a bare commit hash rather than a tag, the project was
+8. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 
@@ -387,9 +402,11 @@ sitting installable-from-nowhere without asking.
    every other machine (and every agent reading the bundled SKILL.md)
    will run:
    ```bash
-   uv tool install --reinstall "git+https://github.com/<owner>/<repo>.git@v0.1.0" && <package_name> --version
+   uv tool install --reinstall "<dist_name> @ git+https://github.com/<owner>/<repo>.git@vX.Y.Z" && <cli_name> --version
    ```
-   It must print `0.1.0`, not `0.0.0` — `0.0.0` means the build saw no
+   Replace `vX.Y.Z` with the latest release tag (`v0.1.0` right after
+   step 3) — always a tag, never a branch (standard §9). It must print
+   `X.Y.Z`, not `0.0.0` — `0.0.0` means the build saw no
    tag (not pushed, or uv's checkout lacks tag info); stop and report it.
    (`--reinstall` because step 1 installed the same tool from the local
    path.) For a private repo this works over plain HTTPS because

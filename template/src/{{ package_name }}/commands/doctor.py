@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 
 from .. import output
-from ..core import services
+from ..core import deps, services
 from ..core.errors import CliTooOld
 from ..core.models import ProjectConfig
 from ..core.version import DEV_VERSION, cli_name, installed_version, module_exists
@@ -78,6 +78,7 @@ def doctor(
             checks.append({"name": "cli_compat", "ok": False, "detail": exc.message})
 
     checks.extend(_auth_checks(config.provider.name if config else "default"))
+    checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(

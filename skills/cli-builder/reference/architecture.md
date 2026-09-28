@@ -438,6 +438,15 @@ yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1
   ../<provider>` in your venv, uncommitted.
 - Bumping the pin is one commit: `tag = "vNEW"` + `uv lock
   --upgrade-package <name>` + the full gate.
+- **External (non-Python) dependencies are declared** in `pyproject.toml`
+  `[[tool.rb.external]]` — `name`, `required`, optional `min_version`,
+  `check` (version command, default `<name> --version`), `why` (standard
+  §12). The gate checks the list against `src/` both ways (every program
+  run by a literal name — `require_cli("x")`, `shutil.which("x")`,
+  `subprocess.run(["x", …])`, `npx` — is declared, every declared one is
+  run); `doctor` shows an `external:<name>` check per entry; the wheel
+  carries `pyproject.toml` as `<package>/_pyproject.toml` so the installed
+  tool can read it.
 - A CLI that shells out to another CLI (not imports it) declares the
   minimum version it needs and checks it at runtime before the first
   call: `exe = core.deps.require_cli("serp", "0.3.0",
