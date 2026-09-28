@@ -444,7 +444,11 @@ yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1
   §12). The gate checks the list against `src/` both ways (every program
   run by a literal name — `require_cli("x")`, `shutil.which("x")`,
   `subprocess.run(["x", …])`, `npx` — is declared, every declared one is
-  run); `doctor` shows an `external:<name>` check per entry; the wheel
+  run — except an entry with `detect = false`, for a program run in a way
+  the scan can't see: an injected runner, an absolute path; it still needs
+  `why`). For one of our CLIs, `dist` (default `rb-<name>`) and `url` make
+  `DEPENDENCY_TOO_OLD` print a runnable `uv tool install "<dist> @
+  git+<url>.git@v<min>" --force`. `doctor` shows an `external:<name>` check per entry; the wheel
   carries `pyproject.toml` as `<package>/_pyproject.toml` so the installed
   tool can read it.
 - A CLI that shells out to another CLI (not imports it) declares the

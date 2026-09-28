@@ -218,14 +218,24 @@ def check_external_deps() -> str:
         for name, files in used.items()
         if name not in declared
     ]
-    problems += [f"`{name}` is declared but nothing in src/ runs it" for name in sorted(declared - used.keys())]
+    # detect = false: run in a way this scan can't see (an injected runner, an
+    # absolute path) — declared on trust, but still with a `why`.
+    hidden = {entry.get("name") for entry in entries if entry.get("detect", True) is False}
+    unseen = sorted(declared - used.keys() - hidden)
+    problems += [
+        f"`{name}` is declared but nothing in src/ runs it (set detect = false if it's run in a way the gate "
+        "can't see, e.g. an injected runner or an absolute path)"
+        for name in unseen
+    ]
     if problems:
         raise StepFailed(
             "pyproject.toml [[tool.rb.external]] doesn't match the code (standard §12):\n  - "
             + "\n  - ".join(problems)
             + '\nDeclare: [[tool.rb.external]] name = "x", required = true, min_version = "1.0", check = "x --version", why = "..."'
         )
-    return f"{len(declared)} declared, all used" if declared else "none used, none declared"
+    if not declared:
+        return "none used, none declared"
+    return f"{len(declared)} declared, all used" + (f" ({len(hidden)} with detect = false)" if hidden else "")
 
 
 def _tooling_only_pyproject(path: str, tag: str) -> bool:

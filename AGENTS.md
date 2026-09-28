@@ -161,6 +161,11 @@ before (missing answers file, wrong `copier.yml` location).
   `private_deps` (CI job env `GH_TOKEN` from the `GITHUB_READ_TOKEN`
   secret + `gh auth setup-git`), `dist_name_legacy` (rename transition).
   Render each branch once when you touch the workflow or `copier.yml`.
+- Human output goes through rich, which silently drops anything in
+  `[...]` it takes for markup (`[[tool.rb.external]]` vanished from help).
+  `output.guard`/`output.group` escape help text; `human.echo()` escapes
+  its argument; only `human.echo_markup()` renders markup — escape() any
+  data you put inside it.
 - Three names: `package_name` (import, keychain, env prefix, project dir),
   `cli_name` (command) and `dist_name` (`[project] name`, default
   `rb-<slug>`, standard §10). The distribution name is rendered into

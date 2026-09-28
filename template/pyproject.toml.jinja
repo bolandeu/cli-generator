@@ -111,6 +111,9 @@ showcontent = true
 # min_version = "6.0"           # optional
 # check = "ffmpeg -version"     # prints the version; default "<name> --version"
 # why = "transcodes the downloaded videos"
+# detect = false                # run via an injected runner / absolute path the gate can't see
+# dist = "rb-serp"              # for one of our CLIs: its distribution (default rb-<name>)
+# url = "https://github.com/bolandeu/serp"  # its repo: DEPENDENCY_TOO_OLD then prints a pinned install
 
 [tool.cli-generator]
 # Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)

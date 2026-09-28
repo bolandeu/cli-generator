@@ -135,10 +135,16 @@ def test_external_registry_must_match_code(tmp_path: Path, monkeypatch: pytest.M
     with pytest.raises(release.StepFailed, match=re.escape("`ffmpeg` is run in src/mod.py but not declared")):
         release.check_external_deps()
 
-    registry = {"external": [{"name": "ffmpeg", "why": "video"}, {"name": "node", "why": "unused"}]}
+    registry: dict[str, list[dict[str, object]]] = {
+        "external": [{"name": "ffmpeg", "why": "video"}, {"name": "node", "why": "unused"}]
+    }
     monkeypatch.setattr(release, "_tool", lambda name: registry if name == "rb" else {})
     with pytest.raises(release.StepFailed, match=re.escape("`node` is declared but nothing in src/ runs it")):
         release.check_external_deps()
 
-    registry["external"].pop()
-    assert release.check_external_deps() == "1 declared, all used"
+    registry["external"][1]["detect"] = False  # run through an injected runner: declared on trust
+    assert release.check_external_deps() == "2 declared, all used (1 with detect = false)"
+
+    registry["external"][1]["why"] = ""
+    with pytest.raises(release.StepFailed, match="needs `name` and `why`"):
+        release.check_external_deps()
