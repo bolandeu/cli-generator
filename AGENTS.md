@@ -79,7 +79,7 @@ verify against a local bare remote rather than assuming: `git init --bare
 `uv run scripts/release.py patch`, `git push --follow-tags`, then
 `uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
 The release process itself is specified in
-`~/Projects/tools/docs/standard-release.md` (owned by the tools/ root
+`~/Work/tools/docs/standard-release.md` (owned by the tools/ root
 agent) — change it there first, then here.
 
 For a change to the gate's "build + install wheel" step, re-run the
