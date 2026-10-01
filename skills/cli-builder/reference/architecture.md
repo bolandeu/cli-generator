@@ -518,19 +518,23 @@ finishes and survives truncation better than a half-written array.
 
 ## 12. Tool data: the shared database (`include_db`)
 
-A tool that keeps records (journals, results, history) generates with
+A tool that keeps data (journals, results, history, caches) generates with
 `include_db=true`: `core/db.py` (connection, revision check, upgrade,
 import), `core/tables.py` (SQLAlchemy Core tables), `migrations/`
 (Alembic), `commands/db.py`, `core/normalize.py`. SQLAlchemy Core +
-Alembic + psycopg 3 — no ORM, no hand-rolled migrations. A cache
-(responses that can be refetched) stays a local SQLite file outside this
-layer.
+Alembic + psycopg 3 — no ORM, no hand-rolled migrations. All of a
+tool's data goes through this layer by default, caches included (a shared
+cache of paid API responses is the point: Mac and homeserver don't pay
+twice). Keeping something local instead is the tool's decision, recorded
+with its reason in the tool's own `AGENTS.md` (e.g. llmkit's response
+cache).
 
 **Where.** `<TOOL>_DATABASE_URL` set → PostgreSQL (the shared base on the
 homeserver, the one Directus uses; the URL comes from Doppler). Set but
 unreachable / rejected → `DATABASE_UNAVAILABLE`, exit 5 — **never** a
 fallback to SQLite, whose rows would silently miss the shared base. Not
-set → SQLite in the user data dir (tests, offline work). `<TOOL>` is
+set → SQLite in the user data dir (tests, offline work), or at
+`<TOOL>_DB_PATH` when that is set. `<TOOL>` is
 `cli_name` with non-alphanumerics as `_` (`_distribution.TOOL`, written
 down at generation, never derived at runtime).
 

@@ -47,6 +47,14 @@ def test_sqlite_is_created_and_migrated_on_open(_local_database: Path) -> None:
     assert _local_database.is_file()
 
 
+def test_sqlite_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.undo()  # conftest replaced sqlite_path itself
+    monkeypatch.setenv(db.PATH_ENV_VAR, str(tmp_path / "x.sqlite"))
+    assert db.sqlite_path() == tmp_path / "x.sqlite"
+    monkeypatch.delenv(db.PATH_ENV_VAR)
+    assert db.sqlite_path().name == f"{db.PREFIX.removesuffix('_')}.db"
+
+
 def test_tables_match_the_migrations() -> None:
     """tables.py and migrations/versions/ describe the same schema."""
     engine = db.open_db()

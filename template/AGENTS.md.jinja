@@ -59,7 +59,9 @@ changed with no changelog fragment on the branch.
   files (`init`, `config set`) don't need this.
 {%- if include_db %}
 - Data goes through `core/db.py` (cli-generator `architecture.md` §12).
-  `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → the shared PostgreSQL, else local SQLite.
+  `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → the shared PostgreSQL, else local SQLite
+  (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DB_PATH` moves the file). Caches go there too; anything kept local
+  instead is listed here, with the reason.
   Tables, views, indexes: `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_*` only, declared in `core/tables.py`
   and created by a hand-written migration in `migrations/versions/`.
   Other tools read only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views — a new shape is a `_v2_`

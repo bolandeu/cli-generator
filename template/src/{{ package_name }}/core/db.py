@@ -39,6 +39,7 @@ from .tables import PREFIX, metadata
 _PACKAGE_NAME = __name__.split(".")[0]
 
 ENV_VAR = f"{TOOL.upper()}_DATABASE_URL"
+PATH_ENV_VAR = f"{TOOL.upper()}_DB_PATH"  # the local SQLite file elsewhere (a second database, an existing file)
 VERSION_TABLE = f"alembic_version_{TOOL}"
 CONNECT_TIMEOUT_S = 5
 
@@ -48,7 +49,9 @@ def database_url() -> str | None:
 
 
 def sqlite_path() -> Path:
-    """The local database: app data dir, not Caches (cleaners wipe caches)."""
+    """The local database: `<TOOL>_DB_PATH`, else the app data dir (not Caches — cleaners wipe caches)."""
+    if path := os.environ.get(PATH_ENV_VAR):
+        return Path(path).expanduser()
     return platformdirs.user_data_path(TOOL) / f"{TOOL}.db"
 
 
@@ -261,6 +264,7 @@ def doctor_checks() -> list[dict]:
 
 __all__ = [
     "ENV_VAR",
+    "PATH_ENV_VAR",
     "PREFIX",
     "VERSION_TABLE",
     "SchemaState",
