@@ -157,7 +157,11 @@ before (missing answers file, wrong `copier.yml` location).
 - Optional generated parts are copier questions, not deletions:
   `include_auth`, `include_providers` (only without auth),
   `include_http_provider` (drops `providers/http.py`,
-  `tests/test_http_provider.py` and `httpx`), `include_ci`,
+  `tests/test_http_provider.py` and `httpx`), `include_db` (keeps
+  `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,
+  `tests/test_db.py`, `tests/conftest.py` and the SQLAlchemy/Alembic/psycopg
+  deps; its PostgreSQL test runs only with `TEST_DATABASE_URL` set — e.g.
+  `docker run --rm -e POSTGRES_PASSWORD=pw -p 55432:5432 postgres:16-alpine`), `include_ci`,
   `private_deps` (CI job env `GH_TOKEN` from the `GITHUB_READ_TOKEN`
   secret + `gh auth setup-git`), `dist_name_legacy` (rename transition).
   Render each branch once when you touch the workflow or `copier.yml`.

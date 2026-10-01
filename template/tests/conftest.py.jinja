@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from {{ package_name }}.core import db
+
+
+@pytest.fixture(autouse=True)
+def _local_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Every test gets its own SQLite file: never the user's database, never the shared PostgreSQL."""
+    path = tmp_path / "db" / "test.db"
+    monkeypatch.setattr(db, "sqlite_path", lambda: path)
+    monkeypatch.delenv(db.ENV_VAR, raising=False)
+    return path

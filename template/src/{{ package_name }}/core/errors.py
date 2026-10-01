@@ -155,3 +155,46 @@ class CliTooOld(CliError):
 class Aborted(CliError):
     def __init__(self, description: str) -> None:
         super().__init__("ABORTED", f"{description}: aborted by user.", exit_code=1)
+
+
+class DatabaseUnavailable(CliError):
+    """`<TOOL>_DATABASE_URL` is set but unusable: unreachable, wrong credentials, not PostgreSQL (core/db.py).
+
+    Exit 5 like any external service. Never answered by falling back to the
+    local SQLite file — data written there would silently miss the shared base.
+    """
+
+    def __init__(self, message: str, *, action: str | None = None) -> None:
+        super().__init__(
+            "DATABASE_UNAVAILABLE",
+            message,
+            action=action or "Check the database URL and that the server is reachable; then retry.",
+            exit_code=5,
+        )
+
+
+class DatabaseNotMigrated(CliError):
+    """The shared database's schema is behind this CLI's migrations (core/db.py)."""
+
+    def __init__(self, current: str | None, head: str) -> None:
+        super().__init__(
+            "DATABASE_NOT_MIGRATED",
+            f"The database schema is at revision {current or 'none'}, this {_CLI} needs {head}.",
+            action=f"Run '{_CLI} db upgrade' (it changes the shared database — run the released version).",
+            exit_code=1,
+        )
+
+
+class DatabaseTooNew(CliError):
+    """The database was migrated by a newer release than this one: the CLI is the one to update.
+
+    The same `CLI_TOO_OLD` code and exit 6 as `CliTooOld` — the cure is the same.
+    """
+
+    def __init__(self, current: str) -> None:
+        super().__init__(
+            "CLI_TOO_OLD",
+            f"The database schema is at revision {current}, which this {_CLI} doesn't know: a newer release migrated it.",
+            action=f"Run 'uv tool upgrade {_DIST}', then retry.",
+            exit_code=6,
+        )

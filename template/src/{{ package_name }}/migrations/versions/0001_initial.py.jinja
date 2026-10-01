@@ -1,0 +1,49 @@
+"""items, and the v1 view other tools read them through
+
+Revision ID: 0001
+Revises:
+
+The template's example — replace it with the tool's first real migration (keep
+the revision id "0001"), or, for a tool that already had a database, with one that
+renames its tables to the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_` prefix.
+
+Names are literal on purpose: a migration is history and must not change when
+code it would import does.
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+revision = "0001"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("phrase", sa.Text, nullable=False),
+        sa.Column("phrase_key", sa.Text, nullable=False),
+        sa.Column("region", sa.Integer, nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
+    op.create_index(
+        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items_phrase_key_ix",
+        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items",
+        ["phrase_key"],
+    )
+    # The contract with other tools: they read this view, never the table. Its
+    # columns don't change — a different shape is a new `_v2_` view next to it.
+    op.execute(
+        """
+        CREATE VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_items AS
+        SELECT phrase, phrase_key, region, created_at FROM {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items
+        """
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_items")
+    op.drop_table("{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items")

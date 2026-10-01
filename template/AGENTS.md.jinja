@@ -57,6 +57,17 @@ changed with no changelog fragment on the branch.
   `--dry-run` (`output.is_dry_run`) and gate the actual action behind
   `output.require_confirmation`. Commands that only touch local project
   files (`init`, `config set`) don't need this.
+{%- if include_db %}
+- Data goes through `core/db.py` (cli-generator `architecture.md` §12).
+  `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → the shared PostgreSQL, else local SQLite.
+  Tables, views, indexes: `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_*` only, declared in `core/tables.py`
+  and created by a hand-written migration in `migrations/versions/`.
+  Other tools read only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views — a new shape is a `_v2_`
+  view plus a Service map entry. Cross-tool keys: `core/normalize.py`,
+  stored next to the original text. Every migration must keep working
+  with the previous release (expand/contract); the shared base is
+  migrated only by `{{ cli_name }} db upgrade` from a release.
+{%- endif %}
 
 ## Releasing
 

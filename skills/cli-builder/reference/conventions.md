@@ -70,7 +70,9 @@ per project when one of these fits:
 | `AUTH_REQUIRED`                | 3    | a provider getting 401/403, or a service with no credential |
 | `PROJECT_NOT_INITIALIZED`      | 4    | `services.require_project_root` |
 | `PROVIDER_ERROR`               | 5    | `providers.HttpProvider` after retries; carries `provider` and `status` |
-| `CLI_TOO_OLD`                  | 6    | `services.load_config` when installed < `cli.min_version` |
+| `CLI_TOO_OLD`                  | 6    | `services.load_config` when installed < `cli.min_version`; `core.db` when the shared database is at a revision this release doesn't know |
+| `DATABASE_UNAVAILABLE`         | 5    | `core.db` when `<TOOL>_DATABASE_URL` is set but unreachable, rejected or not PostgreSQL (never a fallback to SQLite) |
+| `DATABASE_NOT_MIGRATED`        | 1    | `core.db` when the shared database is behind this release's migrations (`<cli> db upgrade`) |
 | `DEPENDENCY_TOO_OLD`           | 1    | `core.deps.require_cli` when another CLI this one calls is missing or older than needed |
 | `CREDENTIALS_UNHEALTHY`        | 3    | `auth status` when a required credential isn't ok, or any is invalid/expired (envelope also carries the full report) |
 | `CREDENTIAL_STORE_UNAVAILABLE` | 1    | `credentials.manager` on write/delete when the keychain is unusable |

@@ -79,6 +79,8 @@ def doctor(
 
     checks.extend(_auth_checks(config.provider.name if config else "default"))
     checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
+    if module_exists(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time
+        checks.extend(importlib.import_module(f"{_PACKAGE_NAME}.core.db").doctor_checks())
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(

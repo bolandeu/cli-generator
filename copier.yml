@@ -22,6 +22,12 @@ _exclude:
   - "{% if not (include_providers and include_http_provider) %}src/{{ package_name }}/providers/http.py{% endif %}"
   - "{% if not (include_providers and include_http_provider) %}tests/test_http_provider.py{% endif %}"
   - "{% if not include_ci %}.github/workflows{% endif %}"
+  - "{% if not include_db %}src/{{ package_name }}/core/db.py{% endif %}"
+  - "{% if not include_db %}src/{{ package_name }}/core/tables.py{% endif %}"
+  - "{% if not include_db %}src/{{ package_name }}/migrations{% endif %}"
+  - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
+  - "{% if not include_db %}tests/test_db.py{% endif %}"
+  - "{% if not include_db %}tests/conftest.py{% endif %}"
 
 # The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
 # around it, so they're rendered in the generated project, not shipped.
@@ -95,6 +101,11 @@ include_http_provider:
   help: "Include providers/http.py (HttpProvider: shared httpx client, retries, error mapping, the 10 s health probe)? No if no provider speaks HTTP"
   default: true
   when: "{{ include_providers }}"
+
+include_db:
+  type: bool
+  help: "Keep data in a database (core/db.py: shared PostgreSQL from <TOOL>_DATABASE_URL, else local SQLite; Alembic migrations; `db` commands)?"
+  default: false
 
 include_ci:
   type: bool

@@ -116,6 +116,11 @@ function) is governed by these four rules instead
      another CLI)? Declare it in `pyproject.toml` `[[tool.rb.external]]`
      (name, required, min_version, check, why) — the gate fails on an
      undeclared or unused one — and reach it through `core.deps.require_cli`.
+   - Keeps records (journal, results, history — not a refetchable cache)?
+     `--data include_db=true`: shared PostgreSQL from `<TOOL>_DATABASE_URL`,
+     else local SQLite; tables in `core/tables.py` + a hand-written Alembic
+     migration; other tools read only `<tool>_v1_*` views; cross-tool keys
+     from `core/normalize.py` (`architecture.md` §12).
    - An integration that doesn't speak HTTP: `--data include_http_provider=false`
      drops `providers/http.py` and the `httpx` dependency; subclass
      `providers.Provider` directly.

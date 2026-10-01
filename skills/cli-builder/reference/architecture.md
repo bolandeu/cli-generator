@@ -168,6 +168,7 @@ the CLI, or point it at a project explicitly without changing cwd.
 | Project state (generated)  | `<project>/.{{package_name}}/state.json`   | No |
 | User-level config           | OS user config dir (`platformdirs`)        | N/A |
 | Secrets                     | OS keychain via `keyring`, or env var       | Never |
+| Tool data (records, history) | shared PostgreSQL (`<TOOL>_DATABASE_URL`), else SQLite in the user data dir — §12 | Never |
 
 Credential resolution order: CLI argument → environment variable → OS
 keychain → legacy env var name if the provider declares one (never falls
@@ -514,3 +515,66 @@ template, but common once one is added — e.g. `<cli> resource list`),
 prefer **JSONL** (one JSON object per line) over a single large JSON array
 under `--json`: it lets an agent start processing before the command
 finishes and survives truncation better than a half-written array.
+
+## 12. Tool data: the shared database (`include_db`)
+
+A tool that keeps records (journals, results, history) generates with
+`include_db=true`: `core/db.py` (connection, revision check, upgrade,
+import), `core/tables.py` (SQLAlchemy Core tables), `migrations/`
+(Alembic), `commands/db.py`, `core/normalize.py`. SQLAlchemy Core +
+Alembic + psycopg 3 — no ORM, no hand-rolled migrations. A cache
+(responses that can be refetched) stays a local SQLite file outside this
+layer.
+
+**Where.** `<TOOL>_DATABASE_URL` set → PostgreSQL (the shared base on the
+homeserver, the one Directus uses; the URL comes from Doppler). Set but
+unreachable / rejected → `DATABASE_UNAVAILABLE`, exit 5 — **never** a
+fallback to SQLite, whose rows would silently miss the shared base. Not
+set → SQLite in the user data dir (tests, offline work). `<TOOL>` is
+`cli_name` with non-alphanumerics as `_` (`_distribution.TOOL`, written
+down at generation, never derived at runtime).
+
+**Names and ownership.** Everything lives in schema `public` (Directus
+sees one schema), so every table, view, index and constraint starts with
+`<tool>_`. A tool is the only owner of its objects: DDL only through its
+own migrations, tracked in its own `alembic_version_<tool>` table.
+Alembic is filtered to the prefix (`migrations/env.py`) — it never
+reflects, compares or touches another tool's tables or Directus'.
+`tables.py` mirrors the latest migration; `tests/test_db.py` fails when
+they disagree. Migrations are written by hand, with literal names.
+
+**Contract between tools.** Another tool (or Directus, or a report)
+reads only views named `<tool>_v1_*`, never the tables. A view's columns
+don't change: a different shape is a new `<tool>_v2_*` view next to the
+old one, plus a line in the root `AGENTS.md` Service map; `v1` is
+dropped only after every consumer has moved. Tools link records by
+natural keys, not by each other's ids: `core/normalize.py`
+(`norm_phrase` — NFKC, lower, ё→е, collapsed whitespace — with the
+region as a second key column; `norm_url`, `norm_domain` — no scheme,
+`www.`, port or trailing slash, IDN as Unicode). Store the key in its own
+indexed column (`phrase_key`) next to the original text (`phrase`); the
+key loses information, the original must not. Changing a normalization
+is a new view version and a migration that recomputes the key.
+
+**Migrations.** SQLite is migrated on open. PostgreSQL is one database
+for every machine — a dev checkout must not migrate it — so it is never
+migrated implicitly: `<cli> db upgrade` (released version, under a
+`pg_advisory_xact_lock`, one transaction). Opening it only compares
+revisions: behind → `DATABASE_NOT_MIGRATED` (exit 1, "run db upgrade");
+at a revision this release doesn't know → `CLI_TOO_OLD` (exit 6, "upgrade
+the tool"). Nothing is touched in either case. Because the previous
+release keeps running against the upgraded base until every machine
+updates, **every migration must work with the previous release's code
+(expand/contract)**: add a column/table/view first (nullable or with a
+default), switch the code in that release, and drop or rename the old
+thing only in a later release, after nothing reads it. A rename is
+add + copy + later drop, never `ALTER ... RENAME` of something the
+previous release uses.
+
+**Commands.** `db status` (where, current vs head revision), `db upgrade
+[--dry-run]`, `db import-sqlite [PATH] [--dry-run]` — the one-off move of
+the local SQLite (default: the tool's own file, migrated to head first)
+into the configured database: all tables, one transaction, every target
+table must be empty, sequences moved past the imported ids. `doctor`
+reports `database` (connection) and `database_schema` (revision).
+

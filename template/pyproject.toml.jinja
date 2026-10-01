@@ -19,6 +19,11 @@ dependencies = [
 {%- if include_auth %}
     "keyring>=25.0",
 {%- endif %}
+{%- if include_db %}
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+{%- endif %}
 ]
 
 [project.scripts]
