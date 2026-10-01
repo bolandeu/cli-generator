@@ -342,6 +342,13 @@ outside the working tree, so it happens only after one explicit
 go-ahead from the user — but always *offer* it; don't leave the package
 sitting installable-from-nowhere without asking.
 
+Inside `~/Work/tools/`, questions to the user go through the root agent,
+not this window: send step 2's question as `herdr agent prompt tools-root
+"<question, options, your recommendation>"` and continue with what doesn't
+depend on it. The user's yes it relays covers creating the repo and its
+first push (step 4); every later push is the root agent's — hand it the
+ready release (`<repo, branch, tags, what's inside, gate result>`).
+
 1. **Prove it's installable locally first.** This catches packaging
    mistakes (missing `[build-system]`, no `[project.scripts]`, package
    data not shipped) before the repo exists, where they're confusing to
@@ -426,8 +433,10 @@ sitting installable-from-nowhere without asking.
 7. **Releases after that**: `uv run scripts/release.py patch|minor|major`
    from a clean, up-to-date `main` with fragments in `changelog.d/`. It
    runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
-   towncrier, commits `Release vX.Y.Z` and tags — then prints
-   `git push --follow-tags`, which needs the user's confirmation. Pick the
+   towncrier, commits `Release vX.Y.Z` and tags. It never pushes, and
+   neither do you: hand the release to the
+   root agent (`herdr agent prompt tools-root "<repo, branch, tags, what's
+   inside, gate result>"`), which pushes after the user's yes. Pick the
    part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
    features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
    section — one fragment per change, `release.py` when it should ship.
