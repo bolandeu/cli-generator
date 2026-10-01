@@ -370,7 +370,8 @@ the template implements it):
   branches never touch the same line, so they never conflict. The gate
   (below) requires one whenever something user-visible changed since the
   last tag — tooling-only changes (`uv.lock`, `.github/`, `scripts/`,
-  `tests/`, `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, and
+  `tests/`, `docs/` (backlog, findings — notes for maintainers),
+  `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, and
   `pyproject.toml` when its `[project]` table — name, version,
   dependencies, scripts, optional-dependencies — is unchanged: `[tool.*]`
   and `[dependency-groups]` are tooling; compared with `tomllib` against
