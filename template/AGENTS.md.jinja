@@ -80,7 +80,8 @@ are in the tool's state dir (`runs/`); `python3 scripts/detach.py stop
   stored next to the original text. Every migration must keep working
   with the previous release (expand/contract); the shared base is
   migrated only by `{{ cli_name }} db upgrade` from a release. Every table
-  has a PRIMARY KEY (Directus needs it). PostgreSQL tests: only via
+  has a single-column PRIMARY KEY (a surrogate `id`; Directus supports
+  no other kind) and its natural key as UNIQUE. PostgreSQL tests: only via
   `scripts/pg_test.sh` (own container, Docker-assigned port, removed after)
   — never a fixed port or another tool's server. Append-only
   tables with a unique natural key can be marked `info={"push": ...}` for

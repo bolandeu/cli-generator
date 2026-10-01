@@ -558,8 +558,10 @@ own migrations, tracked in its own `alembic_version_<tool>` table.
 Alembic is filtered to the prefix (`migrations/env.py`) — it never
 reflects, compares or touches another tool's tables or Directus'.
 `tables.py` mirrors the latest migration; `tests/test_db.py` fails when
-they disagree. Every table has a PRIMARY KEY (Directus can't show or edit
-one without it; the test checks). Migrations are written by hand, with
+they disagree. Every table has a **single-column** PRIMARY KEY — Directus
+can't show or edit a table without one and doesn't support a composite
+one: a surrogate `id`, the natural key as a UNIQUE constraint (the test
+checks both the metadata and the migrated database). Migrations are written by hand, with
 literal names. Tests against PostgreSQL run only through
 `scripts/pg_test.sh`: a throwaway container with its own name on a port
 Docker assigns, removed afterwards — a fixed port once let one tool's
