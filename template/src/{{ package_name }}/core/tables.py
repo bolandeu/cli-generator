@@ -5,6 +5,9 @@ tool's tables (and Directus') in one `public` schema. Change a table here *and* 
 a migration by hand (copy the example in `migrations/versions/`) — tests/test_db.py
 fails when the migrated schema and this metadata disagree.
 
+Every table has a PRIMARY KEY — Directus can't show or edit one without it
+(tests/test_db.py checks both this metadata and the migrated database).
+
 `items` below is the template's example: replace it with the tool's own tables.
 
 `info={"push": {...}}` marks an append-only table for `<cli> db push` (local SQLite →

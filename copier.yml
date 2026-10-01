@@ -28,6 +28,7 @@ _exclude:
   - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
   - "{% if not include_db %}tests/test_db.py{% endif %}"
   - "{% if not include_db %}tests/conftest.py{% endif %}"
+  - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
 
 # The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
 # around it, so they're rendered in the generated project, not shipped.

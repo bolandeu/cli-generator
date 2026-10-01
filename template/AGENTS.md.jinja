@@ -68,7 +68,10 @@ changed with no changelog fragment on the branch.
   view plus a Service map entry. Cross-tool keys: `core/normalize.py`,
   stored next to the original text. Every migration must keep working
   with the previous release (expand/contract); the shared base is
-  migrated only by `{{ cli_name }} db upgrade` from a release. Append-only
+  migrated only by `{{ cli_name }} db upgrade` from a release. Every table
+  has a PRIMARY KEY (Directus needs it). PostgreSQL tests: only via
+  `scripts/pg_test.sh` (own container, Docker-assigned port, removed after)
+  — never a fixed port or another tool's server. Append-only
   tables with a unique natural key can be marked `info={"push": ...}` for
   `{{ cli_name }} db push` (local SQLite → `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_PROD_DATABASE_URL`).
 {%- endif %}
