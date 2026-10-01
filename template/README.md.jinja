@@ -26,12 +26,12 @@ Each change adds a changelog fragment instead of editing `CHANGELOG.md`:
 ```bash
 uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."
 uv run scripts/release.py patch   # or minor / major (SemVer; at 0.x: patch = fix/feature, minor = breaking)
-git push --follow-tags
+# then the root tools agent pushes it (git push --follow-tags) after your yes
 ```
 
 `release.py` refuses off `main`, on a dirty tree or behind the remote, runs
 the full gate (the same as `--check`; any failing step aborts the release), assembles `CHANGELOG.md` from `changelog.d/`, commits
-`Release vX.Y.Z` and tags it; pushing is left to you.
+`Release vX.Y.Z` and tags it; pushing goes through the root tools agent.
 
 ## Install
 

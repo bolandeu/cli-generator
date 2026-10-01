@@ -54,10 +54,11 @@ sandbox knows what to do when the plain HTTPS install is refused with an
 auth error. Later updates on any machine are `uv tool upgrade <pkg>`.
 
 Creating that repo is part of the skill's job (SKILL.md, "Publish to
-GitHub"): after the package verifies, it offers to `gh repo create
---private --source=. --push` and then proves the from-GitHub install
-works — in both Scaffold and Refactor mode, never without the user's
-go-ahead.
+GitHub"): after the package verifies, it prepares the local repo and
+hands it to the root tools agent, which creates the private repo and
+pushes after the user's yes (agents never write to GitHub themselves);
+then the skill proves the from-GitHub install works — in both Scaffold
+and Refactor mode.
 
 ## 2. Four layers
 
@@ -402,8 +403,9 @@ the template implements it):
   the wheel as the new version via `UV_DYNAMIC_VERSIONING_BYPASS`, since
   the tag doesn't exist yet), bumps the last `v*` tag, runs
   `towncrier build`, commits `Release vX.Y.Z` and creates the annotated
-  tag. It does **not** push — it prints `git push --follow-tags`, which
-  the user confirms. The template's copy is canonical: every repo
+  tag. It does **not** push, and neither does the agent: the release goes
+  to the root tools agent, which runs `git push --follow-tags` after the
+  user's yes. The template's copy is canonical: every repo
   following the standard uses it verbatim.
 - **CI is optional**: one `ubuntu-24.04` job on the lowest supported
   Python that installs osv-scanner and runs `release.py --check` —

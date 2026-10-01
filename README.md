@@ -34,11 +34,12 @@ session without the flag), then ask for either:
 - "refactor this script/package into our CLI architecture" → refactor mode
   (works on a feature branch, never directly on main — see SKILL.md step 0)
 
-Both modes end by offering to publish: create a **private** GitHub repo
-with `gh repo create --private --source=. --push` and verify that
+Both modes end by offering to publish: the skill prepares the local repo
+and hands it to the root tools agent, which creates a **private** GitHub
+repo and pushes after your yes; the skill then verifies that
 `uv tool install "git+https://github.com/<owner>/<repo>.git"` works from
 there — the one-command install every generated README/SKILL.md points
-other machines (and agents) at. Nothing is created without your go-ahead.
+other machines (and agents) at. Nothing reaches GitHub without your go-ahead.
 
 If it doesn't trigger automatically, invoke it explicitly:
 `/cli-generator:cli-builder`.

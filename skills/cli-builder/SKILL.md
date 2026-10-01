@@ -152,8 +152,8 @@ function) is governed by these four rules instead
    its output. `uv sync` writes `uv.lock` — it's committed. **Run
    `release.py --check` before every commit**, not only at the end.
 5. Publish — follow "Publish to GitHub" below. Scaffolding is local
-   until the user says otherwise: do not `git init`/create a remote/push
-   before they've answered that section's question.
+   until the user says otherwise: nothing reaches GitHub before the root
+   agent has the user's yes (that section, step 3).
 
 ## Mode: Refactor
 
@@ -337,17 +337,12 @@ with one command and no PyPI account —
 uv tool install "git+https://github.com/<owner>/<repo>.git"
 ```
 
-Do this after the verify step. Everything from step 2 on touches state
-outside the working tree, so it happens only after one explicit
-go-ahead from the user — but always *offer* it; don't leave the package
+Do this after the verify step. You prepare everything locally; whatever
+touches GitHub — creating the repo, every push, the ruleset — is done by
+the root agent (`~/Work/tools/`) after the user's yes. One rule, no
+exceptions: you never run `gh repo create`, `git push` or anything else
+that writes to GitHub. Always *offer* publishing; don't leave the package
 sitting installable-from-nowhere without asking.
-
-Inside `~/Work/tools/`, questions to the user go through the root agent,
-not this window: send step 2's question as `herdr agent prompt tools-root
-"<question, options, your recommendation>"` and continue with what doesn't
-depend on it. The user's yes it relays covers creating the repo and its
-first push (step 4); every later push is the root agent's — hand it the
-ready release (`<repo, branch, tags, what's inside, gate result>`).
 
 1. **Prove it's installable locally first.** This catches packaging
    mistakes (missing `[build-system]`, no `[project.scripts]`, package
@@ -358,52 +353,39 @@ ready release (`<repo, branch, tags, what's inside, gate result>`).
    ```
    The template's `pyproject.toml` has everything needed; a refactored
    project may not — fix it here, not later.
-2. **Ask once, with the defaults filled in:** create GitHub repo
-   `<owner>/<repo>` (owner from `gh api user -q .login`, repo name as
-   decided in Scaffold step 1 / by the refactored project's existing name)
-   as a **private** repo and push to it? Private is the default, not an
-   option to bring up: these CLIs typically hold account-specific
-   provider logic, and `uv tool install` works from a private repo just
-   as well (step 6). Only go `--public` if the user says so. If they
-   decline, stop here and tell them the placeholder in README.md and
-   `src/<package_name>/data/SKILL.md` needs filling once a repo exists
-   (step 5) — don't silently leave it.
-3. **Preconditions.** `gh auth status` must succeed — if it doesn't, ask
-   the user to run `gh auth login` themselves; never handle tokens on
-   their behalf. If the directory isn't a git repo yet (Scaffold mode):
-   `git init -b main && git add -A && git commit -m "Initial commit"`,
-   then tag it — the version comes from the tag, and `release.py` needs
-   one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
-   In Refactor mode you're on a feature branch — pushing that branch is
-   fine, merging it is the user's call. If the repo already has an
-   `origin` remote, skip step 4 entirely.
-4. **Create and push in one step:**
+2. **Prepare the local repo.** If the directory isn't a git repo yet
+   (Scaffold mode): `git init -b main && git add -A && git commit -m
+   "Initial commit"`, then tag it — the version comes from the tag, and
+   `release.py` needs one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
+   In Refactor mode you're on a feature branch; merging it is the user's
+   call. Fill in the repo URL now (step 5) so the first push already
+   carries it.
+3. **Hand it to the root agent** — the question and the ready repo in one
+   message, with the defaults filled in:
    ```bash
-   gh repo create <owner>/<repo> --private --source=. --remote=origin --push
-   git push origin v0.1.0   # --push sends the branch only; the tag must reach GitHub too
+   herdr agent prompt tools-root "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
    ```
-   CI is optional (it only repeats `release.py --check`; the local gate is
-   authoritative) — to save Actions minutes on a private repo, generate
-   (or update) with `--data include_ci=false` and skip the ruleset. A tool
-   depending on our **private** repos needs `--data private_deps=true`
-   plus a repo secret `GITHUB_READ_TOKEN` (fine-grained, Contents: read on
-   those repos) — without it CI can't fetch them (standard §9); ask the
-   user to create the secret, never handle the token yourself.
-   If CI stays, try to make it unskippable — a ruleset that requires
-   the `test` check (the only CI job) to pass and forbids force-pushes on
-   `main`:
-   ```bash
-   gh api -X POST repos/<owner>/<repo>/rulesets --input - <<'JSON'
-   {"name":"main","target":"branch","enforcement":"active",
-    "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
-    "rules":[{"type":"non_fast_forward"},{"type":"deletion"},
-             {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,
-              "required_status_checks":[{"context":"test"}]}}]}
-   JSON
-   ```
-   On a personal free plan GitHub refuses this for **private** repos
-   (HTTP 403 mentioning "Upgrade"); that's expected — tell the user in
-   one line and move on, the gates still run on every push and PR.
+   Owner from `gh api user -q .login`, repo name as decided in Scaffold
+   step 1 / the refactored project's existing name. **Private** is the
+   default, not an option to bring up: these CLIs typically hold
+   account-specific provider logic, and `uv tool install` works from a
+   private repo just as well (step 6); `--public` only if the user says so.
+   The root agent asks the user, then runs `gh repo create <owner>/<repo>
+   --private --source=. --remote=origin --push` and pushes the tags. While
+   you wait, do whatever doesn't depend on it. If the user declines, tell
+   the root agent the placeholder in README.md and
+   `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
+   don't silently leave it.
+4. **CI and its secret** go into that same message. CI is optional (it
+   only repeats `release.py --check`; the local gate is authoritative) —
+   to save Actions minutes on a private repo, generate (or update) with
+   `--data include_ci=false`. A tool depending on our **private** repos
+   needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
+   (fine-grained, Contents: read on those repos) — without it CI can't
+   fetch them (standard §9); the user creates the secret, never you. If CI
+   stays, ask the root agent to add the ruleset that requires the `test`
+   check and forbids force-pushes on `main` (on a personal free plan
+   GitHub refuses it for private repos with HTTP 403 "Upgrade" — expected).
 5. **Make sure the package knows its own URL.** In Scaffold mode with
    `repository_url` passed to copier this is already true. Otherwise
    replace the `<owner>/<repo>` placeholder in README.md ("Install") and
@@ -411,8 +393,9 @@ ready release (`<repo, branch, tags, what's inside, gate result>`).
    copier-generated project also set `repository_url` in
    `.copier-answers.yml` — that file is the answer store `copier update`
    reads, so without this the next update would render the placeholder
-   back. Commit and push these edits.
-6. **Verify from GitHub, not from the checkout** — this is the command
+   back. Commit these edits before step 3.
+6. **Verify from GitHub, not from the checkout**, once the root agent
+   reports the push — this is the command
    every other machine (and every agent reading the bundled SKILL.md)
    will run:
    ```bash
@@ -421,7 +404,8 @@ ready release (`<repo, branch, tags, what's inside, gate result>`).
    Replace `vX.Y.Z` with the latest release tag (`v0.1.0` right after
    step 3) — always a tag, never a branch (standard §9). It must print
    `X.Y.Z`, not `0.0.0` — `0.0.0` means the build saw no
-   tag (not pushed, or uv's checkout lacks tag info); stop and report it.
+   tag (not pushed, or uv's checkout lacks tag info); stop and report it
+   to the root agent.
    (`--reinstall` because step 1 installed the same tool from the local
    path.) For a private repo this works over plain HTTPS because
    `gh auth login` also configured git's credential helper; on a machine
