@@ -612,5 +612,7 @@ harmless. Production's revision is checked first, as on open (behind →
 `DATABASE_NOT_MIGRATED`, newer → `CLI_TOO_OLD`). One transaction;
 `--dry-run` rolls it back, so its counts (`selected`, `sent`, `skipped`
 per table) are exact. A table that is updated in place is not a push
-table.
+table. Only the root tools agent runs anything against production —
+`db push` (dry run included), reads through `<TOOL>_PROD_DATABASE_URL`,
+ssh to the server; a tool's agent hands it the exact command.
 

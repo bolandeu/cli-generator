@@ -66,7 +66,8 @@ uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@v
   server is unreachable, nothing was written anywhere; `DATABASE_NOT_MIGRATED`
   → `{{ cli_name }} db upgrade` (changes the shared base: ask the user
   first); `db status --json` shows the revision. `db push --dry-run`
-  then `db push` sends new local rows to production
+  then `db push` sends new local rows to production — run by the root
+  tools agent only; any other agent sends it the exact command
   (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_PROD_DATABASE_URL`; already-present ones are skipped). Reading this tool's data
   from SQL: only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views.
 {%- endif %}

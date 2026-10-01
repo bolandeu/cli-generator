@@ -157,6 +157,11 @@ Full rules: `~/Work/tools/docs/standard-release.md` §13.
   question or decision for the user → the same channel, briefly: the
   question, the options, your recommendation; meanwhile do whatever doesn't
   depend on the answer.
+- **Only the root agent goes to production.** Run nothing against it:
+  no `db push` (not even `--dry-run`), no reads through
+  `*_PROD_DATABASE_URL`, no ssh to the server. Need a check on production →
+  send the root agent the exact command; it runs it and returns the output.
+  A local throwaway database (`scripts/pg_test.sh`) is yours.
 
 - **Report to the root agent** (in the report to the user, next to the
   release tag): a new or renamed env var / credential, a new local database
