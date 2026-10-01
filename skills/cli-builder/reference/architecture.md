@@ -526,8 +526,9 @@ Alembic + psycopg 3 — no ORM, no hand-rolled migrations. All of a
 tool's data goes through this layer by default, caches included (a shared
 cache of paid API responses is the point: Mac and homeserver don't pay
 twice). Keeping something local instead is the tool's decision, recorded
-with its reason in the tool's own `AGENTS.md` (e.g. llmkit's response
-cache).
+with its reason in the tool's own `AGENTS.md` (serp and wordstat keep
+their response caches in PostgreSQL; llmkit keeps its response cache in
+local SQLite and only its spend log in PostgreSQL).
 
 **Where.** `<TOOL>_DATABASE_URL` set → PostgreSQL (the shared base on the
 homeserver, the one Directus uses; the URL comes from Doppler). Set but
@@ -581,4 +582,18 @@ the local SQLite (default: the tool's own file, migrated to head first)
 into the configured database: all tables, one transaction, every target
 table must be empty, sequences moved past the imported ids. `doctor`
 reports `database` (connection) and `database_schema` (revision).
+
+**Dev → prod: `db push`.** A dev machine works on its local SQLite;
+production is the PostgreSQL in `<TOOL>_PROD_DATABASE_URL` (Doppler
+`tools/dev`). `db push [--table T] [--since DATE] [--where SQL]
+[--dry-run]` sends the local rows of the *push tables* there: tables
+marked `info={"push": {"since": "<timestamp column>"}}` in `tables.py` —
+append-only, with a unique constraint on the natural key and no foreign
+keys. Rows go in without their ids (`INSERT … ON CONFLICT DO NOTHING`):
+one whose key is already in prod is skipped, so a repeated push is
+harmless. Production's revision is checked first, as on open (behind →
+`DATABASE_NOT_MIGRATED`, newer → `CLI_TOO_OLD`). One transaction;
+`--dry-run` rolls it back, so its counts (`selected`, `sent`, `skipped`
+per table) are exact. A table that is updated in place is not a push
+table.
 

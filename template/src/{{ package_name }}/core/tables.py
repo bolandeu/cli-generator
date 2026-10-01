@@ -6,6 +6,12 @@ a migration by hand (copy the example in `migrations/versions/`) — tests/test_
 fails when the migrated schema and this metadata disagree.
 
 `items` below is the template's example: replace it with the tool's own tables.
+
+`info={"push": {...}}` marks an append-only table for `<cli> db push` (local SQLite →
+production PostgreSQL): rows are inserted without their ids and skipped when one
+with the same natural key exists, so the table needs a unique constraint on that key
+and no foreign keys (link by natural keys). `since` names the timestamp column that
+`--since` filters on.
 """
 
 from __future__ import annotations
@@ -33,7 +39,9 @@ items = sa.Table(
     metadata,
     sa.Column("id", sa.Integer, primary_key=True),
     sa.Column("phrase", sa.Text, nullable=False),  # as the user typed it
-    sa.Column("phrase_key", sa.Text, nullable=False, index=True),  # core.normalize.norm_phrase(phrase)
+    sa.Column("phrase_key", sa.Text, nullable=False),  # core.normalize.norm_phrase(phrase)
     sa.Column("region", sa.Integer, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    sa.UniqueConstraint("phrase_key", "region"),  # the natural key
+    info={"push": {"since": "created_at"}},
 )

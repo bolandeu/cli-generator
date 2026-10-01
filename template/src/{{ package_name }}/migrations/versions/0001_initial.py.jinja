@@ -28,11 +28,7 @@ def upgrade() -> None:
         sa.Column("phrase_key", sa.Text, nullable=False),
         sa.Column("region", sa.Integer, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    )
-    op.create_index(
-        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items_phrase_key_ix",
-        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items",
-        ["phrase_key"],
+        sa.UniqueConstraint("phrase_key", "region", name="{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items_phrase_key_region_uq"),
     )
     # The contract with other tools: they read this view, never the table. Its
     # columns don't change — a different shape is a new `_v2_` view next to it.

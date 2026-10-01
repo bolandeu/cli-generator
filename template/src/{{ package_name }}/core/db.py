@@ -19,6 +19,7 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import platformdirs
@@ -39,6 +40,7 @@ from .tables import PREFIX, metadata
 _PACKAGE_NAME = __name__.split(".")[0]
 
 ENV_VAR = f"{TOOL.upper()}_DATABASE_URL"
+PROD_ENV_VAR = f"{TOOL.upper()}_PROD_DATABASE_URL"  # `db push` target: production, from a dev machine
 PATH_ENV_VAR = f"{TOOL.upper()}_DB_PATH"  # the local SQLite file elsewhere (a second database, an existing file)
 VERSION_TABLE = f"alembic_version_{TOOL}"
 CONNECT_TIMEOUT_S = 5
@@ -78,14 +80,14 @@ def sqlite_engine(path: Path) -> sa.Engine:
     return engine
 
 
-def postgres_engine(url: str) -> sa.Engine:
+def postgres_engine(url: str, *, env_var: str = ENV_VAR) -> sa.Engine:
     """An engine for `url` (any `postgres://` / `postgresql://` spelling → the psycopg driver), connection checked."""
     try:
         parsed = sa.make_url(url)
     except sa_exc.ArgumentError as exc:
-        raise DatabaseUnavailable(f"{ENV_VAR} is not a database URL.") from exc
+        raise DatabaseUnavailable(f"{env_var} is not a database URL.") from exc
     if parsed.drivername.split("+")[0] not in ("postgres", "postgresql"):
-        raise DatabaseUnavailable(f"{ENV_VAR}: only PostgreSQL is supported, not '{parsed.drivername}'.")
+        raise DatabaseUnavailable(f"{env_var}: only PostgreSQL is supported, not '{parsed.drivername}'.")
     engine = sa.create_engine(
         parsed.set(drivername="postgresql+psycopg"),
         pool_pre_ping=True,
@@ -241,6 +243,80 @@ def _reset_sequences(connection: sa.Connection, table: sa.Table) -> None:
             )
 
 
+def push_tables() -> list[sa.Table]:
+    """Tables marked `info={"push": ...}` in tables.py — append-only, with a natural key."""
+    return [table for table in metadata.sorted_tables if "push" in table.info]
+
+
+def prod_engine() -> sa.Engine:
+    """Production PostgreSQL for `db push` (`<TOOL>_PROD_DATABASE_URL`), at this CLI's revision."""
+    url = os.environ.get(PROD_ENV_VAR)
+    if not url:
+        raise InvalidArguments(f"{PROD_ENV_VAR} is not set: it names the production database `db push` writes to.")
+    engine = postgres_engine(url, env_var=PROD_ENV_VAR)
+    check_schema(engine)
+    return engine
+
+
+def push(
+    source: sa.Engine,
+    target: sa.Engine,
+    *,
+    tables: list[str] | None = None,
+    since: datetime | None = None,
+    where: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, dict[str, int]]:
+    """Insert the source's rows of the push tables into `target`, skipping those whose natural key is there.
+
+    Ids are not carried over (the target numbers its own rows). `since` keeps rows whose
+    `since` column (tables.py) is at or after it; `where` is an SQL condition on the
+    source table, ANDed in. One transaction; `dry_run` rolls it back, so the counts are
+    exact either way. Returns per table: `selected`, `sent` (inserted), `skipped`.
+    """
+    known = {table.name: table for table in push_tables()}
+    if not known:
+        raise InvalidArguments("No table is marked for push (info={'push': ...} in core/tables.py).")
+    chosen = [known[name] for name in known if not tables or name in tables]
+    if unknown := sorted(set(tables or ()) - set(known)):
+        raise InvalidArguments(f"Not a push table: {', '.join(unknown)}. Push tables: {', '.join(known)}.")
+    report: dict[str, dict[str, int]] = {}
+    with source.connect() as src, target.connect() as dst:
+        transaction = dst.begin()
+        for table in chosen:
+            if table.foreign_keys or not any(isinstance(c, sa.UniqueConstraint) for c in table.constraints):
+                raise InvalidArguments(f"Push table '{table.name}' needs a unique natural key and no foreign keys.")
+            columns = [c for c in table.columns if not (c.primary_key and c.autoincrement in (True, "auto"))]
+            query = sa.select(*columns)
+            if since is not None:
+                if not (column := table.info["push"].get("since")):
+                    raise InvalidArguments(f"Push table '{table.name}' has no `since` column for --since.")
+                query = query.where(table.c[column] >= since)
+            if where:
+                query = query.where(sa.text(where))
+            insert = _insert(dst, table).on_conflict_do_nothing().returning(sa.literal(1))
+            selected = sent = 0
+            rows = src.execute(query).mappings()
+            while batch := rows.fetchmany(1000):
+                selected += len(batch)
+                sent += len(dst.execute(insert, [dict(row) for row in batch]).all())
+            report[table.name] = {"selected": selected, "sent": sent, "skipped": selected - sent}
+        if dry_run:
+            transaction.rollback()
+        else:
+            transaction.commit()
+    return report
+
+
+def _insert(connection: sa.Connection, table: sa.Table):
+    """INSERT with `on_conflict_do_nothing()` in the connection's dialect."""
+    if is_postgres(connection):
+        from sqlalchemy.dialects.postgresql import insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert
+    return insert(table)
+
+
 def doctor_checks() -> list[dict]:
     """doctor's `database` and `database_schema` checks (connection, revision vs this CLI's head)."""
     try:
@@ -266,6 +342,7 @@ __all__ = [
     "ENV_VAR",
     "PATH_ENV_VAR",
     "PREFIX",
+    "PROD_ENV_VAR",
     "VERSION_TABLE",
     "SchemaState",
     "check_schema",
@@ -274,6 +351,8 @@ __all__ = [
     "doctor_checks",
     "import_sqlite",
     "open_db",
+    "push",
+    "push_tables",
     "schema_state",
     "sqlite_path",
     "upgrade",

@@ -65,7 +65,9 @@ uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@v
   set (else a local SQLite file). `DATABASE_UNAVAILABLE` (exit 5) — the
   server is unreachable, nothing was written anywhere; `DATABASE_NOT_MIGRATED`
   → `{{ cli_name }} db upgrade` (changes the shared base: ask the user
-  first); `db status --json` shows the revision. Reading this tool's data
+  first); `db status --json` shows the revision. `db push --dry-run`
+  then `db push` sends new local rows to production
+  (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_PROD_DATABASE_URL`; already-present ones are skipped). Reading this tool's data
   from SQL: only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views.
 {%- endif %}
 - **`doctor --json`** first when something looks off — it reports

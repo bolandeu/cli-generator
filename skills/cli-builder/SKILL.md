@@ -120,7 +120,9 @@ function) is governed by these four rules instead
      `--data include_db=true`: shared PostgreSQL from `<TOOL>_DATABASE_URL`,
      else local SQLite; tables in `core/tables.py` + a hand-written Alembic
      migration; other tools read only `<tool>_v1_*` views; cross-tool keys
-     from `core/normalize.py` (`architecture.md` §12).
+     from `core/normalize.py` (`architecture.md` §12). Dev SQLite → prod
+     PostgreSQL for append-only tables: mark them `info={"push": ...}` and
+     use `db push`.
    - An integration that doesn't speak HTTP: `--data include_http_provider=false`
      drops `providers/http.py` and the `httpx` dependency; subclass
      `providers.Provider` directly.

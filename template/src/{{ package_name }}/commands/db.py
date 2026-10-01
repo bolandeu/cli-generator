@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -109,5 +110,43 @@ def import_sqlite(
         {"source": str(source), "dry_run": output.is_dry_run(ctx), "rows": counts},
         render_human=lambda d: output.human.key_values(
             ("Would import" if d["dry_run"] else "Imported") + f" from {d['source']}", d["rows"]
+        ),
+    )
+
+
+@app.command("push")
+@output.guard
+def push(
+    ctx: typer.Context,
+    table: list[str] = typer.Option(None, "--table", help="Only this push table (repeatable; default: all of them)."),
+    since: datetime = typer.Option(None, "--since", help="Only rows created at or after this date/time."),
+    where: str = typer.Option(None, "--where", help='Extra SQL condition on the local table, e.g. "region = 213".'),
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+    dry_run: bool = output.DryRunOption,
+) -> None:
+    """Send new rows of the push tables from the local SQLite to production.
+
+    Production is the PostgreSQL in `<CLI>_PROD_DATABASE_URL`; its schema
+    revision must match this CLI's. Rows go in
+    without their ids; one whose natural key is already there is skipped.
+    One transaction; --dry-run counts exactly and writes nothing.
+
+    Example: {cli} db push --since 2026-10-01 --dry-run
+    """
+    target = db.prod_engine()
+    source = db.sqlite_engine(db.sqlite_path())
+    try:
+        db.upgrade(source)
+        report = db.push(source, target, tables=table, since=since, where=where, dry_run=output.is_dry_run(ctx))
+    finally:
+        source.dispose()
+        target.dispose()
+    output.emit_success(
+        ctx,
+        {"target": db.describe(target), "dry_run": output.is_dry_run(ctx), "tables": report},
+        render_human=lambda d: output.human.key_values(
+            ("Would push to " if d["dry_run"] else "Pushed to ") + d["target"],
+            {name: f"{t['sent']} sent, {t['skipped']} skipped" for name, t in d["tables"].items()},
         ),
     )

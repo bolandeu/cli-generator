@@ -68,7 +68,9 @@ changed with no changelog fragment on the branch.
   view plus a Service map entry. Cross-tool keys: `core/normalize.py`,
   stored next to the original text. Every migration must keep working
   with the previous release (expand/contract); the shared base is
-  migrated only by `{{ cli_name }} db upgrade` from a release.
+  migrated only by `{{ cli_name }} db upgrade` from a release. Append-only
+  tables with a unique natural key can be marked `info={"push": ...}` for
+  `{{ cli_name }} db push` (local SQLite → `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_PROD_DATABASE_URL`).
 {%- endif %}
 
 ## Releasing

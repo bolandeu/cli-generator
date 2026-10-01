@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,7 @@ def test_url_must_be_postgres(url: str) -> None:
 def _as_postgres(monkeypatch: pytest.MonkeyPatch, engine: sa.Engine) -> None:
     """Route the URL branch to a SQLite engine: the shared-database rules without a server."""
     monkeypatch.setenv(db.ENV_VAR, "postgresql://stand-in")
-    monkeypatch.setattr(db, "postgres_engine", lambda _url: engine)
+    monkeypatch.setattr(db, "postgres_engine", lambda *_args, **_kwargs: engine)
 
 
 def test_shared_database_is_never_migrated_implicitly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -180,6 +181,83 @@ def test_import_sqlite_rejects_bad_sources(tmp_path: Path) -> None:
         db.import_sqlite(tmp_path / "shared.db", target)
 
 
+def _prod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> sa.Engine:
+    """A migrated stand-in for production, behind <TOOL>_PROD_DATABASE_URL."""
+    prod = db.sqlite_engine(tmp_path / "prod.db")
+    db.upgrade(prod)
+    monkeypatch.setenv(db.PROD_ENV_VAR, "postgresql://prod")
+    monkeypatch.setattr(db, "postgres_engine", lambda *_args, **_kwargs: prod)
+    return prod
+
+
+def _phrases(engine: sa.Engine) -> list[tuple[int, str]]:
+    with engine.connect() as conn:
+        return [tuple(row) for row in conn.execute(sa.select(tables.items.c.id, tables.items.c.phrase).order_by("id"))]
+
+
+def test_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    local = db.open_db()
+    for phrase in ("один", "два", "три"):
+        _add_item(local, phrase)
+    prod = _prod(monkeypatch, tmp_path)
+    _add_item(prod, "два")  # already there: skipped, not duplicated
+    _add_item(prod, "четыре")
+
+    code, payload = invoke_json("db", "push", "--dry-run")
+    assert code == 0, payload
+    assert payload["tables"] == {tables.items.name: {"selected": 3, "sent": 2, "skipped": 1}}
+    assert len(_phrases(prod)) == 2
+
+    code, payload = invoke_json("db", "push")
+    assert payload["tables"][tables.items.name]["sent"] == 2
+    assert [phrase for _id, phrase in _phrases(prod)] == ["два", "четыре", "один", "три"]  # prod's own ids
+
+    code, payload = invoke_json("db", "push")
+    assert payload["tables"][tables.items.name] == {"selected": 3, "sent": 0, "skipped": 3}
+
+
+def test_push_filters(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    local = db.open_db()
+    _add_item(local, "старая")
+    with local.begin() as conn:
+        conn.execute(sa.update(tables.items).values(created_at=datetime(2020, 1, 1)))
+    _add_item(local, "новая")
+    _prod(monkeypatch, tmp_path)
+    _code, payload = invoke_json("db", "push", "--since", "2026-01-01", "--dry-run")
+    assert payload["tables"][tables.items.name]["selected"] == 1
+    _code, payload = invoke_json("db", "push", "--where", "phrase = 'старая'", "--dry-run")
+    assert payload["tables"][tables.items.name]["selected"] == 1
+    code, payload = invoke_json("db", "push", "--table", "nope")
+    assert code == 2 and "Not a push table" in payload["error"]["message"]
+
+
+def test_push_needs_a_migrated_prod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    code, payload = invoke_json("db", "push")
+    assert code == 2 and db.PROD_ENV_VAR in payload["error"]["message"]
+    prod = db.sqlite_engine(tmp_path / "prod.db")  # never migrated
+    monkeypatch.setenv(db.PROD_ENV_VAR, "postgresql://prod")
+    monkeypatch.setattr(db, "postgres_engine", lambda *_args, **_kwargs: prod)
+    code, payload = invoke_json("db", "push")
+    assert code == 1 and payload["error"]["code"] == "DATABASE_NOT_MIGRATED"
+
+
+def test_push_table_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(db, "push_tables", lambda: [])
+    with pytest.raises(InvalidArguments, match="No table"):
+        db.push(db.open_db(), db.open_db())
+    keyless = sa.Table(
+        f"{db.PREFIX}keyless", sa.MetaData(), sa.Column("id", sa.Integer, primary_key=True), info={"push": {}}
+    )
+    monkeypatch.setattr(db, "push_tables", lambda: [keyless])
+    with pytest.raises(InvalidArguments, match="natural key"):
+        db.push(db.open_db(), db.open_db())
+    no_since = tables.items.to_metadata(sa.MetaData())
+    no_since.info["push"] = {}
+    monkeypatch.setattr(db, "push_tables", lambda: [no_since])
+    with pytest.raises(InvalidArguments, match="since"):
+        db.push(db.open_db(), db.open_db(), since=datetime(2026, 1, 1))
+
+
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert PG_URL
@@ -198,8 +276,19 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     db.upgrade(source)
     _add_item(source)
     assert db.import_sqlite(tmp_path / "old.db", engine) == {tables.items.name: 1}
-    _add_item(engine)  # the sequence moved past the imported ids
+    _add_item(engine, "вторая")  # the sequence moved past the imported ids
     with engine.connect() as conn:
         assert conn.execute(sa.text(f"SELECT count(*) FROM {db.PREFIX}v1_items")).scalar_one() == 2  # noqa: S608
         assert sa.inspect(conn).has_table("directus_users")
+
+    monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL)  # db push into real PostgreSQL: ON CONFLICT, RETURNING
+    local = db.sqlite_engine(tmp_path / "local.db")
+    db.upgrade(local)
+    _add_item(local)  # "Купить ёлку" is already there
+    _add_item(local, "третья")
+    prod = db.prod_engine()
+    assert db.push(local, prod, dry_run=True) == {tables.items.name: {"selected": 2, "sent": 1, "skipped": 1}}
+    assert db.push(local, prod)[tables.items.name]["sent"] == 1
+    assert db.push(local, prod)[tables.items.name]["sent"] == 0
+    prod.dispose()
     engine.dispose()
