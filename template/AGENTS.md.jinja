@@ -27,6 +27,17 @@ via `.claude/settings.json`). The pre-commit hook **blocks** a commit where
 a command's logic changed but its docstring didn't, and warns when `src/`
 changed with no changelog fragment on the branch.
 
+**A command that may take more than a couple of minutes runs detached —
+only through `scripts/run_detached.sh <label> <command...>`, then poll
+`scripts/runs_status.sh <label>` (`--json` for the exit code and the
+output tails).** Any command: the gate, `scripts/pg_test.sh`, a long
+`{{ cli_name }}` run. Run in the agent's own shell, it dies with the turn
+— an interrupt (an incoming herdr message is one) kills it and the work
+is redone. The detached run has its own session; its pid, output
+(`<label>.log`), errors (`<label>.stderr`) and exit code (`<label>.exit`)
+are in the tool's state dir (`runs/`); `python3 scripts/detach.py stop
+<label>` ends it.
+
 ## Architecture (do not violate)
 
 - `commands/` — argument parsing only. No business logic here.

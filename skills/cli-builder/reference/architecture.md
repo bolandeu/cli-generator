@@ -332,6 +332,15 @@ Every command that could prompt (`init`, `auth login`, …) must accept
 `--non-interactive` and fail with a clear `CliError` (not a hang) if it
 can't get what it needs without prompting.
 
+Long commands (more than a couple of minutes: the gate, PostgreSQL tests,
+a big import) are started by agents only through `scripts/run_detached.sh
+<label> <command...>` and followed with `scripts/runs_status.sh` —
+`scripts/detach.py`, standard library only: `subprocess.Popen(...,
+start_new_session=True)` (macOS has no `setsid`) under a small supervisor
+that records the exit code; pid, stdout log, stderr and exit code per
+label in `<user state dir>/<cli>/runs/`. A command in the agent's own
+shell dies when the turn is interrupted.
+
 ## 7. Cross-platform means Python APIs, not shell
 
 `pathlib.Path`, `shutil`, `platformdirs` — never `os.system`, never
