@@ -12,6 +12,10 @@ migrated database).
 
 `items` below is the template's example: replace it with the tool's own tables.
 
+Every table says what its rows are, `info={"kind": "data"}` or `"cache"` (tests/test_db.py
+fails without it): `data` is the tool's result and lost when deleted; `cache` is a copy
+of something it can fetch again. `describe --json` publishes it (x-rb-data).
+
 `info={"push": {...}}` marks an append-only table for `<cli> db push` (local SQLite →
 production PostgreSQL): rows are inserted without their ids and skipped when one
 with the same natural key exists, so the table needs a unique constraint on that key
@@ -48,5 +52,23 @@ items = sa.Table(
     sa.Column("region", sa.Integer, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     sa.UniqueConstraint("phrase_key", "region"),  # the natural key
-    info={"push": {"since": "created_at"}},
+    info={"kind": "data", "push": {"since": "created_at"}},
+)
+
+# The `<tool>_v1_*` views other tools, Directus and the platform read instead of the
+# tables — the tool's data contract, published by `describe --json` (x-rb-data.views).
+# Declared here for that, created by a migration (`CREATE VIEW`); tests/test_db.py
+# fails when a view below is missing from the migrated database or its columns differ.
+# Columns never change: a different shape is a new `_v2_` view next to the old one.
+# Kept out of `metadata`, which mirrors the tables only.
+views = sa.MetaData()
+
+v1_items = sa.Table(
+    f"{PREFIX}v1_items",
+    views,
+    sa.Column("phrase", sa.Text, comment="The phrase as the user typed it"),
+    sa.Column("phrase_key", sa.Text, comment="The normalized phrase: the key to join on"),
+    sa.Column("region", sa.Integer, comment="Region id"),
+    sa.Column("created_at", sa.DateTime(timezone=True), comment="When the row was added"),
+    comment="The template's example: one row per stored phrase and region",
 )

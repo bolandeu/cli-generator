@@ -288,7 +288,18 @@ template, `_commit` is the template release it was last synced to):
    `HttpProvider` updates with `--data include_http_provider=false` (and
    drops `httpx`); one that imports `providers.HttpProvider` keeps working
    (lazy export) but new code imports `from .http import HttpProvider`.
-7. **Changing `include_auth` / `include_providers`** (`--data
+7. **Crossing template v1.5.0** (`describe --json`, OpenCLI). After the
+   update `uv run pytest --snapshot-update` renders
+   `tests/snapshots/describe.json` — read it: it is the contract the tools
+   catalog publishes. With `include_db`: give every table in `tables.py`
+   `info={"kind": "data" | "cache"}` (ask the user when it isn't obvious),
+   declare every existing `<tool>_v1_*` view in `tables.views` with the
+   columns its migration creates (types, `comment=` descriptions) — the
+   test names any view missing or differing; files in the user data dir
+   besides the SQLite file go in `core/data_files.py` `DATA_FILES`. A
+   tool's own `CliError` with an exit code outside `EXIT_CODES` fails
+   `test_every_exit_code_is_documented`: use a standard code.
+8. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -301,7 +312,7 @@ template, `_commit` is the template release it was last synced to):
    credentials that doesn't use `providers/` answers
    `include_providers=false` instead of deleting `providers/` — deleted
    template files come back on the next update.
-8. If `_commit` is a bare commit hash rather than a tag, the project was
+9. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 

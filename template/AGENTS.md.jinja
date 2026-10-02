@@ -76,7 +76,10 @@ are in the tool's state dir (`runs/`); `python3 scripts/detach.py stop
   Tables, views, indexes: `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_*` only, declared in `core/tables.py`
   and created by a hand-written migration in `migrations/versions/`.
   Other tools read only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views — a new shape is a `_v2_`
-  view plus a Service map entry. Cross-tool keys: `core/normalize.py`,
+  view plus a Service map entry. Every view is declared in `tables.py`
+  `views` (typed columns with `comment=`) — `{{ cli_name }} describe --json`
+  publishes it as the data contract; every table has
+  `info={"kind": "data" | "cache"}`. Cross-tool keys: `core/normalize.py`,
   stored next to the original text. Every migration must keep working
   with the previous release (expand/contract); the shared base is
   migrated only by `{{ cli_name }} db upgrade` from a release. Every table
@@ -135,7 +138,9 @@ docstring in the same commit**:
   `Example: {cli} <command> ...` line (`output.guard` turns `{cli}` into
   `{{ cli_name }}`); every `typer.Option`/`Argument` has `help=`;
 - then `uv run pytest --snapshot-update` and read the diff in
-  `tests/snapshots/help/` — that diff is the user-visible change.
+  `tests/snapshots/help/` and `tests/snapshots/describe.json` — that diff
+  is the user-visible change (`describe --json` is the machine-readable
+  contract the tools catalog and the platform read).
 
 Enforced: Claude Code hooks (`.claude/settings.json`: PostToolUse after
 editing a command file, Stop before ending the turn), the pre-commit hook,

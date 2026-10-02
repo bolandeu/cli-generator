@@ -30,10 +30,10 @@ _exclude:
   - "{% if not include_db %}tests/conftest.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
 
-# The --help snapshots (tests/snapshots/help/) contain the CLI's name and wrap
-# around it, so they're rendered in the generated project, not shipped.
+# The --help and describe snapshots (tests/snapshots/) contain the CLI's name and
+# wrap around it, so they're rendered in the generated project, not shipped.
 _tasks:
-  - command: "uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py"
+  - command: "uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py"
     when: "{{ _copier_operation == 'copy' }}"
 
 package_name:

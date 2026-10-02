@@ -561,7 +561,10 @@ reflects, compares or touches another tool's tables or Directus'.
 they disagree. Every table has a **single-column** PRIMARY KEY — Directus
 can't show or edit a table without one and doesn't support a composite
 one: a surrogate `id`, the natural key as a UNIQUE constraint (the test
-checks both the metadata and the migrated database). Migrations are written by hand, with
+checks both the metadata and the migrated database). Every table says
+what its rows are — `info={"kind": "data"}` (the tool's result, lost when
+deleted) or `"cache"` (a copy it can fetch again); the test fails without
+it. Which is which is the dev side's call, approved by the user. Migrations are written by hand, with
 literal names. Tests against PostgreSQL run only through
 `scripts/pg_test.sh`: a throwaway container with its own name on a port
 Docker assigns, removed afterwards — a fixed port once let one tool's
@@ -571,7 +574,14 @@ tests drop a table in another tool's test database.
 reads only views named `<tool>_v1_*`, never the tables. A view's columns
 don't change: a different shape is a new `<tool>_v2_*` view next to the
 old one, plus a line in the root `AGENTS.md` Service map; `v1` is
-dropped only after every consumer has moved. Tools link records by
+dropped only after every consumer has moved. Views are created by a
+migration (`CREATE VIEW`) and declared in `tables.py` `views` (a separate
+`MetaData`: name, typed columns, `comment=` descriptions) — that declaration
+is what `describe --json` publishes as the tool's data contract
+(conventions.md), and `tests/test_db.py` fails when a declared view is
+missing from the migrated database or its columns differ. Files the tool
+keeps in its user data dir besides the SQLite file are declared in
+`core/data_files.py` `DATA_FILES` for the same reason. Tools link records by
 natural keys, not by each other's ids: `core/normalize.py`
 (`norm_phrase` — NFKC, lower, ё→е, collapsed whitespace — with the
 region as a second key column; `norm_url`, `norm_domain` — no scheme,

@@ -47,7 +47,36 @@ exits with that error's exit code. Don't hand-roll this per command: a
 consumer (`tools-watch`) relies on `ok` meaning "exit code 0" and on the
 report fields being there in both cases.
 
+## `describe --json`: the tool's contract as an OpenCLI document
+
+`<cli> describe --json` prints an [OpenCLI](https://opencli.org) document
+(spec 0.1) — the one command whose `--json` is **not** in the `{"ok": ...}`
+envelope: the bare document, on one line, so it validates against the
+OpenCLI schema as it is. The tools catalog and the platform read it from
+every installed tool.
+
+- `command` tree, `options`, `arguments`, `required`, `aliases`, `hidden`,
+  `acceptedValues` — introspected from Typer/Click (`core/opencli.py`),
+  never written by hand.
+- `exitCodes` on the root — from `core/errors.py` `EXIT_CODES` (the table
+  below).
+- What OpenCLI has no field for goes into `metadata` as `x-rb-*`:
+  per option/argument `x-rb-type`, `x-rb-default`, `x-rb-multiple`; on the
+  root command `x-rb-tool` (`tool`, `dist`, `package`),
+  `x-rb-template-version`, `x-rb-env` (credential env vars from the
+  providers, the database's from `core/db.py` `ENV_VARS`), `x-rb-data`
+  (`tables` with `kind`, `<tool>_v1_*` `views`, files in `user_data_dir`),
+  `x-rb-external` (`[[tool.rb.external]]`).
+
+`tests/test_describe.py` validates it against the vendored schema
+(`tests/data/opencli.schema.json`), checks it against the registered
+commands and their `--help`, and snapshots it
+(`tests/snapshots/describe.json`). It is public API like everything here.
+
 ## Exit codes (fixed across all generated CLIs)
+
+`core/errors.py` `EXIT_CODES` is this table in code (`describe`'s
+`exitCodes`); a `CliError` with a code not in it fails the tests.
 
 ```
 0  Success
@@ -56,7 +85,7 @@ report fields being there in both cases.
 3  Authentication error
 4  Project not initialized
 5  Provider error (external service: network, timeout, 5xx, 429, bad body)
-6  CLI too old for this project (cli.min_version)
+6  CLI too old for this project or database (cli.min_version, a newer schema)
 ```
 
 ## Error codes
@@ -134,7 +163,7 @@ exit codes, global options, command names and flags. Versions follow
 SemVer against that surface (`architecture.md` §8):
 
 Everything above also includes the `auth status` report (`architecture.md`
-§4). From `1.0.0` on:
+§4) and the `describe --json` document. From `1.0.0` on:
 
 | Change | Bump |
 |---|---|
@@ -165,6 +194,7 @@ breaking release.
 <cli> auth status [--check] [--provider NAME] [--json]   # fixed shape: architecture.md §4
 <cli> skill install [--tool claude-code|agents] [--project]
 <cli> run
+<cli> describe [--json]                                   # OpenCLI document, no envelope
 <cli> --ai
 ```
 
