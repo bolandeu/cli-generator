@@ -29,6 +29,9 @@ _exclude:
   - "{% if not include_db %}tests/test_db.py{% endif %}"
   - "{% if not include_db %}tests/conftest.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
+  # Migrations are the project's own history once generated: on `copier update` the
+  # template's example revisions must never land in a tool's chain (a second 0002...).
+  - "{% if _copier_operation == 'update' %}src/{{ package_name }}/migrations/versions{% endif %}"
 
 # The --help and describe snapshots (tests/snapshots/) contain the CLI's name and
 # wrap around it, so they're rendered in the generated project, not shipped.

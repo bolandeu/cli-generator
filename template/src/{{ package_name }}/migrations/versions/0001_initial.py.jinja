@@ -1,4 +1,4 @@
-"""items, and the v1 view other tools read them through
+"""items and responses, and the v1 views other tools read them through
 
 Revision ID: 0001
 Revises:
@@ -38,8 +38,28 @@ def upgrade() -> None:
         SELECT phrase, phrase_key, region, created_at FROM {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items
         """
     )
+    # The template's example cache table, created in public as tools did before schema
+    # `cache` existed — 0002 shows moving it. A new tool creates its cache tables in
+    # `cache` right away (schema="cache"; on SQLite core/db.py maps it away) and drops 0002.
+    op.create_table(
+        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("phrase_key", sa.Text, nullable=False),
+        sa.Column("region", sa.Integer, nullable=False),
+        sa.Column("body", sa.Text, nullable=False),
+        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint("phrase_key", "region", name="{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses_phrase_key_region_uq"),
+    )
+    op.execute(
+        """
+        CREATE VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_responses AS
+        SELECT phrase_key, region, body, fetched_at FROM {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses
+        """
+    )
 
 
 def downgrade() -> None:
+    op.execute("DROP VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_responses")
+    op.drop_table("{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses")
     op.execute("DROP VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_items")
     op.drop_table("{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items")

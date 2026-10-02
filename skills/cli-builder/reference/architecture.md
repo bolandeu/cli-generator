@@ -564,7 +564,20 @@ one: a surrogate `id`, the natural key as a UNIQUE constraint (the test
 checks both the metadata and the migrated database). Every table says
 what its rows are — `info={"kind": "data"}` (the tool's result, lost when
 deleted) or `"cache"` (a copy it can fetch again); the test fails without
-it. Which is which is the dev side's call, approved by the user. Migrations are written by hand, with
+it. Which is which is the dev side's call, approved by the user. A
+`cache` table lives in PostgreSQL schema `cache` (`schema=CACHE_SCHEMA`
+in `tables.py`; the test checks kind and schema agree), the data in
+`public`; on SQLite the engine maps the schema away (`schema_translate_map`)
+— the same file as before. The `<tool>_v1_*` views stay in `public` and
+read `cache.<table>`. The schema and the role's USAGE + CREATE on it are
+the infrastructure's job: `db upgrade` checks both before any migration
+runs and stops with `DATABASE_UNAVAILABLE` (nothing moved) when either is
+missing. An existing table moves with one migration — `ALTER TABLE ...
+SET SCHEMA cache` (rows, indexes, constraints and the id sequence go with
+it, views follow), the template's `migrations/versions/0002_cache_schema.py.jinja`
+is the pattern; a new tool creates its cache tables in `cache` from the
+start. The template's revisions are seed examples: `copier update` never
+touches `migrations/versions/` (`copier.yml` `_exclude`). Migrations are written by hand, with
 literal names. Tests against PostgreSQL run only through
 `scripts/pg_test.sh`: a throwaway container with its own name on a port
 Docker assigns, removed afterwards — a fixed port once let one tool's

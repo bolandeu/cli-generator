@@ -98,7 +98,9 @@ are in the tool's state dir (`runs/`); `python3 scripts/detach.py stop
   view plus a Service map entry. Every view is declared in `tables.py`
   `views` (typed columns with `comment=`) — `{{ cli_name }} describe --json`
   publishes it as the data contract; every table has
-  `info={"kind": "data" | "cache"}`. Cross-tool keys: `core/normalize.py`,
+  `info={"kind": "data" | "cache"}`, and a `cache` table lives in
+  PostgreSQL schema `cache` (`schema=CACHE_SCHEMA`; ignored on SQLite) —
+  the schema and the rights on it come from the infrastructure. Cross-tool keys: `core/normalize.py`,
   stored next to the original text. Every migration must keep working
   with the previous release (expand/contract); the shared base is
   migrated only by `{{ cli_name }} db upgrade` from a release. Every table

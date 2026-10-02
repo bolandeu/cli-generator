@@ -100,7 +100,7 @@ def test_tables_match_the_migrations() -> None:
         context = MigrationContext.configure(
             conn, opts={"include_name": lambda name, type_, *_: type_ != "table" or name.startswith(db.PREFIX)}
         )
-        assert compare_metadata(context, tables.metadata) == []
+        assert compare_metadata(context, db.metadata_for(engine)) == []
 
 
 def test_url_never_falls_back_to_sqlite(monkeypatch: pytest.MonkeyPatch, _local_database: Path) -> None:
@@ -196,12 +196,12 @@ def test_import_sqlite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _as_postgres(monkeypatch, target)
 
     code, payload = invoke_json("db", "import-sqlite", str(tmp_path / "old.db"), "--dry-run")
-    assert code == 0 and payload["rows"] == {tables.items.name: 2}
+    assert code == 0 and payload["rows"] == {tables.items.name: 2, tables.responses.name: 0}
     with target.connect() as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(tables.items)).scalar_one() == 0
 
     code, payload = invoke_json("db", "import-sqlite", str(tmp_path / "old.db"))
-    assert code == 0 and payload["rows"] == {tables.items.name: 2}
+    assert code == 0 and payload["rows"] == {tables.items.name: 2, tables.responses.name: 0}
     with target.connect() as conn:
         assert {row.phrase for row in conn.execute(sa.select(tables.items))} == {"Купить ёлку", "вторая"}
 
@@ -314,7 +314,7 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     source = db.sqlite_engine(tmp_path / "old.db")
     db.upgrade(source)
     _add_item(source)
-    assert db.import_sqlite(tmp_path / "old.db", engine) == {tables.items.name: 1}
+    assert db.import_sqlite(tmp_path / "old.db", engine) == {tables.items.name: 1, tables.responses.name: 0}
     _add_item(engine, "вторая")  # the sequence moved past the imported ids
     with engine.connect() as conn:
         assert conn.execute(sa.text(f"SELECT count(*) FROM {db.PREFIX}v1_items")).scalar_one() == 2  # noqa: S608
@@ -419,10 +419,13 @@ def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
     with engine.begin() as conn:
         command.upgrade(db.alembic_config(conn), "0001")  # the layout before: everything in public
         fetched = datetime(2026, 9, 1, 12, 30, tzinfo=UTC)
-        conn.execute(sa.text(
-            f"INSERT INTO {tables.responses.name} (phrase_key, region, body, fetched_at)"  # noqa: S608
-            " VALUES (:phrase_key, :region, :body, :fetched_at)"
-        ), {**RESPONSE, "fetched_at": fetched})
+        conn.execute(
+            sa.text(
+                f"INSERT INTO {tables.responses.name} (phrase_key, region, body, fetched_at)"  # noqa: S608
+                " VALUES (:phrase_key, :region, :body, :fetched_at)"
+            ),
+            {**RESPONSE, "fetched_at": fetched},
+        )
         assert _where(conn, tables.responses.name) == "public"
     view_columns = [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")]
 
@@ -449,10 +452,10 @@ def test_pg_old_cli_on_a_moved_database(monkeypatch: pytest.MonkeyPatch, tmp_pat
     engine = _pg_engine(monkeypatch)
     db.upgrade(engine)
     _old_cli(monkeypatch, tmp_path)
-    for args in (("db", "upgrade"), ("status",), ("db", "status")):
-        code, payload = invoke_json(*args)
-        if args != ("db", "status"):  # db status reports instead of failing
-            assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD", (args, payload)
+    code, payload = invoke_json("db", "upgrade")
+    assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD", payload
+    with pytest.raises(DatabaseTooNew):
+        db.open_db()
     with engine.connect() as conn:
         assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA
         names = sa.inspect(conn).get_table_names()
@@ -470,8 +473,9 @@ def test_pg_push_writes_into_the_cache_schema(monkeypatch: pytest.MonkeyPatch, t
     db.upgrade(local)
     with local.begin() as conn:
         conn.execute(sa.insert(tables.responses).values(**RESPONSE))
+    monkeypatch.setattr(db, "push_tables", lambda: [tables.responses])  # a cache the tool chose to push
     prod = db.prod_engine()
-    assert db.push(local, prod, tables=[tables.responses.name])[tables.responses.name]["sent"] == 1
+    assert db.push(local, prod)[tables.responses.name]["sent"] == 1
     with engine.connect() as conn:
         count = sa.text(f"SELECT count(*) FROM {tables.CACHE_SCHEMA}.{tables.responses.name}")  # noqa: S608
         assert conn.execute(count).scalar_one() == 1

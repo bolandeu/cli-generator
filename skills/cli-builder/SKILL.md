@@ -309,7 +309,22 @@ template, `_commit` is the template release it was last synced to):
    (TDD): `uv lock` (new `mutation` dependency group), and the gate gains
    an `existing tests` step that only reports — from then on every report
    carries the red run and the changed existing tests with reasons.
-8. **Changing `include_auth` / `include_providers`** (`--data
+8. **Crossing template v1.6.0** (kind="cache" → PostgreSQL schema
+   `cache`, T30). `copier update` no longer touches
+   `migrations/versions/` — they're the tool's history. With `include_db`:
+   the template's example `<tool>_responses` table and `v1_responses` view
+   arrive in `tables.py`/`tests/test_db.py` — delete them (and the tests
+   that use them) unless the tool has that table. Give every cache table
+   `schema=tables.CACHE_SCHEMA`, then write the move migration from the
+   template's `migrations/versions/0002_cache_schema.py.jinja` (in
+   cli-generator — update doesn't copy it): `ALTER TABLE public.<t> SET
+   SCHEMA cache` per table, no-op on SQLite. Run `scripts/pg_test.sh`: the
+   T30 tests (move keeps rows and dates, view still works, previous release
+   gets CLI_TOO_OLD, push lands in `cache.<t>`, missing schema or rights
+   is a clear error) must pass. Schema `cache` and the role's USAGE +
+   CREATE on it in production are the infrastructure's — ask through the
+   root agent before the release that moves anything.
+9. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -322,7 +337,7 @@ template, `_commit` is the template release it was last synced to):
    credentials that doesn't use `providers/` answers
    `include_providers=false` instead of deleting `providers/` — deleted
    template files come back on the next update.
-9. If `_commit` is a bare commit hash rather than a tag, the project was
+10. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 

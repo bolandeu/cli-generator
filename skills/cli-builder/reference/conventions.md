@@ -65,7 +65,7 @@ every installed tool.
   root command `x-rb-tool` (`tool`, `dist`, `package`),
   `x-rb-template-version`, `x-rb-env` (credential env vars from the
   providers, the database's from `core/db.py` `ENV_VARS`), `x-rb-data`
-  (`tables` with `kind`, `<tool>_v1_*` `views`, files in `user_data_dir`),
+  (`tables` with `schema` and `kind`, `<tool>_v1_*` `views`, files in `user_data_dir`),
   `x-rb-external` (`[[tool.rb.external]]`).
 
 `tests/test_describe.py` validates it against the vendored schema

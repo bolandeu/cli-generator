@@ -1,0 +1,37 @@
+"""move the cache tables from public to schema cache
+
+Revision ID: 0002
+Revises: 0001
+
+The template for moving an existing table: `cache` tables (tables.py kind="cache")
+live in PostgreSQL schema `cache`, the data in public. `ALTER TABLE ... SET SCHEMA`
+takes the rows as they are, with the indexes, constraints and the id sequence; views
+over the table (`<tool>_v1_*`, in public) follow it. One transaction: either every
+table moves or none. core/db.py `upgrade` checks first that the schema exists and this
+role may CREATE in it. SQLite has no schemas: there it changes nothing.
+
+Literal names, like every migration: list the tables to move.
+"""
+
+from alembic import op
+
+revision = "0002"
+down_revision = "0001"
+branch_labels = None
+depends_on = None
+
+TABLES = ["{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses"]
+
+
+def upgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+    for table in TABLES:
+        op.execute(f"ALTER TABLE public.{table} SET SCHEMA cache")
+
+
+def downgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+    for table in TABLES:
+        op.execute(f"ALTER TABLE cache.{table} SET SCHEMA public")
