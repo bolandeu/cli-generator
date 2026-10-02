@@ -1,0 +1,132 @@
+"""The consumer-contract runner itself (tests/test_contracts.py): what each kind of case checks, and how it fails.
+
+Consumers' cases live in tests/contracts/<consumer>/*.yaml; these tests feed the
+runner synthetic ones.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from tests.test_contracts import (
+    ContractError,
+    applies,
+    check_output,
+    check_static,
+    check_view_columns,
+    load_cases,
+    resolve_fixture,
+    run_case,
+    type_family,
+)
+
+DOCUMENT = {
+    "opencli": "0.1",
+    "info": {"title": "{{ cli_name }}", "version": "0.7.0"},
+    "command": {
+        "name": "{{ cli_name }}",
+        "options": [{"name": "--json"}],
+        "commands": [
+            {"name": "search", "options": [{"name": "--region", "aliases": ["-r"]}, {"name": "--json"}]},
+            {"name": "db", "commands": [{"name": "status"}]},
+        ],
+        "exitCodes": [{"code": 0}, {"code": 5}],
+        "metadata": [
+            {
+                "name": "x-rb-data",
+                "value": {
+                    "views": [
+                        {"name": "x_v1_calls", "columns": [{"name": "model", "type": "TEXT"}, {"name": "n", "type": "INTEGER"}]}
+                    ]
+                },
+            }
+        ],
+    },
+}
+
+
+def _write(root: Path, consumer: str, name: str, text: str) -> None:
+    (root / consumer).mkdir(parents=True, exist_ok=True)
+    (root / consumer / name).write_text(text)
+
+
+def test_cases_load_per_consumer(tmp_path: Path) -> None:
+    _write(tmp_path, "windmill", "serp.yaml", "cases:\n  - id: search-json\n    kind: static\n    command: [search]\n")
+    _write(tmp_path, "astro", "pages.yaml", "cases:\n  - id: pages\n    kind: static\n    exit_codes: [0]\n")
+    cases = load_cases(tmp_path)
+    assert [(case.consumer, case.id) for case in cases] == [("astro", "pages"), ("windmill", "search-json")]
+
+
+def test_a_malformed_contract_names_its_file(tmp_path: Path) -> None:
+    _write(tmp_path, "windmill", "bad.yaml", "cases:\n  - id: x\n    kind: telepathy\n")
+    with pytest.raises(ContractError, match=r"windmill/bad\.yaml"):
+        load_cases(tmp_path)
+    _write(tmp_path, "windmill", "bad.yaml", "cases:\n  - id: x\n    kind: run\n    args: [search]\n")
+    with pytest.raises(ContractError, match="fixture"):  # a run case names its fixture
+        load_cases(tmp_path)
+
+
+def test_static_checks_commands_options_exit_codes_views() -> None:
+    check_static({"command": ["search"], "options": ["--region", "-r", "--json"], "exit_codes": [0, 5]}, DOCUMENT)
+    check_static({"command": ["db", "status"]}, DOCUMENT)
+    check_static({"view": "x_v1_calls", "columns": {"model": "text", "n": "integer"}}, DOCUMENT)
+    for case, what in [
+        ({"command": ["serach"]}, "command 'serach'"),
+        ({"command": ["search"], "options": ["--limit"]}, "option '--limit'"),
+        ({"exit_codes": [7]}, "exit code 7"),
+        ({"view": "x_v1_nope", "columns": {}}, "view 'x_v1_nope'"),
+        ({"view": "x_v1_calls", "columns": {"cost": "number"}}, "column 'cost'"),
+        ({"view": "x_v1_calls", "columns": {"n": "text"}}, "column 'n' is integer, the consumer expects text"),
+    ]:
+        with pytest.raises(ContractError, match=what):
+            check_static(case, DOCUMENT)
+
+
+def test_output_extra_fields_are_fine_missing_required_are_not() -> None:
+    case = {
+        "exit_code": 0,
+        "output_schema": {"type": "object", "required": ["ok", "items"], "properties": {"items": {"type": "array"}}},
+    }
+    check_output(case, 0, '{"ok": true, "items": [], "extra": 1}')
+    with pytest.raises(ContractError, match="'items' is a required property"):
+        check_output(case, 0, '{"ok": true}')
+    with pytest.raises(ContractError, match="exit code 5, the consumer expects 0"):
+        check_output(case, 5, '{"ok": false}')
+    with pytest.raises(ContractError, match="not JSON"):
+        check_output(case, 0, "Done.")
+
+
+def test_provider_version_range() -> None:
+    assert applies({"provider": "<0.7"}, "0.6.9")
+    assert not applies({"provider": "<0.7"}, "0.7.0")
+    assert not applies({"provider": "<0.7"}, "0.7.0.dev3")  # building 0.7.0
+    assert applies({}, "0.7.0")
+
+
+def test_unknown_fixture_is_a_clear_error(request: pytest.FixtureRequest) -> None:
+    with pytest.raises(ContractError, match="fixture 'no_such_fixture'"):
+        resolve_fixture(request, "no_such_fixture")
+    resolve_fixture(request, "tmp_path")  # an existing one resolves
+
+
+def test_view_columns_by_type_family() -> None:
+    check_view_columns("x_v1_calls", {"model": "text", "at": "datetime"}, {"model": "VARCHAR", "at": "TIMESTAMP", "x": "INTEGER"})
+    with pytest.raises(ContractError, match="column 'at'"):
+        check_view_columns("x_v1_calls", {"at": "datetime"}, {"model": "TEXT"})
+    assert type_family("TIMESTAMP WITH TIME ZONE") == "datetime"
+    assert type_family("BIGINT") == "integer"
+    assert type_family("JSONB") == "json"
+
+
+def test_run_case_invokes_the_cli_on_the_fixture(request: pytest.FixtureRequest) -> None:
+    case = {
+        "fixture": "tmp_path",
+        "args": ["describe", "--json"],
+        "exit_code": 0,
+        "output_schema": {"type": "object", "required": ["opencli", "command"]},
+    }
+    run_case(case, request)
+    with pytest.raises(ContractError, match="'nope' is a required property"):
+        run_case({**case, "output_schema": {"type": "object", "required": ["nope"]}}, request)
