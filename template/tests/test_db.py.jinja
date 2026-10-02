@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from typer.testing import CliRunner
@@ -302,8 +303,7 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     monkeypatch.setenv(db.ENV_VAR, PG_URL)
     engine = db.open_db(check=False)
     with engine.begin() as conn:  # a clean slate: only this tool's objects
-        conn.execute(sa.text(f"DROP VIEW IF EXISTS {db.PREFIX}v1_items"))
-        conn.execute(sa.text(f"DROP TABLE IF EXISTS {db.PREFIX}items, {db.VERSION_TABLE}"))
+        _pg_clean_slate(conn)
         conn.execute(sa.text("CREATE TABLE IF NOT EXISTS directus_users (id int)"))  # someone else's table
     with pytest.raises(DatabaseNotMigrated):
         db.open_db()
@@ -331,3 +331,199 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     assert db.push(local, prod)[tables.items.name]["sent"] == 0
     prod.dispose()
     engine.dispose()
+
+
+# --- The cache schema: kind="cache" tables live in PostgreSQL schema `cache` ------------
+# (public holds the data). Scenarios approved by the user 2026-10-02 (T30).
+
+RESPONSE = {"phrase_key": "купить елку", "region": 213, "body": '{"top": []}'}
+
+
+def _old_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Make this CLI the previous release: its migrations stop at 0001 (before the move to `cache`)."""
+    source = Path(db.__file__).parent.parent / "migrations"
+    (tmp_path / "old" / "versions").mkdir(parents=True)
+    for name in ("env.py", "script.py.mako"):
+        (tmp_path / "old" / name).write_text((source / name).read_text())
+    for path in (source / "versions").glob("0001_*.py"):
+        (tmp_path / "old" / "versions" / path.name).write_text(path.read_text())
+    new_config = db.alembic_config
+
+    def old_config(connection=None):
+        config = new_config(connection)
+        config.set_main_option("script_location", str(tmp_path / "old"))
+        return config
+
+    monkeypatch.setattr(db, "alembic_config", old_config)
+
+
+def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
+    for table in tables.metadata.sorted_tables:
+        expected = tables.CACHE_SCHEMA if table.info.get("kind") == "cache" else None
+        assert table.schema == expected, f"{table.name}: kind={table.info.get('kind')} needs schema={expected!r}"
+    assert any(table.schema == tables.CACHE_SCHEMA for table in tables.metadata.sorted_tables)  # the example
+
+
+def test_sqlite_ignores_the_cache_schema() -> None:
+    """Scenario 5: on SQLite the cache table is in the same file, read and written as before."""
+    engine = db.open_db()
+    with engine.begin() as conn:
+        conn.execute(sa.insert(tables.responses).values(**RESPONSE))
+    with engine.connect() as conn:
+        assert conn.execute(sa.select(tables.responses.c.body)).scalar_one() == RESPONSE["body"]
+        assert conn.execute(sa.text(f"SELECT count(*) FROM {db.PREFIX}v1_responses")).scalar_one() == 1  # noqa: S608
+    assert tables.responses.name in sa.inspect(engine).get_table_names()
+
+
+def test_old_cli_on_a_moved_sqlite_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Scenario 4 (SQLite): the previous release refuses a database migrated past it, touching nothing."""
+    db.open_db()  # migrated to head by this release
+    _old_cli(monkeypatch, tmp_path)
+    code, payload = invoke_json("db", "upgrade")
+    assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD"
+    with pytest.raises(DatabaseTooNew):
+        db.open_db()
+
+
+def _pg_engine(monkeypatch: pytest.MonkeyPatch) -> sa.Engine:
+    """The throwaway server, wiped of this tool's objects, with schema `cache` present."""
+    assert PG_URL
+    assert sa.make_url(PG_URL).host in ("127.0.0.1", "localhost"), "TEST_DATABASE_URL must be scripts/pg_test.sh's"
+    monkeypatch.setenv(db.ENV_VAR, PG_URL)
+    engine = db.open_db(check=False)
+    with engine.begin() as conn:
+        _pg_clean_slate(conn)
+    return engine
+
+
+def _pg_clean_slate(conn: sa.Connection) -> None:
+    for view in tables.views.sorted_tables:
+        conn.execute(sa.text(f"DROP VIEW IF EXISTS {view.name}"))
+    for table in tables.metadata.sorted_tables:
+        conn.execute(sa.text(f"DROP TABLE IF EXISTS {table.name}, {tables.CACHE_SCHEMA}.{table.name} CASCADE"))
+    conn.execute(sa.text(f"DROP TABLE IF EXISTS {db.VERSION_TABLE}"))
+    conn.execute(sa.text(f"CREATE SCHEMA IF NOT EXISTS {tables.CACHE_SCHEMA}"))
+
+
+def _where(conn: sa.Connection, name: str) -> str | None:
+    """The schema table `name` is in, None when there is none."""
+    return conn.execute(
+        sa.text("SELECT table_schema FROM information_schema.tables WHERE table_name = :name"), {"name": name}
+    ).scalar()
+
+
+@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
+def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scenarios 1-3: db upgrade moves the cache table, rows and dates intact; it works after; so does the view."""
+    engine = _pg_engine(monkeypatch)
+    with engine.begin() as conn:
+        command.upgrade(db.alembic_config(conn), "0001")  # the layout before: everything in public
+        fetched = datetime(2026, 9, 1, 12, 30, tzinfo=UTC)
+        conn.execute(sa.text(
+            f"INSERT INTO {tables.responses.name} (phrase_key, region, body, fetched_at)"  # noqa: S608
+            " VALUES (:phrase_key, :region, :body, :fetched_at)"
+        ), {**RESPONSE, "fetched_at": fetched})
+        assert _where(conn, tables.responses.name) == "public"
+    view_columns = [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")]
+
+    code, payload = invoke_json("db", "upgrade")
+    assert code == 0 and payload["up_to_date"], payload
+    with engine.connect() as conn:
+        assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA  # and no longer in public
+        row = conn.execute(sa.select(tables.responses.c.phrase_key, tables.responses.c.fetched_at)).one()
+        assert row == (RESPONSE["phrase_key"], fetched)
+    with db.connect() as conn:  # scenario 2: written and read through tables.py after the move
+        conn.execute(sa.insert(tables.responses).values(**{**RESPONSE, "region": 2}))
+    with engine.connect() as conn:
+        assert conn.execute(sa.select(sa.func.count()).select_from(tables.responses)).scalar_one() == 2
+        view = sa.text(f"SELECT region FROM {db.PREFIX}v1_responses ORDER BY region")  # noqa: S608
+        assert conn.execute(view).scalars().all() == [2, 213]  # scenario 3
+    assert [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")] == view_columns
+    _assert_views_match(engine)
+    engine.dispose()
+
+
+@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
+def test_pg_old_cli_on_a_moved_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Scenario 4: the previous release on a moved base → CLI_TOO_OLD (exit 6), creates nothing."""
+    engine = _pg_engine(monkeypatch)
+    db.upgrade(engine)
+    _old_cli(monkeypatch, tmp_path)
+    for args in (("db", "upgrade"), ("status",), ("db", "status")):
+        code, payload = invoke_json(*args)
+        if args != ("db", "status"):  # db status reports instead of failing
+            assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD", (args, payload)
+    with engine.connect() as conn:
+        assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA
+        names = sa.inspect(conn).get_table_names()
+        assert tables.responses.name not in names  # nothing re-created in public
+    engine.dispose()
+
+
+@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
+def test_pg_push_writes_into_the_cache_schema(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Scenario 6: db push sends local cache rows into cache.<table> in production."""
+    engine = _pg_engine(monkeypatch)
+    db.upgrade(engine)
+    monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL or "")
+    local = db.sqlite_engine(tmp_path / "local.db")
+    db.upgrade(local)
+    with local.begin() as conn:
+        conn.execute(sa.insert(tables.responses).values(**RESPONSE))
+    prod = db.prod_engine()
+    assert db.push(local, prod, tables=[tables.responses.name])[tables.responses.name]["sent"] == 1
+    with engine.connect() as conn:
+        count = sa.text(f"SELECT count(*) FROM {tables.CACHE_SCHEMA}.{tables.responses.name}")  # noqa: S608
+        assert conn.execute(count).scalar_one() == 1
+    prod.dispose()
+    engine.dispose()
+
+
+@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
+def test_pg_no_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scenario 7a: schema `cache` missing → a clear error, nothing migrated at all."""
+    engine = _pg_engine(monkeypatch)
+    with engine.begin() as conn:
+        command.upgrade(db.alembic_config(conn), "0001")
+        conn.execute(sa.text(f"DROP SCHEMA {tables.CACHE_SCHEMA}"))
+    code, payload = invoke_json("db", "upgrade")
+    assert code == 5 and payload["error"]["code"] == "DATABASE_UNAVAILABLE"
+    assert f"schema '{tables.CACHE_SCHEMA}'" in payload["error"]["message"]
+    with engine.connect() as conn:
+        assert db.current_revision(conn) == "0001"
+        assert _where(conn, tables.responses.name) == "public"
+    engine.dispose()
+
+
+@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
+def test_pg_no_rights_on_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scenario 7b: a role without CREATE on `cache` → a clear error, no partial move."""
+    engine = _pg_engine(monkeypatch)
+    role = f"{db.PREFIX}limited"
+    with engine.begin() as conn:
+        conn.execute(sa.text(f"DROP OWNED BY {role}") if _role_exists(conn, role) else sa.text("SELECT 1"))
+        conn.execute(sa.text(f"DROP ROLE IF EXISTS {role}"))
+        conn.execute(sa.text(f"CREATE ROLE {role} LOGIN PASSWORD 'limited'"))
+        conn.execute(sa.text(f"GRANT CREATE, USAGE ON SCHEMA public TO {role}"))
+        conn.execute(sa.text(f"GRANT USAGE ON SCHEMA {tables.CACHE_SCHEMA} TO {role}"))  # but not CREATE
+    limited_url = sa.make_url(PG_URL or "").set(username=role, password="limited")  # noqa: S106
+    monkeypatch.setenv(db.ENV_VAR, limited_url.render_as_string(hide_password=False))
+    limited = db.open_db(check=False)
+    with limited.begin() as conn:
+        command.upgrade(db.alembic_config(conn), "0001")  # its own tables, in public
+    code, payload = invoke_json("db", "upgrade")
+    assert code == 5 and payload["error"]["code"] == "DATABASE_UNAVAILABLE"
+    assert "CREATE" in payload["error"]["message"]
+    with limited.connect() as conn:
+        assert db.current_revision(conn) == "0001"
+        assert _where(conn, tables.responses.name) == "public"
+    limited.dispose()
+    with engine.begin() as conn:
+        _pg_clean_slate(conn)
+        conn.execute(sa.text(f"DROP OWNED BY {role}"))
+        conn.execute(sa.text(f"DROP ROLE {role}"))
+    engine.dispose()
+
+
+def _role_exists(conn: sa.Connection, role: str) -> bool:
+    return bool(conn.execute(sa.text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": role}).scalar())
