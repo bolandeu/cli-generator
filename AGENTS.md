@@ -36,7 +36,10 @@ Known sharp edges) on a commit `vX.Y.Z: <what>`. Nobody here pushes: report each
 tag separately to the root agent — `~/Work/tools/scripts/agent_say.sh
 tools "<repo, branch, tag, what's inside, gate result>"`, the gate being
 the regeneration loop below for both `include_auth`/`include_db`
-variants. It queues the release for dev, who pushes after the user's yes.
+variants. It queues the release for dev, who pushes after the user's yes. TDD
+applies here too: a new behaviour of the template's code (`scripts/`,
+`core/`) gets its test committed first, failing — the red run and any
+changed existing test (with its reason) go into the report.
 
 ## Testing a change to `template/`
 

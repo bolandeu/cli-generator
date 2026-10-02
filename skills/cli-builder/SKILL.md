@@ -37,10 +37,17 @@ function) is governed by these four rules instead
 3. **Surgical changes** (Refactor mode especially). Touch only what the
    checklist item or request requires — don't reformat, "improve," or
    refactor adjacent code you weren't asked to touch.
-4. **Goal-driven execution.** Turn the task into a verifiable check (a
-   test that reproduces a bug, then passes) rather than looping on "make
-   it work" — this is why every mode below ends in `uv sync && pytest &&
-   doctor`.
+4. **Goal-driven execution, test first.** Turn the task into a verifiable
+   check rather than looping on "make it work" — this is why every mode
+   below ends in `uv sync && pytest && doctor`. TDD is required and
+   checked (`~/Work/dev/docs/testing.md`): the failing test is committed
+   before the code, and its red run goes into the readiness report; an
+   existing test is never edited to fit the code — `release.py --check`
+   lists every test changed or gone since the last tag (`existing tests`),
+   and each goes into the report with its reason; acceptance scenarios
+   come from dev with the user, contract tests from the consumer — you
+   write the unit tests and pass theirs; mutation testing
+   (`uv run --group mutation mutmut run`) now and then, outside the gate.
 
 ## Mode: Scaffold
 
@@ -298,7 +305,10 @@ template, `_commit` is the template release it was last synced to):
    test names any view missing or differing; files in the user data dir
    besides the SQLite file go in `core/data_files.py` `DATA_FILES`. A
    tool's own `CliError` with an exit code outside `EXIT_CODES` fails
-   `test_every_exit_code_is_documented`: use a standard code.
+   `test_every_exit_code_is_documented`: use a standard code. From v1.5.6
+   (TDD): `uv lock` (new `mutation` dependency group), and the gate gains
+   an `existing tests` step that only reports — from then on every report
+   carries the red run and the changed existing tests with reasons.
 8. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
@@ -374,7 +384,7 @@ sitting installable-from-nowhere without asking.
 3. **Report it to the root agent** — a push request marked **new repo**,
    with the defaults filled in:
    ```bash
-   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. NEW REPO: <owner>/<repo>, private, ruleset: <yes/no>. Push main + tags. Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
+   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. NEW REPO: <owner>/<repo>, private, ruleset: <yes/no>. Push main + tags. Inside: <what>. Gate: <release.py --check result>. Red run: <failing output of the new tests>. CI: <yes/no>, private_deps: <yes/no>."
    ```
    Owner from `gh api user -q .login`, repo name as decided in Scaffold
    step 1 / the refactored project's existing name. **Private** is the
@@ -434,7 +444,8 @@ sitting installable-from-nowhere without asking.
    towncrier, commits `Release vX.Y.Z` and tags. It never pushes, and
    neither do you: report each release tag separately to the root agent
    (`~/Work/tools/scripts/agent_say.sh tools "<repo, branch, tags, what's
-   inside, release.py --check result>"`); dev pushes after the user's yes. Pick the
+   inside, release.py --check result, the red run, changed existing tests
+   with reasons>"`); dev pushes after the user's yes. Pick the
    part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
    features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
    section — one fragment per change, `release.py` when it should ship.

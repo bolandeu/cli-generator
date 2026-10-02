@@ -155,7 +155,7 @@ def test_external_registry_must_match_code(tmp_path: Path, monkeypatch: pytest.M
         release.check_external_deps()
 
 
-OLD_TESTS = '''
+OLD_TESTS = """
 LIMIT = 3
 
 
@@ -174,9 +174,9 @@ def test_b():
 class TestGroup:
     def test_c(self):
         assert LIMIT
-'''
+"""
 
-NEW_TESTS = '''
+NEW_TESTS = """
 LIMIT = 4
 
 
@@ -195,7 +195,7 @@ class TestGroup:
 
 def test_new():
     assert True
-'''
+"""
 
 
 def test_existing_tests_that_changed() -> None:
@@ -212,7 +212,7 @@ def test_existing_tests_that_changed() -> None:
 
 def test_existing_tests_step_reports_against_the_last_tag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
 
     (tmp_path / "tests" / "snapshots").mkdir(parents=True)
     (tmp_path / "tests" / "test_x.py").write_text(OLD_TESTS)

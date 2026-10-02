@@ -8,3 +8,5 @@ dist/
 .python-version
 .coverage
 htmlcov/
+# mutmut's working copy and results (uv run --group mutation mutmut run)
+mutants/
