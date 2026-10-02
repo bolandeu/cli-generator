@@ -371,21 +371,23 @@ sitting installable-from-nowhere without asking.
    In Refactor mode you're on a feature branch; merging it is the user's
    call. Fill in the repo URL now (step 5) so the first push already
    carries it.
-3. **Report it to the root agent** — the ready repo and the request in
-   one message, with the defaults filled in:
+3. **Report it to the root agent** — a push request marked **new repo**,
+   with the defaults filled in:
    ```bash
-   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
+   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. NEW REPO: <owner>/<repo>, private, ruleset: <yes/no>. Push main + tags. Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
    ```
    Owner from `gh api user -q .login`, repo name as decided in Scaffold
    step 1 / the refactored project's existing name. **Private** is the
    default, not an option to bring up: these CLIs typically hold
    account-specific provider logic, and `uv tool install` works from a
    private repo just as well (step 6); `--public` only if the user says so.
-   The root agent checks it and queues it for dev; dev shows the user and,
-   after their yes, creates the repo and makes the first push
-   (`gh repo create <owner>/<repo> --private --source=. --remote=origin
-   --push`, then the tags). While you wait, do whatever doesn't depend on
-   it. If the user declines, tell the root agent the placeholder in README.md and
+   A new tool going into service needs the user's yes **before** its repo
+   exists. The root agent checks the request and queues it for dev; dev
+   shows the user and, after their yes, creates the repo together with the
+   first push (`gh repo create <owner>/<repo> --private --source=.
+   --remote=origin --push`, then the tags) and adds the ruleset. While you
+   wait, do whatever doesn't depend on it. If the user declines, tell the
+   root agent the placeholder in README.md and
    `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
    don't silently leave it.
 4. **CI and its secret** go into that same message. CI is optional (it
@@ -395,8 +397,8 @@ sitting installable-from-nowhere without asking.
    needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
    (fine-grained, Contents: read on those repos) — without it CI can't
    fetch them (standard §9); the user creates the secret, never you. If CI
-   stays, ask (through the root agent) for the ruleset that requires the `test`
-   check and forbids force-pushes on `main` (on a personal free plan
+   stays, say `ruleset: yes` in that request — dev adds the one that
+   requires the `test` check and forbids force-pushes on `main` (on a personal free plan
    GitHub refuses it for private repos with HTTP 403 "Upgrade" — expected).
 5. **Make sure the package knows its own URL.** In Scaffold mode with
    `repository_url` passed to copier this is already true. Otherwise
