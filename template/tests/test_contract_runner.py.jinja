@@ -229,3 +229,29 @@ def test_view_columns_by_type_family() -> None:
     assert type_family("TIMESTAMP WITH TIME ZONE") == "datetime"
     assert type_family("BIGINT") == "integer"
     assert type_family("JSONB") == "json"
+
+
+WINDMILL = Path(__file__).parent / "data" / "contracts" / "windmill-serp.yaml"  # the first real contract, verbatim
+
+
+def test_the_windmill_contract_is_accepted_as_is(tmp_path: Path) -> None:
+    """~/Work/dev/windmill/tests/contracts/serp/windmill.yaml validates unchanged and expands into its cases."""
+    (tmp_path / "windmill").mkdir()
+    (tmp_path / "windmill" / "serp.yaml").write_text(WINDMILL.read_text())
+    [contract] = load_contracts(tmp_path, provider="serp")
+    assert (contract.consumer, contract.data["provider_range"]) == ("windmill", ">=0.6,<1.0")
+    assert case_ids(contract) == [
+        "windmill:static:command:search",
+        "windmill:static:command:cache info",
+        "windmill:static:command:describe",
+        "windmill:static:root_options",
+        "windmill:static:exit_codes",
+        "windmill:static:env",
+        "windmill:run:version",
+        "windmill:run:search_json_envelope",
+        "windmill:run:empty_result_is_success",
+        "windmill:run:error_is_json_under_json",
+        "windmill:run:auth_missing_is_exit_3",
+        "windmill:run:cache_info_json",
+        "windmill:run:describe_json",
+    ]
