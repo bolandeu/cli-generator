@@ -1,0 +1,243 @@
+"""Consumer contracts: what other tools, Windmill flows and the platform rely on in this CLI.
+
+The cases are written by the consumers (through dev), not by this tool: one
+directory per consumer, `tests/contracts/<consumer>/*.yaml`, in the format
+`tests/contracts/schema.json` defines (cli-generator architecture.md, "Consumer
+contracts"). Each case is one test, `<consumer>:<id>`:
+
+- `static` — from `describe --json`: a command exists (with these options), exit
+  codes are among the documented ones, a `v1` view has these columns of these types;
+- `run` — the command runs on the provider's offline fixture (a pytest fixture of
+  this repo, named in the case) and exits with the expected code; its `--json`
+  output satisfies the consumer's JSON Schema (extra fields are fine, a missing
+  required one is not);
+- `view` — the view's columns and types on the test database (SQLite; PostgreSQL
+  too under scripts/pg_test.sh).
+
+`provider: "<0.7"` limits a case to those provider versions. The gate runs this
+file as its own step (`release.py --check`: "contracts"); a failing case stops
+the release. Never edit a consumer's case to make it pass — that's the point.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+import pytest
+{%- if include_db %}
+import sqlalchemy as sa
+{%- endif %}
+import typer
+import yaml
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import Version
+from typer.testing import CliRunner
+
+from {{ package_name }}.cli import app
+from {{ package_name }}.core import {% if include_db %}db, {% endif %}opencli
+from {{ package_name }}.core.version import DEV_VERSION, installed_version
+
+CONTRACTS = Path(__file__).parent / "contracts"
+SCHEMA = json.loads((CONTRACTS / "schema.json").read_text())
+# The version the gate is building (release.py sets it), else the installed one.
+VERSION_ENV = "RB_PROVIDER_VERSION"
+PG_URL = os.environ.get("TEST_DATABASE_URL")
+FAMILIES = (  # (substring of the SQL type, family); first match wins
+    ("timestamp", "datetime"),
+    ("datetime", "datetime"),
+    ("date", "date"),
+    ("int", "integer"),
+    ("bool", "boolean"),
+    ("json", "json"),
+    ("char", "text"),
+    ("text", "text"),
+    ("string", "text"),
+    ("uuid", "text"),
+    ("float", "number"),
+    ("double", "number"),
+    ("real", "number"),
+    ("numeric", "number"),
+    ("decimal", "number"),
+)
+
+
+class ContractError(Exception):
+    """A consumer's expectation this CLI doesn't meet, or a contract file that can't be read."""
+
+
+@dataclass(frozen=True)
+class Case:
+    consumer: str
+    file: str
+    id: str
+    spec: dict[str, Any]
+
+
+def load_cases(root: Path = CONTRACTS) -> list[Case]:
+    """Every case under `root`, validated against schema.json, sorted by consumer and id."""
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    cases: list[Case] = []
+    for path in sorted(root.glob("*/*.yaml")):
+        name = f"{path.parent.name}/{path.name}"
+        try:
+            content = yaml.safe_load(path.read_text())
+        except yaml.YAMLError as exc:
+            raise ContractError(f"{name}: not valid YAML: {exc}") from exc
+        if errors := sorted(validator.iter_errors(content), key=lambda e: list(e.absolute_path)):
+            where = "/".join(str(part) for part in errors[0].absolute_path) or "(top)"
+            raise ContractError(f"{name}: {where}: {errors[0].message} (format: tests/contracts/schema.json)")
+        cases += [Case(path.parent.name, name, spec["id"], spec) for spec in content["cases"]]
+    return sorted(cases, key=lambda case: (case.consumer, case.id))
+
+
+def applies(spec: dict, version: str) -> bool:
+    """Whether the case's `provider` range (if any) contains `version` (a dev build of X counts as X)."""
+    if "provider" not in spec:
+        return True
+    try:
+        wanted = SpecifierSet(spec["provider"])
+    except InvalidSpecifier as exc:
+        raise ContractError(f"provider: {spec['provider']!r} is not a version range like '<0.7'") from exc
+    built = Version(version)
+    return Version(built.base_version) in wanted
+
+
+def type_family(sql_type: str) -> str:
+    """'TIMESTAMP WITH TIME ZONE' -> 'datetime', 'BIGINT' -> 'integer', ... ('other' when unknown)."""
+    lowered = sql_type.lower()
+    return next((family for marker, family in FAMILIES if marker in lowered), "other")
+
+
+def check_view_columns(view: str, expected: dict[str, str], actual: dict[str, str]) -> None:
+    """`expected` (column -> family, "any" for any) against the view's `actual` columns (name -> SQL type)."""
+    for column, family in expected.items():
+        if column not in actual:
+            raise ContractError(f"view '{view}' has no column '{column}' (it has: {', '.join(actual) or 'none'})")
+        found = type_family(actual[column])
+        if family != "any" and found != family:
+            raise ContractError(f"view '{view}': column '{column}' is {found}, the consumer expects {family}")
+
+
+def _metadata(document: dict, name: str) -> Any:
+    return next((item.get("value") for item in document["command"].get("metadata", []) if item["name"] == name), None)
+
+
+def check_static(spec: dict, document: dict) -> None:
+    """A `static` case against the `describe --json` document."""
+    command = document["command"]
+    for part in spec.get("command", []):
+        sub = next((c for c in command.get("commands", []) if c["name"] == part), None)
+        if sub is None:
+            path = " ".join(spec["command"])
+            raise ContractError(f"no command '{path}' (at '{part}') in describe --json")
+        command = sub
+    names = {name for option in command.get("options", []) for name in (option["name"], *option.get("aliases", []))}
+    for option in spec.get("options", []):
+        if option not in names:
+            where = " ".join(spec.get("command", [])) or "the root command"
+            raise ContractError(f"no option '{option}' on {where} (it has: {', '.join(sorted(names)) or 'none'})")
+    documented = {entry["code"] for entry in document["command"].get("exitCodes", [])}
+    for code in spec.get("exit_codes", []):
+        if code not in documented:
+            raise ContractError(f"exit code {code} is not documented (exitCodes: {sorted(documented)})")
+    if "view" in spec:
+        views = {view["name"]: view for view in (_metadata(document, "x-rb-data") or {}).get("views", [])}
+        if spec["view"] not in views:
+            raise ContractError(f"no view '{spec['view']}' in describe --json (views: {', '.join(views) or 'none'})")
+        columns = {column["name"]: column["type"] for column in views[spec["view"]]["columns"]}
+        check_view_columns(spec["view"], spec.get("columns", {}), columns)
+
+
+def check_output(spec: dict, exit_code: int, stdout: str) -> None:
+    """A `run` case's result: the exit code, then (if the case has one) the JSON Schema of the output."""
+    if exit_code != spec["exit_code"]:
+        raise ContractError(f"exit code {exit_code}, the consumer expects {spec['exit_code']}; output: {stdout[:500]}")
+    if "output_schema" not in spec:
+        return
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ContractError(f"output is not JSON ({exc}): {stdout[:500]}") from exc
+    errors = sorted(jsonschema.Draft202012Validator(spec["output_schema"]).iter_errors(payload), key=str)
+    if errors:
+        where = "/".join(str(part) for part in errors[0].absolute_path) or "(top)"
+        raise ContractError(f"output at {where}: {errors[0].message}")
+
+
+def resolve_fixture(request: pytest.FixtureRequest, name: str) -> Any:
+    """The provider's offline fixture the case names — a clear error when this repo has none by that name."""
+    try:
+        return request.getfixturevalue(name)
+    except pytest.FixtureLookupError as exc:
+        raise ContractError(
+            f"fixture '{name}' doesn't exist in this repo's tests (define it in tests/conftest.py)"
+        ) from exc
+
+
+def run_case(spec: dict, request: pytest.FixtureRequest) -> None:
+    """A `run` case: its fixture set up, the CLI invoked in-process with its args, the result checked."""
+    resolve_fixture(request, spec["fixture"])
+    result = CliRunner().invoke(app, spec["args"])
+    check_output(spec, result.exit_code, result.stdout)
+
+
+def view_columns(view: str) -> dict[str, str]:
+    """The view's columns (name -> SQL type) on the test database: tests' SQLite, or PostgreSQL under pg_test.sh."""
+{%- if include_db %}
+    engine = db.open_db(check=False)
+    try:
+        if db.is_postgres(engine):
+            with engine.begin() as conn:
+                conn.execute(sa.text(f"CREATE SCHEMA IF NOT EXISTS {db.CACHE_SCHEMA}"))
+        db.upgrade(engine)
+        inspector = sa.inspect(engine)
+        if view not in inspector.get_view_names():
+            raise ContractError(f"no view '{view}' in the migrated {engine.dialect.name} database")
+        return {column["name"]: str(column["type"]) for column in inspector.get_columns(view)}
+    finally:
+        engine.dispose()
+{%- else %}
+    raise ContractError(f"this tool has no database, so no view '{view}'")
+{%- endif %}
+
+
+def _version() -> str:
+    return os.environ.get(VERSION_ENV) or installed_version() or DEV_VERSION.split("-")[0]
+
+
+try:
+    CASES = load_cases()
+except ContractError as exc:  # a broken contract file fails the run, naming the file
+    CASES = []
+    LOAD_ERROR: str | None = str(exc)
+else:
+    LOAD_ERROR = None
+
+
+def test_contract_files_are_valid() -> None:
+    assert LOAD_ERROR is None, LOAD_ERROR
+
+
+@pytest.mark.parametrize("case", CASES, ids=[f"{case.consumer}:{case.id}" for case in CASES])
+def test_contract(case: Case, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    version = _version()
+    if not applies(case.spec, version):
+        pytest.skip(f"{case.consumer}:{case.id}: provider {case.spec['provider']}, this is {version}")
+    try:
+        if case.spec["kind"] == "static":
+            check_static(case.spec, opencli.document(typer.main.get_command(app)))
+        elif case.spec["kind"] == "run":
+            run_case(case.spec, request)
+        else:
+{%- if include_db %}
+            if PG_URL:
+                monkeypatch.setenv(db.ENV_VAR, PG_URL)  # scripts/pg_test.sh: PostgreSQL, else the tests' SQLite
+{%- endif %}
+            check_view_columns(case.spec["view"], case.spec["columns"], view_columns(case.spec["view"]))
+    except ContractError as exc:
+        pytest.fail(f"{case.consumer}:{case.id} ({case.file}): {exc}", pytrace=False)

@@ -16,7 +16,8 @@ uv run scripts/release.py --check   # the whole gate — run it before every com
 It is the authoritative gate (CI, if the repo keeps it, runs exactly this,
 and every release runs it too): `uv lock --check`, ruff check + format,
 ty, pytest (coverage floor, help contract + snapshots, `auth status`
-shape), the list of existing tests changed since the last tag, a
+shape), the consumers' contract cases (`tests/contracts/`, their own
+step), the list of existing tests changed since the last tag, a
 changelog fragment for any change since the last tag, and a wheel build
 installed into a throwaway venv where `{{ cli_name }} --version` must
 match the built version. A failure names the step and shows its output —
@@ -34,8 +35,10 @@ fix the cause, never skip the step.
    release through.
 3. **The bar is set by others.** Acceptance scenarios are written by dev
    with the user, contract tests (`--json`, exit codes, `v1` views) by the
-   consumer. You write the unit tests and pass everyone's — a contract
-   test from a consumer is an existing test like any other.
+   consumer — `tests/contracts/<consumer>/*.yaml` (cli-generator
+   `architecture.md` §13). You write the unit tests and the offline
+   fixtures `run` cases name, and pass everyone's; a consumer's case is
+   never edited to pass.
 4. **Mutation testing**, now and then and before a big release (not in
    the gate): `uv run --group mutation mutmut run`, then `mutmut results`
    / `mutmut browse` — a surviving mutant is a line no test really checks.

@@ -641,3 +641,67 @@ table. Only the root tools agent runs anything against production —
 `db push` (dry run included), reads through `<TOOL>_PROD_DATABASE_URL`,
 ssh to the server; a tool's agent hands it the exact command.
 
+
+## 13. Consumer contracts
+
+What other tools, Windmill flows, the Astro build and the platform rely on in
+a CLI is pinned by **their** tests, run by **its** gate (consumer-driven
+contracts, `~/Work/dev/docs/testing.md`). A consumer writes the cases
+(through dev); the tool's agent never edits them to pass — a case that
+changed or vanished shows up in the gate's `existing tests` list.
+
+**Where.** `tests/contracts/<consumer>/*.yaml`, one directory per
+consumer, format `tests/contracts/schema.json` (JSON Schema, validated
+before anything runs — a broken file fails naming itself). Runner:
+`tests/test_contracts.py`, one test per case, id `<consumer>:<case id>`.
+
+```yaml
+description: windmill — the SERP flow
+cases:
+  - id: search-json                 # static: from `describe --json`
+    kind: static
+    command: [search]
+    options: [--json, --region]
+    exit_codes: [0, 5]
+  - id: v1-responses
+    kind: static                    # or kind: view — on the test database
+    view: serp_v1_responses
+    columns: {phrase_key: text, region: integer, fetched_at: datetime}
+  - id: search-output
+    kind: run                       # the CLI in-process, on the provider's fixture
+    fixture: offline_xmlriver       # a pytest fixture in this repo's tests/conftest.py
+    args: [search, купить ёлку, --json]
+    exit_code: 0
+    output_schema:                  # only what the consumer reads
+      type: object
+      required: [results]
+  - id: legacy-field
+    kind: static
+    provider: "<0.7"                # applies to provider versions < 0.7 only
+    command: [search]
+    options: [--legacy]
+```
+
+- `static` — against `describe --json`: the command path exists, has the
+  options (name or alias), each exit code is documented, the view exists
+  with these columns of these type families.
+- `run` — the named fixture is set up (it makes the command offline:
+  recorded responses, a temp project), then `<cli> <args>` runs in-process;
+  the exit code must match and the output must satisfy `output_schema`.
+  Extra fields are fine, a missing required one is not. A fixture this repo
+  doesn't have fails the case with its name.
+- `view` — the view's columns and type families on the migrated test
+  database: SQLite, and PostgreSQL too under `scripts/pg_test.sh`.
+- Type families: `text`, `integer`, `number`, `boolean`, `date`,
+  `datetime`, `json`, `any` (VARCHAR and TEXT are text, BIGINT is integer,
+  TIMESTAMP WITH TIME ZONE is datetime).
+- `provider` — a PEP 440 range; outside it the case is skipped. The gate
+  passes the version being released, so `<0.7` stops applying in the
+  release that makes 0.7.0.
+
+**Gate.** `release.py --check` runs the contracts as their own step, apart
+from pytest: `contracts ... ok (N cases from K consumers)`; a failure
+prints each failing `<consumer>:<case>` with what exactly is wrong, and the
+release doesn't go out. Every template ships one real case:
+`tests/contracts/tools-catalog/describe.yaml` — the tools catalog reads
+`describe --json`.

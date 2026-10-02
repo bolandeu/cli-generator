@@ -1,0 +1,10 @@
+# The tools catalog (~/Work/tools/docs/catalog.json) is built by the root agent from
+# every installed tool's `describe --json`. This is what it relies on.
+description: tools catalog — reads describe --json of every installed tool
+cases:
+  - id: describe-json
+    kind: static
+    description: the catalog runs `<cli> describe --json` and needs exit code 0
+    command: [describe]
+    options: [--json]
+    exit_codes: [0]

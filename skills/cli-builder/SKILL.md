@@ -324,7 +324,13 @@ template, `_commit` is the template release it was last synced to):
    is a clear error) must pass. Schema `cache` and the role's USAGE +
    CREATE on it in production are the infrastructure's — ask through the
    root agent before the release that moves anything.
-9. **Changing `include_auth` / `include_providers`** (`--data
+9. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
+   §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
+   and gains the `contracts` step. `tests/contracts/tools-catalog/` comes
+   with the update; consumers' cases arrive through dev — never write or
+   edit them yourself. A `run` case names a fixture: add it to
+   `tests/conftest.py` when dev asks for it.
+10. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -337,7 +343,7 @@ template, `_commit` is the template release it was last synced to):
    credentials that doesn't use `providers/` answers
    `include_providers=false` instead of deleting `providers/` — deleted
    template files come back on the next update.
-10. If `_commit` is a bare commit hash rather than a tag, the project was
+11. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
 

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rb-consumer-contracts.json",
+  "title": "Consumer contract cases: tests/contracts/<consumer>/*.yaml",
+  "description": "Written by the consumer (through dev), run by the provider's gate (release.py --check, step 'contracts'). Runner: tests/test_contracts.py; documentation: cli-generator architecture.md, 'Consumer contracts'.",
+  "type": "object",
+  "required": ["cases"],
+  "additionalProperties": false,
+  "properties": {
+    "description": {"type": "string", "description": "What the consumer is and what it reads from this tool."},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "family": {
+      "enum": ["text", "integer", "number", "boolean", "date", "datetime", "json", "any"],
+      "description": "Column type family: VARCHAR and TEXT are text, BIGINT is integer, TIMESTAMP WITH TIME ZONE is datetime, ..."
+    },
+    "case": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$", "description": "Unique within the consumer."},
+        "kind": {"enum": ["static", "run", "view"]},
+        "description": {"type": "string"},
+        "provider": {"type": "string", "description": "PEP 440 range of provider versions the case applies to, e.g. '<0.7'."},
+        "command": {"type": "array", "items": {"type": "string"}, "description": "static: command path, e.g. [db, status]; [] is the root."},
+        "options": {"type": "array", "items": {"type": "string"}, "description": "static: options (name or alias) the command has."},
+        "exit_codes": {"type": "array", "items": {"type": "integer"}, "description": "static: exit codes the consumer handles; each must be documented."},
+        "view": {"type": "string", "description": "static, view: a <tool>_v1_* view."},
+        "columns": {"type": "object", "additionalProperties": {"$ref": "#/$defs/family"}, "description": "static, view: column -> type family."},
+        "fixture": {"type": "string", "description": "run: the provider's pytest fixture that makes the command run offline."},
+        "args": {"type": "array", "items": {"type": "string"}, "description": "run: the arguments after the command name."},
+        "exit_code": {"type": "integer", "description": "run: the exit code expected."},
+        "output_schema": {"type": "object", "description": "run: JSON Schema of the --json output, only what the consumer reads."}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "run"}}}, "then": {"required": ["fixture", "args", "exit_code"]}},
+        {"if": {"properties": {"kind": {"const": "view"}}}, "then": {"required": ["view", "columns"]}},
+        {
+          "if": {"properties": {"kind": {"const": "static"}}},
+          "then": {"anyOf": [{"required": ["command"]}, {"required": ["exit_codes"]}, {"required": ["view", "columns"]}]}
+        },
+        {"if": {"required": ["options"]}, "then": {"required": ["command"]}}
+      ]
+    }
+  }
+}

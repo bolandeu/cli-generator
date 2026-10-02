@@ -38,7 +38,10 @@ DOCUMENT = {
                 "name": "x-rb-data",
                 "value": {
                     "views": [
-                        {"name": "x_v1_calls", "columns": [{"name": "model", "type": "TEXT"}, {"name": "n", "type": "INTEGER"}]}
+                        {
+                            "name": "x_v1_calls",
+                            "columns": [{"name": "model", "type": "TEXT"}, {"name": "n", "type": "INTEGER"}],
+                        }
                     ]
                 },
             }
@@ -112,7 +115,9 @@ def test_unknown_fixture_is_a_clear_error(request: pytest.FixtureRequest) -> Non
 
 
 def test_view_columns_by_type_family() -> None:
-    check_view_columns("x_v1_calls", {"model": "text", "at": "datetime"}, {"model": "VARCHAR", "at": "TIMESTAMP", "x": "INTEGER"})
+    check_view_columns(
+        "x_v1_calls", {"model": "text", "at": "datetime"}, {"model": "VARCHAR", "at": "TIMESTAMP", "x": "INTEGER"}
+    )
     with pytest.raises(ContractError, match="column 'at'"):
         check_view_columns("x_v1_calls", {"at": "datetime"}, {"model": "TEXT"})
     assert type_family("TIMESTAMP WITH TIME ZONE") == "datetime"
