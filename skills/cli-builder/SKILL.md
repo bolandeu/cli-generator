@@ -374,7 +374,7 @@ sitting installable-from-nowhere without asking.
 3. **Hand it to the root agent** — the question and the ready repo in one
    message, with the defaults filled in:
    ```bash
-   herdr agent prompt tools-root "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
+   herdr agent prompt tools "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
    ```
    Owner from `gh api user -q .login`, repo name as decided in Scaffold
    step 1 / the refactored project's existing name. **Private** is the
@@ -430,7 +430,7 @@ sitting installable-from-nowhere without asking.
    runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
    towncrier, commits `Release vX.Y.Z` and tags. It never pushes, and
    neither do you: hand the release to the
-   root agent (`herdr agent prompt tools-root "<repo, branch, tags, what's
+   root agent (`herdr agent prompt tools "<repo, branch, tags, what's
    inside, gate result>"`), which pushes after the user's yes. Pick the
    part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
    features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
