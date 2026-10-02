@@ -646,62 +646,78 @@ ssh to the server; a tool's agent hands it the exact command.
 
 What other tools, Windmill flows, the Astro build and the platform rely on in
 a CLI is pinned by **their** tests, run by **its** gate (consumer-driven
-contracts, `~/Work/dev/docs/testing.md`). A consumer writes the cases
-(through dev); the tool's agent never edits them to pass — a case that
-changed or vanished shows up in the gate's `existing tests` list.
+contracts, `~/Work/dev/docs/testing.md`). The consumer writes the contract
+(the source of truth is the consumer's repo, the tool keeps a copy, both
+through dev); the tool's agent never edits it to pass — a contract that
+changed or vanished shows up in the gate's `existing tests` list. The format
+is the consumers'; a change to it goes through the root agent with a reason.
 
-**Where.** `tests/contracts/<consumer>/*.yaml`, one directory per
-consumer, format `tests/contracts/schema.json` (JSON Schema, validated
-before anything runs — a broken file fails naming itself). Runner:
-`tests/test_contracts.py`, one test per case, id `<consumer>:<case id>`.
+**Where.** `tests/contracts/<consumer>/<provider>.yaml` (e.g.
+`tests/contracts/windmill/serp.yaml`), format `contract: 1` in
+`tests/contracts/schema.json` (`$defs/contract`), validated before anything
+runs — a broken file fails naming itself, a contract for another provider
+too. Runner: `tests/test_contracts.py`, one test per check, id
+`<consumer>:<section>:<name>`.
 
 ```yaml
-description: windmill — the SERP flow
-cases:
-  - id: search-json                 # static: from `describe --json`
-    kind: static
-    command: [search]
-    options: [--json, --region]
-    exit_codes: [0, 5]
-  - id: v1-responses
-    kind: static                    # or kind: view — on the test database
-    view: serp_v1_responses
+contract: 1
+consumer: windmill
+provider: serp
+provider_range: ">=0.6,<1.0"     # outside it the contract doesn't apply
+contact: "windmill's agent, through dev"
+static:                          # against `describe --json`
+  commands:
+    - path: [search]
+      arguments: [queries]
+      options: [--engine, --json]
+  root_options: [--version]
+  exit_codes: [0, 1, 2, 3, 5]    # each must be in exitCodes
+  env: [SERP_XMLRIVER_USER]      # each must be in x-rb-env (name or fallback)
+run:                             # the CLI in-process, offline
+  - name: search_json_envelope
+    argv: [search, "{fixture_query}", --cache, --json]
+    exit: 0
+    stdout_json_schema: {type: object, required: [ok, count, results]}
+  - name: auth_missing_is_exit_3
+    argv: [search, "{fixture_query}", --provider, xmlriver, --json]
+    env_unset: [SERP_XMLRIVER_USER]
+    offline_cache: false         # no cache: must fail before the provider
+    exit: 3
+  - name: version
+    argv: [--version]
+    exit: 0
+    stdout_regex: '^\d+\.\d+\.\d+'
+view:                            # describe --json and the migrated test database
+  - name: serp_v1_responses
     columns: {phrase_key: text, region: integer, fetched_at: datetime}
-  - id: search-output
-    kind: run                       # the CLI in-process, on the provider's fixture
-    fixture: offline_xmlriver       # a pytest fixture in this repo's tests/conftest.py
-    args: [search, купить ёлку, --json]
-    exit_code: 0
-    output_schema:                  # only what the consumer reads
-      type: object
-      required: [results]
-  - id: legacy-field
-    kind: static
-    provider: "<0.7"                # applies to provider versions < 0.7 only
-    command: [search]
-    options: [--legacy]
 ```
 
-- `static` — against `describe --json`: the command path exists, has the
-  options (name or alias), each exit code is documented, the view exists
-  with these columns of these type families.
-- `run` — the named fixture is set up (it makes the command offline:
-  recorded responses, a temp project), then `<cli> <args>` runs in-process;
-  the exit code must match and the output must satisfy `output_schema`.
-  Extra fields are fine, a missing required one is not. A fixture this repo
-  doesn't have fails the case with its name.
-- `view` — the view's columns and type families on the migrated test
-  database: SQLite, and PostgreSQL too under `scripts/pg_test.sh`.
-- Type families: `text`, `integer`, `number`, `boolean`, `date`,
-  `datetime`, `json`, `any` (VARCHAR and TEXT are text, BIGINT is integer,
-  TIMESTAMP WITH TIME ZONE is datetime).
-- `provider` — a PEP 440 range; outside it the case is skipped. The gate
-  passes the version being released, so `<0.7` stops applying in the
-  release that makes 0.7.0.
+- `static` — commands (path, positional arguments, options by name or
+  alias), root options, documented exit codes, env var names.
+- `run` — every run is **offline and keyless**: DNS and connections to
+  anything but loopback are refused *and recorded* — a case that tried the
+  network fails even when the CLI caught the error and exited "right" (it
+  must not cost money); every `x-rb-env` variable is unset and the OS
+  keychain disabled; then `env_unset`. `{placeholders}` in `argv` and the
+  offline data come from the tool's own `tests/contracts/fixtures.yaml`
+  (`$defs/fixtures`): `placeholders` (name → value), `offline_cache` (a
+  pytest fixture in `tests/conftest.py` that puts recorded responses / a
+  filled cache / fake keys in place) and `no_cache` (for `offline_cache:
+  false` cases, which must fail before reaching the provider). An unknown
+  placeholder or fixture fails the case naming it. The exit code must
+  match; `stdout_json_schema` (extra fields are fine, a missing required one
+  is not) or `stdout_regex` (re.search).
+- `view` — columns and type families (`text`, `integer`, `number`,
+  `boolean`, `date`, `datetime`, `json`, `any`; VARCHAR is text, BIGINT
+  integer, TIMESTAMP WITH TIME ZONE datetime) in `describe --json` and on
+  the migrated test database: SQLite, PostgreSQL too under
+  `scripts/pg_test.sh`.
+- `provider_range` — PEP 440. The gate passes the version being released,
+  so `<1.0` stops applying in the release that makes 1.0.0.
 
 **Gate.** `release.py --check` runs the contracts as their own step, apart
 from pytest: `contracts ... ok (N cases from K consumers)`; a failure
-prints each failing `<consumer>:<case>` with what exactly is wrong, and the
-release doesn't go out. Every template ships one real case:
-`tests/contracts/tools-catalog/describe.yaml` — the tools catalog reads
-`describe --json`.
+prints each failing `<consumer>:<section>:<name>` with what exactly is
+wrong, and the release doesn't go out. Every template ships one real
+contract: `tests/contracts/tools-catalog/<cli>.yaml` — the tools catalog
+reads `describe --json`.

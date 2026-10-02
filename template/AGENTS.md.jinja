@@ -35,10 +35,10 @@ fix the cause, never skip the step.
    release through.
 3. **The bar is set by others.** Acceptance scenarios are written by dev
    with the user, contract tests (`--json`, exit codes, `v1` views) by the
-   consumer — `tests/contracts/<consumer>/*.yaml` (cli-generator
-   `architecture.md` §13). You write the unit tests and the offline
-   fixtures `run` cases name, and pass everyone's; a consumer's case is
-   never edited to pass.
+   consumer — `tests/contracts/<consumer>/<this tool>.yaml` (cli-generator
+   `architecture.md` §13). You write the unit tests and the offline data
+   the consumers' `run` cases need (`tests/contracts/fixtures.yaml`), and
+   pass everyone's; a consumer's contract is never edited to pass.
 4. **Mutation testing**, now and then and before a big release (not in
    the gate): `uv run --group mutation mutmut run`, then `mutmut results`
    / `mutmut browse` — a surviving mutant is a line no test really checks.

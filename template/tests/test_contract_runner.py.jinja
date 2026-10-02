@@ -15,6 +15,7 @@ import typer
 from tests.test_contracts import (
     ContractError,
     applies,
+    case_ids,
     check_env,
     check_exit_codes,
     check_output,
@@ -24,7 +25,6 @@ from tests.test_contracts import (
     expand_argv,
     load_contracts,
     run_case,
-    case_ids,
     type_family,
 )
 
@@ -194,7 +194,7 @@ def _probe() -> typer.Typer:
 
 def test_a_case_that_reaches_the_network_fails_even_if_the_cli_catches_it(request: pytest.FixtureRequest) -> None:
     for argv in (["fetch"], ["fetch", "--swallow"]):
-        with pytest.raises(ContractError, match="tried the network: example.com"):
+        with pytest.raises(ContractError, match=r"tried the network: example\.com"):
             run_case({"argv": argv, "exit": 5}, request, {}, app=_probe(), document=DOCUMENT)
 
 

@@ -326,10 +326,12 @@ template, `_commit` is the template release it was last synced to):
    root agent before the release that moves anything.
 9. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
    §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
-   and gains the `contracts` step. `tests/contracts/tools-catalog/` comes
-   with the update; consumers' cases arrive through dev — never write or
-   edit them yourself. A `run` case names a fixture: add it to
-   `tests/conftest.py` when dev asks for it.
+   and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
+   and `tests/contracts/fixtures.yaml` come with the update; consumers'
+   contracts arrive through dev — never write or edit them yourself. Their
+   `run` cases need this tool's offline data: fill `fixtures.yaml`
+   (`placeholders`, `offline_cache`/`no_cache` fixtures in
+   `tests/conftest.py`) — runs have no network and no real keys.
 10. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
