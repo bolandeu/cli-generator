@@ -35,7 +35,7 @@ session without the flag), then ask for either:
   (works on a feature branch, never directly on main — see SKILL.md step 0)
 
 Both modes end by offering to publish: the skill prepares the local repo
-and hands it to the root tools agent, which creates a **private** GitHub
+and reports it to the root tools agent; dev creates a **private** GitHub
 repo and pushes after your yes; the skill then verifies that
 `uv tool install "git+https://github.com/<owner>/<repo>.git"` works from
 there — the one-command install every generated README/SKILL.md points

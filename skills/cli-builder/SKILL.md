@@ -348,11 +348,11 @@ with one command and no PyPI account —
 uv tool install "git+https://github.com/<owner>/<repo>.git"
 ```
 
-Do this after the verify step. You prepare everything locally; whatever
-touches GitHub — creating the repo, every push, the ruleset — is done by
-the root agent (`~/Work/tools/`) after the user's yes. One rule, no
-exceptions: you never run `gh repo create`, `git push` or anything else
-that writes to GitHub. Always *offer* publishing; don't leave the package
+Do this after the verify step. You prepare everything locally and report
+it to the root agent `tools`; whatever touches GitHub — creating the repo,
+the first and every later push, the ruleset — is done by dev after the
+user's yes. One rule, no exceptions: you never run `gh repo create`,
+`git push` or anything else that writes to GitHub. Always *offer* publishing; don't leave the package
 sitting installable-from-nowhere without asking.
 
 1. **Prove it's installable locally first.** This catches packaging
@@ -371,20 +371,21 @@ sitting installable-from-nowhere without asking.
    In Refactor mode you're on a feature branch; merging it is the user's
    call. Fill in the repo URL now (step 5) so the first push already
    carries it.
-3. **Hand it to the root agent** — the question and the ready repo in one
-   message, with the defaults filled in:
+3. **Report it to the root agent** — the ready repo and the request in
+   one message, with the defaults filled in:
    ```bash
-   herdr agent prompt tools "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
+   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. Create private GitHub repo <owner>/<repo> and push main + tags? Inside: <what>. Gate: <release.py --check result>. CI: <yes/no>, private_deps: <yes/no>."
    ```
    Owner from `gh api user -q .login`, repo name as decided in Scaffold
    step 1 / the refactored project's existing name. **Private** is the
    default, not an option to bring up: these CLIs typically hold
    account-specific provider logic, and `uv tool install` works from a
    private repo just as well (step 6); `--public` only if the user says so.
-   The root agent asks the user, then runs `gh repo create <owner>/<repo>
-   --private --source=. --remote=origin --push` and pushes the tags. While
-   you wait, do whatever doesn't depend on it. If the user declines, tell
-   the root agent the placeholder in README.md and
+   The root agent checks it and queues it for dev; dev shows the user and,
+   after their yes, creates the repo and makes the first push
+   (`gh repo create <owner>/<repo> --private --source=. --remote=origin
+   --push`, then the tags). While you wait, do whatever doesn't depend on
+   it. If the user declines, tell the root agent the placeholder in README.md and
    `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
    don't silently leave it.
 4. **CI and its secret** go into that same message. CI is optional (it
@@ -394,7 +395,7 @@ sitting installable-from-nowhere without asking.
    needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
    (fine-grained, Contents: read on those repos) — without it CI can't
    fetch them (standard §9); the user creates the secret, never you. If CI
-   stays, ask the root agent to add the ruleset that requires the `test`
+   stays, ask (through the root agent) for the ruleset that requires the `test`
    check and forbids force-pushes on `main` (on a personal free plan
    GitHub refuses it for private repos with HTTP 403 "Upgrade" — expected).
 5. **Make sure the package knows its own URL.** In Scaffold mode with
@@ -406,7 +407,7 @@ sitting installable-from-nowhere without asking.
    reads, so without this the next update would render the placeholder
    back. Commit these edits before step 3.
 6. **Verify from GitHub, not from the checkout**, once the root agent
-   reports the push — this is the command
+   reports that dev pushed — this is the command
    every other machine (and every agent reading the bundled SKILL.md)
    will run:
    ```bash
@@ -429,9 +430,9 @@ sitting installable-from-nowhere without asking.
    from a clean, up-to-date `main` with fragments in `changelog.d/`. It
    runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
    towncrier, commits `Release vX.Y.Z` and tags. It never pushes, and
-   neither do you: hand the release to the
-   root agent (`herdr agent prompt tools "<repo, branch, tags, what's
-   inside, gate result>"`), which pushes after the user's yes. Pick the
+   neither do you: report each release tag separately to the root agent
+   (`~/Work/tools/scripts/agent_say.sh tools "<repo, branch, tags, what's
+   inside, release.py --check result>"`); dev pushes after the user's yes. Pick the
    part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
    features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
    section — one fragment per change, `release.py` when it should ship.

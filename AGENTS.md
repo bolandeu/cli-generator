@@ -29,6 +29,15 @@ If you're changing what generated CLIs look like, change `architecture.md`
 and `template/` together, in the same commit — a template change that
 contradicts the documented contract is a bug.
 
+## Releasing this repo
+
+A template change ships as an annotated tag `vX.Y.Z` (PEP 440, see
+Known sharp edges) on a commit `vX.Y.Z: <what>`. Nobody here pushes: report each
+tag separately to the root agent — `~/Work/tools/scripts/agent_say.sh
+tools "<repo, branch, tag, what's inside, gate result>"`, the gate being
+the regeneration loop below for both `include_auth`/`include_db`
+variants. It queues the release for dev, who pushes after the user's yes.
+
 ## Testing a change to `template/`
 
 Never trust a template edit without regenerating and running it — a
@@ -76,7 +85,8 @@ verify against a local bare remote rather than assuming: `git init --bare
 `git tag -a v0.1.0 -m v0.1.0` (`uv run <cli> --version` must now print
 `0.1.0`, not `0.0.0…`), push `main` with `-u`, add a fragment
 (`uv run towncrier create +x.fixed.md -c x`), commit, run
-`uv run scripts/release.py patch`, `git push --follow-tags`, then
+`uv run scripts/release.py patch`, `git push --follow-tags` (to that local
+bare remote only — never GitHub), then
 `uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
 The release process itself is specified in
 `~/Work/tools/docs/standard-release.md` (owned by the tools/ root
