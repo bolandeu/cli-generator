@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -202,10 +201,15 @@ def test_antagor_project_config() -> None:
 
 
 def test_antagor_layout() -> None:
-    # The method's layout (`antagor layout check`): the glossary, the review rules and the decisions in their own files.
+    # The method's layout: AGENTS.md holds pointers only, the rules live in their own files (`antagor layout check` runs in check_template.sh).
     root = SCRIPTS.parent
-    for name in ("AGENTS.md", "CONTEXT.md", "CODING_STANDARDS.md", "docs/adr/README.md"):
+    for name in ("AGENTS.md", "CLAUDE.md", "CONTEXT.md", "CODING_STANDARDS.md", "docs/adr/README.md"):
         assert (root / name).is_file(), name
+    agents = (root / "AGENTS.md").read_text()
+    for pointer in ("`CONTEXT.md`", "`docs/adr/`", "`CODING_STANDARDS.md`", "`.agents/antagor/`"):
+        assert pointer in agents
+    assert len(agents.splitlines()) <= 12
+    assert "AGENTS.md" in (root / "CLAUDE.md").read_text()
     context = (root / "CONTEXT.md").read_text()
     assert re.fullmatch(r"# \S.*", context.splitlines()[0])
     assert re.search(r"^\*\*[^*]+\*\*:$", re.sub(r"<!--.*?-->", "", context, flags=re.DOTALL), re.MULTILINE)
@@ -213,11 +217,3 @@ def test_antagor_layout() -> None:
     assert "antagor publish" in readme
     assert "install_hooks" not in readme
     assert "towncrier" not in readme
-    if shutil.which("antagor"):
-        result = subprocess.run(  # noqa: S603
-            ["antagor", "-C", str(root), "layout", "check"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr

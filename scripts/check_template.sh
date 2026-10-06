@@ -15,6 +15,11 @@ run() {
     "$@" || { printf '\nFAILED [%s]: %s\n' "$VARIANT" "$*" >&2; exit 1; }
 }
 
+command -v antagor >/dev/null 2>&1 || {
+    echo "antagor не найден в PATH: нужен для antagor layout check" >&2
+    exit 1
+}
+
 check_variant() {
     VARIANT=$1
     dest="$WORK/$VARIANT"
@@ -33,6 +38,7 @@ check_variant() {
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m i
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0
     run uv run scripts/release.py --check
+    run antagor -C "$dest" layout check
     cd "$ROOT"
 }
 
