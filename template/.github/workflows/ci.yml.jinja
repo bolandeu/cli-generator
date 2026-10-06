@@ -49,6 +49,6 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       # Everything: lock, lint, format, types, tests (incl. help snapshots and
-      # the auth status shape), changelog fragment, wheel build + install +
+      # the auth status shape), wheel build + install +
       # `{{ cli_name }} --version` / `--help`, osv-scanner over uv.lock.
       - run: uv run scripts/release.py --check

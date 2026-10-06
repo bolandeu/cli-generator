@@ -2,7 +2,8 @@
 """The quality gate and the release, in one place.
 
     uv run scripts/release.py --check              run the full gate, release nothing
-    uv run scripts/release.py patch|minor|major    gate, assemble the changelog, commit, tag
+
+Tagging and the changelog belong to `antagor publish --bump`, not to this script.
 
 This local gate is the authoritative check (tools/docs/standard-release.md
 §3): agents run `--check` before committing, CI (if any) runs `--check`,
@@ -21,9 +22,7 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     into the release report with its reason, `tools/dev` reject it without one) ·
     external dependencies (every program src/ runs is declared in
     [[tool.rb.external]] and vice versa) ·
-    changelog fragment (at least one in changelog.d/ when anything user-visible
-    changed since the last tag — not uv.lock, .github/, scripts/, tests/,
-    .githooks/, .claude/, AGENTS.md, CLAUDE.md) · build the wheel and install
+    build the wheel and install
     it into a throwaway venv with exactly the uv.lock dependency set (`uv export`,
     then the wheel with --no-deps, then `uv pip check` — never resolving from
     an index, so git-sourced deps can't be swapped for a same-named PyPI
@@ -34,15 +33,11 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     notice when osv-scanner isn't installed)
 
 The version lives only in git tags (`vX.Y.Z`, read at build time by
-uv-dynamic-versioning); a release bumps the last `v*` tag by `part`. Releasing
-refuses off `main`, on a dirty tree, when `main` is behind its upstream, or
-with no fragments. It never pushes, nor does any agent here: the release is
-reported to the root agent `tools`, and dev pushes it after the user's yes.
+uv-dynamic-versioning).
 
 Settings in pyproject.toml `[tool.cli-generator]` (so the script itself stays
 verbatim): `gate_extras = ["x"]` runs ruff/ty/pytest with those extras
-installed; `release_commit = "chore(release): v{version}"` sets the release
-commit message (default "Release v{version}").
+installed.
 
 Canonical copy: cli-generator `template/scripts/release.py`. Other repos
 copy it verbatim instead of editing it.
@@ -70,24 +65,13 @@ def _tool(name: str) -> dict:
     return tomllib.loads((ROOT / "pyproject.toml").read_text()).get("tool", {}).get(name, {})
 
 
-def _towncrier() -> dict:
-    return _tool("towncrier")
-
-
 def gate_extras() -> list[str]:
     """`[tool.cli-generator] gate_extras`: optional-dependency extras the gate installs, so their tests run."""
     return list(_tool("cli-generator").get("gate_extras", []))
 
 
-def release_commit_message(version: str) -> str:
-    """`[tool.cli-generator] release_commit` (e.g. "chore(release): v{version}" for Conventional Commits)."""
-    return _tool("cli-generator").get("release_commit", "Release v{version}").format(version=version)
-
-
-FRAGMENTS = ROOT / _towncrier().get("directory", "changelog.d")
 CONTRACT_TESTS = "tests/test_contracts.py"
 VERSION_ENV = "RB_PROVIDER_VERSION"  # tests/test_contracts.py: the version being built, for `provider:` ranges
-PARTS = ("patch", "minor", "major")
 COMMANDS = (
     ("uv lock --check", ("uv", "lock", "--check")),
     ("ruff check", ("uv", "run", "ruff", "check", ".")),
@@ -96,48 +80,9 @@ COMMANDS = (
     ("pytest", ("uv", "run", "pytest", f"--ignore={CONTRACT_TESTS}")),  # contracts: their own step
 )
 AUDIT_STEP = "vulnerability audit"
-EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, fragment, wheel
+EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
 EXIT_AUDIT_FAILED = 3  # only the osv-scanner audit: the code is fine, a dependency has a known vulnerability
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-
-# Changes that never need a changelog fragment (standard §3): they don't
-# change what users of the package get. Keep this list identical in
-# scripts/release.py and scripts/check_changelog_fragment.py (a test checks).
-NO_FRAGMENT_NEEDED = (
-    "uv.lock",
-    ".github/",
-    "scripts/",
-    "tests/",
-    "docs/",
-    ".githooks/",
-    ".claude/",
-    "AGENTS.md",
-    "CLAUDE.md",
-)
-
-
-def needs_fragment(path: str) -> bool:
-    """Whether a change to `path` (repo-relative, POSIX) is user-visible enough to need a fragment."""
-    return not any(path == entry or (entry.endswith("/") and path.startswith(entry)) for entry in NO_FRAGMENT_NEEDED)
-
-
-def project_table_changed(old: str | None, new: str | None) -> bool:
-    """Whether pyproject.toml's [project] table differs — the package metadata users get.
-
-    Everything else in pyproject.toml ([tool.*], [dependency-groups], build
-    settings) is tooling and needs no changelog fragment (standard §3).
-    Unreadable or missing on either side counts as changed.
-    """
-    try:
-        import tomllib
-    except ModuleNotFoundError:  # a pre-commit hook's python3 older than 3.11
-        return True
-    if old is None or new is None:
-        return True
-    try:
-        return tomllib.loads(old).get("project") != tomllib.loads(new).get("project")
-    except tomllib.TOMLDecodeError:
-        return True
 
 
 class StepFailed(Exception):
@@ -169,15 +114,6 @@ def tags() -> list[tuple[int, int, int]]:
     result = subprocess.run(["git", "tag", "--list", "v*"], cwd=ROOT, text=True, capture_output=True, check=False)
     listed = result.stdout.split()  # not a git repo yet (fresh scaffold): no tags
     return sorted((int(m[1]), int(m[2]), int(m[3])) for t in listed if (m := TAG_RE.match(t)))
-
-
-def changelog_file() -> str:
-    """Where towncrier writes: `[tool.towncrier] filename` (default CHANGELOG.md)."""
-    return _towncrier().get("filename", "CHANGELOG.md")
-
-
-def fragments() -> list[Path]:
-    return [p for p in FRAGMENTS.glob("*") if p.is_file() and not p.name.startswith(".")]
 
 
 # --- gate steps ----------------------------------------------------------------
@@ -256,40 +192,6 @@ def check_external_deps() -> str:
     if not declared:
         return "none used, none declared"
     return f"{len(declared)} declared, all used" + (f" ({len(hidden)} with detect = false)" if hidden else "")
-
-
-def _tooling_only_pyproject(path: str, tag: str) -> bool:
-    if path != "pyproject.toml":
-        return False
-    old = subprocess.run(
-        ["git", "show", f"{tag}:pyproject.toml"], cwd=ROOT, text=True, capture_output=True, check=False
-    )
-    return not project_table_changed(old.stdout if old.returncode == 0 else None, (ROOT / path).read_text())
-
-
-def check_fragment() -> str:
-    # Looks at the working tree, not commits: `towncrier check` only sees
-    # committed files, and agents run --check before committing.
-    if found := fragments():
-        return f"{len(found)} fragment(s)"
-    versions = tags()
-    if versions:
-        last = "v{}.{}.{}".format(*versions[-1])
-        changed = _changed_since(last)
-        if not changed:
-            return f"nothing changed since {last}"
-        if not any(needs_fragment(path) for path in changed if not _tooling_only_pyproject(path, last)):
-            return (
-                f"only tooling changed since {last} ({', '.join(NO_FRAGMENT_NEEDED)}, pyproject.toml outside [project])"
-            )
-        since = f"since {last}"
-    else:
-        since = "and there is no release tag yet"
-    raise StepFailed(
-        f"changes exist {since} but changelog.d/ has no fragment. Add one:\n"
-        '  uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."\n'
-        "  (type: added/changed/deprecated/removed/fixed/security)"
-    )
 
 
 def _top_level(source: str) -> tuple[dict[str, str], list[str]]:
@@ -490,7 +392,6 @@ def run_gate(version: str | None) -> None:
         ("contracts", lambda: check_contracts(version)),
         ("existing tests", check_existing_tests),
         ("external dependencies", check_external_deps),
-        ("changelog fragment", check_fragment),
         ("build + install wheel", lambda: check_installed_wheel(version)),
         (AUDIT_STEP, check_vulnerabilities),
     ]
@@ -509,91 +410,12 @@ def run_gate(version: str | None) -> None:
         print(f"ok ({detail})" if detail else "ok", flush=True)
 
 
-# --- release -------------------------------------------------------------------
-
-
-def check_branch() -> None:
-    if run("git", "rev-parse", "--abbrev-ref", "HEAD", capture=True) != "main":
-        fail("releases are cut from main")
-    if run("git", "status", "--porcelain", capture=True):
-        fail("working tree is not clean — commit or stash first")
-    run("git", "fetch", "--quiet")
-    try:
-        counts = run("git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}", capture=True)
-    except subprocess.CalledProcessError:
-        fail("main has no upstream — push it first (git push -u origin main)")
-    _, behind = counts.split()
-    if int(behind):
-        fail(f"main is {behind} commit(s) behind its upstream — pull first")
-
-
-def repository_url() -> str | None:
-    """`[project.urls] Repository` (copier's repository_url), else `origin` as an https URL."""
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text()).get("project", {})
-    url = project.get("urls", {}).get("Repository")
-    if not url:
-        origin = subprocess.run(
-            ["git", "remote", "get-url", "origin"], cwd=ROOT, text=True, capture_output=True, check=False
-        )
-        url = origin.stdout.strip() if origin.returncode == 0 else None
-    return normalize_repo_url(url) if url else None
-
-
-def normalize_repo_url(url: str) -> str:
-    """git@github.com:o/r.git / https://github.com/o/r.git -> https://github.com/o/r."""
-    return re.sub(r"^git@([^:]+):", r"https://\1/", url).removesuffix(".git")
-
-
-def install_command(tag: str) -> str:
-    """The pinned install line to hand out after a release: "<dist> @ git+<url>.git@<tag>"."""
-    dist = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["name"]
-    url = repository_url() or "https://github.com/<owner>/<repo>"
-    return f'uv tool install "{dist} @ git+{url}.git@{tag}"'
-
-
-def next_version(part: str) -> str:
-    versions = tags()
-    if not versions:
-        fail("no vX.Y.Z tag yet — tag the current version first: git tag -a v0.1.0 -m v0.1.0")
-    major, minor, patch = versions[-1]
-    if part == "major":
-        return f"{major + 1}.0.0"
-    if part == "minor":
-        return f"{major}.{minor + 1}.0"
-    return f"{major}.{minor}.{patch + 1}"
-
-
 def main() -> None:
-    arg = sys.argv[1] if len(sys.argv) == 2 else ""
-    if arg == "--check":
-        run_gate(None)
-        print("release: gate passed")
-        return
-    if arg not in PARTS:
+    if sys.argv[1:] != ["--check"]:
         print(__doc__, file=sys.stderr)
         raise SystemExit(2)
-    check_branch()
-    if not fragments():
-        fail("changelog.d/ has no fragments — nothing to release (uv run towncrier create +<slug>.<type>.md -c '...')")
-    version = next_version(arg)
-    tag = f"v{version}"
-    if run("git", "tag", "--list", tag, capture=True):
-        fail(f"tag {tag} already exists")
-    run_gate(version)
-
-    run(
-        "uv", "run", "towncrier", "build", "--version", version, "--yes"
-    )  # writes changelog_file(), `git rm`s fragments
-    run("git", "add", "--all", changelog_file(), *([str(FRAGMENTS)] if FRAGMENTS.exists() else []))
-    run("git", "commit", "-m", release_commit_message(version))
-    run("git", "tag", "-a", tag, "-m", tag)
-    print(
-        f"Released {tag} locally. Report it to tools: agent_say.sh tools "
-        "(repo, branch, tags, what is inside, release.py --check). dev pushes after the user's yes.\n"
-        "TDD in the report: the failing (red) run of the new tests, committed before the code; "
-        "every entry of 'existing tests' above with its reason."
-    )
-    print(f"Then install it anywhere with: {install_command(tag)}")
+    run_gate(None)
+    print("release: gate passed")
 
 
 if __name__ == "__main__":
