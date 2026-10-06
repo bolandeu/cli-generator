@@ -77,12 +77,16 @@ order before moving to the next item.
     (→ tag the current version first if untagged, `git tag -a vX.Y.Z -m
     vX.Y.Z <sha>`, then `dynamic = ["version"]` + uv-dynamic-versioning +
     `[tool.uv] cache-keys`, runtime via `importlib.metadata`); a
-    hand-edited `CHANGELOG.md` / `## [Unreleased]` section (→ towncrier
-    config, the start marker above the newest release, unreleased entries
-    moved into `changelog.d/` fragments — except for a package that has
-    **never been released** (no `v*` tag): when it gets its first tag
-    `vX.Y.Z`, rename `## [Unreleased]` to `## [X.Y.Z] - <date>` instead,
-    since those changes ship in that tag); a `scripts/release.py` that
+    hand-edited `CHANGELOG.md` / `## [Unreleased]` section, or towncrier
+    (config, `changelog.d/`) — the changelog is written by `antagor
+    publish` from ticket titles; except for a package that has **never
+    been released** (no `v*` tag): when it gets its first tag `vX.Y.Z`,
+    rename `## [Unreleased]` to `## [X.Y.Z] - <date>` instead, since those
+    changes ship in that tag; `.githooks/`, `scripts/install_hooks.sh`,
+    `core.hooksPath` or `herdr_name` files (→ delete, `antagor hooks
+    install`; SKILL.md Update mode); no `.agents/antagor/antagor.toml`
+    (→ `antagor init --prefix <PREFIX> --name <cli_name>`, `checks`,
+    `[publish]` as in the template, `scripts/deploy.sh`); a `scripts/release.py` that
     isn't the template's verbatim copy; `ruff check --fix` run without
     re-checking imports afterwards (F401's autofix deletes "unused"
     imports that are really re-exports a lazy `from … import` inside a
@@ -111,8 +115,8 @@ order before moving to the next item.
     (`architecture.md` §5): no `tests/test_help.py` + `tests/snapshots/help/`
     (copy the test, then `uv run pytest --snapshot-update` and read every
     generated page — it's usually the first time anyone has), no
-    `.claude/settings.json` hooks + `scripts/check_command_docstrings.py`,
-    no versioned `.githooks/pre-commit`. Commands missing an `Example:`
+    `scripts/check_command_docstrings.py` in the `checks` of
+    `antagor.toml`. Commands missing an `Example:`
     line or a parameter `help=` are fixed here, not waived. Also fail if `pyproject.toml` has no coverage
     `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
     step — copy all three from the template, along with

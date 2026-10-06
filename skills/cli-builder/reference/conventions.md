@@ -180,7 +180,7 @@ tools use for us):
 | anything removed, renamed or changed (breaking) | minor `0.2 → 0.3` |
 
 Deprecate before removing: keep the old form working with a warning on
-stderr, add a `deprecated` changelog fragment, remove it in the next
+stderr, name the deprecation in the ticket title, remove it in the next
 breaking release.
 
 ## Command surface every generated CLI starts with
