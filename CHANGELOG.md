@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.15.0 — 2026-10-06
+
+### Changed
+
+- Идея: линтер или check для правил httpx-вне-providers и print() (CG-011)
+- Шаблон: тест AGENTS.md без магического числа, FAILED в check_template.sh (CG-013)
+
+### Documentation
+
+- Навык: Update mode для проекта со старым скриптом релиза и деплоя (CG-012)
+
 ## v1.14.0 — 2026-10-06
 
 ### Changed
