@@ -274,27 +274,39 @@ template, `_commit` is the template release it was last synced to):
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
    report instead of working around it.
 5. **Crossing the Antagor template** (release by `antagor publish`, no
-   towncrier, no hand-made hooks). A project on an older template moves
-   like this:
-   1. Delete `.githooks/`, `scripts/install_hooks.sh`, the
+   towncrier, no hand-made hooks). Use it for a project with its own old
+   release: towncrier and fragments, `.githooks/`, `scripts/release.py
+   patch|minor|major`, and a pre-push hook that pushes and notifies tools.
+   Move it in this order:
+   1. Hooks. Delete `.githooks/`, `scripts/install_hooks.sh`, the
       `.claude/settings.json` hooks and `herdr_name` files, and run
-      `git config --unset core.hooksPath`.
-   2. Remove `towncrier` from `pyproject.toml` (the `[tool.towncrier]`
-      table and the dev dependency), delete `changelog.d/` and the
+      `git config --unset core.hooksPath`. Then run `antagor hooks install`
+      (it installs Antagor's pre-commit, post-commit and pre-push hooks and
+      refuses while `core.hooksPath` is set).
+   2. Towncrier and the old release command. Remove `towncrier` from
+      `pyproject.toml` (the `[tool.towncrier]` table and the dev
+      dependency), delete `changelog.d/` and the
       `<!-- towncrier release notes start -->` marker. Keep the released
       sections of `CHANGELOG.md`: Antagor adds new sections above them.
       Delete a `## [Unreleased]` heading. If the package has **never been
       released** (no `v*` tag), rename it to `## [X.Y.Z] - <date>`
-      instead, because its first tag already contains those changes.
-   3. Take `.agents/antagor/antagor.toml`, `scripts/deploy.sh` and
-      `scripts/release.py` from the template (`copier update` brings
-      them). Check `prefix` and `name` in `antagor.toml`; the project may
-      not have the `antagor_prefix` answer yet, so pass
-      `--data antagor_prefix=<PREFIX>`.
-   4. Run `antagor hooks install` (it installs Antagor's pre-commit,
-      post-commit and pre-push hooks and refuses while `core.hooksPath`
-      is set), then `uv lock`, then the gate.
-   5. From now on every change is a ticket and a release is
+      instead, because its first tag already contains those changes. Remove
+      the `patch|minor|major` modes from `scripts/release.py`; keep only
+      `--check` (the template's `release.py` is verbatim: take it).
+   3. Deploy. Take `scripts/deploy.sh` from the template. It does the same
+      as the old pre-push hook: push, then notify tools. Do not keep that
+      logic in a hook.
+   4. Antagor config. Take `.agents/antagor/antagor.toml` from the template
+      (`copier update` brings it, with `scripts/deploy.sh` and
+      `scripts/release.py`). Check `prefix` and `name`; the project may not
+      have the `antagor_prefix` answer yet, so pass
+      `--data antagor_prefix=<PREFIX>`. In `[publish]` set
+      `versioning = "semver"`, `changelog = "CHANGELOG.md"` and
+      `deploy_command = "sh scripts/deploy.sh"`.
+   5. Checks. Set `checks = ["python3 scripts/check_command_docstrings.py",
+      "uv run scripts/release.py --check"]`: the command docstring check
+      and `release.py --check`. Then run `uv lock` and the gate.
+   6. From now on every change is a ticket and a release is
       `antagor publish --bump patch|minor|major` (Publish step 7).
 6. **Crossing template v1.2.6** (credential namespace = command name).
    Keychain service and env vars moved from the package name to
