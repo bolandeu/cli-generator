@@ -56,6 +56,15 @@ cli_name:
     cli_name must be lowercase letters, digits, '-' or '_'
     {% endif %}
 
+antagor_prefix:
+  type: str
+  help: "Antagor ticket prefix: 2-4 capital letters (tickets are <PREFIX>-001)"
+  default: "{{ (cli_name | upper | regex_replace('[^A-Z]', ''))[:3] }}"
+  validator: >-
+    {% if not (antagor_prefix | regex_search('^[A-Z]{2,4}$')) %}
+    antagor_prefix must be 2-4 capital letters
+    {% endif %}
+
 dist_name:
   type: str
   help: "Distribution name ([project] name; what `uv tool install` and dependencies use). Standard §10: rb-<slug> for import package rb_<slug>"

@@ -178,3 +178,23 @@ def test_gate_runs_contracts_as_their_own_step() -> None:
     pytest_step = dict(release.COMMANDS)["pytest"]
     assert "--ignore=tests/test_contracts.py" in pytest_step
     assert release.check_contracts.__name__ == "check_contracts"
+
+
+def test_antagor_project_config() -> None:
+    import tomllib
+
+    root = SCRIPTS.parent
+    config = tomllib.loads((root / ".agents" / "antagor" / "antagor.toml").read_text())
+    assert config["schema"] == 1
+    assert re.fullmatch(r"[A-Z]{2,4}", config["prefix"])
+    assert config["worker"] == "claude-code"
+    assert config["checks"] == ["python3 scripts/check_command_docstrings.py", "uv run scripts/release.py --check"]
+    assert config["review"]["required_types"] == ["feature", "bugfix"]
+    assert config["publish"] == {
+        "versioning": "semver",
+        "changelog": "CHANGELOG.md",
+        "deploy_command": "sh scripts/deploy.sh",
+    }
+    assert "mode" not in config
+    assert (root / ".agents" / "antagor" / ".gitignore").read_text().split() == ["state/", "receipts/"]
+    assert "ANTAGOR_VERSION" in (SCRIPTS / "deploy.sh").read_text()
