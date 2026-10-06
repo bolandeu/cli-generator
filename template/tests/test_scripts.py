@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -198,3 +199,25 @@ def test_antagor_project_config() -> None:
     assert "mode" not in config
     assert (root / ".agents" / "antagor" / ".gitignore").read_text().split() == ["state/", "receipts/"]
     assert "ANTAGOR_VERSION" in (SCRIPTS / "deploy.sh").read_text()
+
+
+def test_antagor_layout() -> None:
+    # The method's layout (`antagor layout check`): the glossary, the review rules and the decisions in their own files.
+    root = SCRIPTS.parent
+    for name in ("AGENTS.md", "CONTEXT.md", "CODING_STANDARDS.md", "docs/adr/README.md"):
+        assert (root / name).is_file(), name
+    context = (root / "CONTEXT.md").read_text()
+    assert re.fullmatch(r"# \S.*", context.splitlines()[0])
+    assert re.search(r"^\*\*[^*]+\*\*:$", re.sub(r"<!--.*?-->", "", context, flags=re.DOTALL), re.MULTILINE)
+    readme = (root / "README.md").read_text()
+    assert "antagor publish" in readme
+    assert "install_hooks" not in readme
+    assert "towncrier" not in readme
+    if shutil.which("antagor"):
+        result = subprocess.run(  # noqa: S603
+            ["antagor", "-C", str(root), "layout", "check"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr

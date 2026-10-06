@@ -8,7 +8,6 @@
 uv sync
 uv run {{ cli_name }} --help
 uv run scripts/release.py --check   # the full gate (what releases and CI run)
-scripts/install_hooks.sh  # once per clone: git uses the versioned hooks in .githooks/
 uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
 ```
 
@@ -21,17 +20,15 @@ and says it skipped the scan otherwise. CI is optional and only repeats
 ## Release
 
 The version is the git tag (`vX.Y.Z`) — `pyproject.toml` has no `version =`.
-Each change adds a changelog fragment instead of editing `CHANGELOG.md`:
+Work goes through Antagor tickets (`.agents/antagor/`); a release (run by the Human) is
 
 ```bash
-uv run towncrier create +<slug>.<type>.md -c "What changed, for a human reader."
-uv run scripts/release.py patch   # or minor / major (SemVer; at 0.x: patch = fix/feature, minor = breaking)
-# then the root tools agent pushes it (git push --follow-tags) after your yes
+antagor publish --bump   # SemVer; at 0.x: patch = fix/feature, minor = breaking
 ```
 
-`release.py` refuses off `main`, on a dirty tree or behind the remote, runs
-the full gate (the same as `--check`; any failing step aborts the release), assembles `CHANGELOG.md` from `changelog.d/`, commits
-`Release vX.Y.Z` and tags it; pushing goes through the root tools agent.
+It tags the release, builds `CHANGELOG.md` from the ticket titles and runs
+`scripts/deploy.sh`: push `main` with tags, then report the release to the
+root tools agent. Nobody tags or pushes by hand.
 
 ## Install
 
@@ -53,7 +50,7 @@ uv tool install "{{ dist_name }} @ git+https://github.com/<owner>/<repo>.git@vX.
 ```
 
 Replace `vX.Y.Z` with the latest release tag (a tag cut by
-`scripts/release.py`; never install a branch). This is also how an AI agent
+`antagor publish`; never install a branch). This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
 yet — see `src/{{ package_name }}/data/SKILL.md`.
 
