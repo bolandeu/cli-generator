@@ -208,7 +208,8 @@ def test_antagor_layout() -> None:
     agents = (root / "AGENTS.md").read_text()
     for pointer in ("`CONTEXT.md`", "`docs/adr/`", "`CODING_STANDARDS.md`", "`.agents/antagor/`"):
         assert pointer in agents
-    assert len(agents.splitlines()) <= 12
+    for moved in ("TDD", "--dry-run", "expand/contract"):
+        assert moved not in agents, moved
     assert "AGENTS.md" in (root / "CLAUDE.md").read_text()
     context = (root / "CONTEXT.md").read_text()
     assert re.fullmatch(r"# \S.*", context.splitlines()[0])
