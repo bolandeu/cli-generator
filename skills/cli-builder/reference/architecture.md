@@ -303,9 +303,8 @@ signature + body without the docstring, compared with `HEAD`):
    Snapshots contain the CLI's name, so copier renders them at `copier
    copy` time (`_tasks`) instead of shipping them.
 
-Antagor's own git hooks (`antagor hooks install`) guard commits and
-pushes; the project keeps no `.githooks/` and sets no `core.hooksPath`.
-The docstring check blocks a ticket that breaks it. For a change that
+The project keeps no `.githooks/` and sets no `core.hooksPath`: Antagor's
+git hooks (`antagor hooks install`) only work without it. For a change that
 truly doesn't alter behaviour an **agent** keeps the command body
 AST-identical — a lint/type fix goes in as a `# noqa` / `# ty: ignore[...]`
 comment, which doesn't change the AST — instead of the
@@ -392,10 +391,10 @@ the template implements it):
 - **`antagor publish --bump patch|minor|major`** is the only way a version
   moves (`[publish] versioning = "semver"` in `.agents/antagor/antagor.toml`;
   default `patch`). It merges the accepted tickets, writes the changelog
-  from their titles, creates the annotated tag `vX.Y.Z` (a valid PEP 440
-  version) and runs `deploy_command` (`sh scripts/deploy.sh`: it pushes
-  `main` with the tags and tells the root tools agent about the release),
-  then verifies and rolls back on failure. Only the Human runs it. An
+  from their titles, creates the tag `vX.Y.Z` (a valid PEP 440 version)
+  and runs `deploy_command` (`sh scripts/deploy.sh`: it pushes `main`
+  with the tags and tells the root tools agent about the release). Only
+  the Human runs it. An
   agent never pushes by hand: it reports each ready tag to the root tools
   agent. `scripts/release.py` has no bump mode any more; it is only the
   gate. The template's copy is canonical: every repo following the

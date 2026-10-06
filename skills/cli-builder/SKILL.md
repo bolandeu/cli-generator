@@ -252,17 +252,13 @@ template, `_commit` is the template release it was last synced to):
    `uv run pytest --snapshot-update` and read the diff. Make the update its own ticket, titled
    `Template vX.Y.Z: ...` — that title becomes the changelog line.
 4. **Crossing template v1.1.0** (the release standard: version from the
-   git tag, changelog by `antagor publish`). Before `copier update`: if the
+   git tag). Before `copier update`: if the
    project's current `version = "X.Y.Z"` has no tag, tag the current
    `main` commit with it (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`) — otherwise
    the next build reports `0.0.0`. During the merge: `pyproject.toml`
-   drops `version =` for `dynamic = ["version"]`; in `CHANGELOG.md` keep
-   the released sections and delete any `## [Unreleased]` heading and
-   towncrier marker (`<!-- towncrier release notes start -->`) — **unless
-   the package has never been released** (no `v*` tag): then its first tag
-   `vX.Y.Z` already contains those changes, so rename `## [Unreleased]` to
-   `## [X.Y.Z] - <date>`; a hand-edited
-   `scripts/release.py` is replaced by the template's verbatim. After:
+   drops `version =` for `dynamic = ["version"]`; a hand-edited
+   `scripts/release.py` is replaced by the template's verbatim. The
+   changelog and the hooks move in step 5. After:
    `uv lock`, `uv run pytest --snapshot-update` once
    (help snapshots are only rendered on `copier copy`) and read the
    generated `tests/snapshots/help/` — fix any command the new
@@ -284,15 +280,20 @@ template, `_commit` is the template release it was last synced to):
       `.claude/settings.json` hooks and `herdr_name` files, and run
       `git config --unset core.hooksPath`.
    2. Remove `towncrier` from `pyproject.toml` (the `[tool.towncrier]`
-      table and the dev dependency) and delete `changelog.d/`. Keep
-      `CHANGELOG.md` as is: Antagor appends new sections to it.
+      table and the dev dependency), delete `changelog.d/` and the
+      `<!-- towncrier release notes start -->` marker. Keep the released
+      sections of `CHANGELOG.md`: Antagor adds new sections above them.
+      Delete a `## [Unreleased]` heading. If the package has **never been
+      released** (no `v*` tag), rename it to `## [X.Y.Z] - <date>`
+      instead, because its first tag already contains those changes.
    3. Take `.agents/antagor/antagor.toml`, `scripts/deploy.sh` and
       `scripts/release.py` from the template (`copier update` brings
       them). Check `prefix` and `name` in `antagor.toml`; the project may
       not have the `antagor_prefix` answer yet, so pass
       `--data antagor_prefix=<PREFIX>`.
-   4. Run `antagor hooks install` (Antagor's own git hooks replace the
-      deleted ones), then `uv lock`, then the gate.
+   4. Run `antagor hooks install` (it installs Antagor's pre-commit,
+      post-commit and pre-push hooks and refuses while `core.hooksPath`
+      is set), then `uv lock`, then the gate.
    5. From now on every change is a ticket and a release is
       `antagor publish --bump patch|minor|major` (Publish step 7).
 6. **Crossing template v1.2.6** (credential namespace = command name).
@@ -306,7 +307,7 @@ template, `_commit` is the template release it was last synced to):
    by hand, take the template's version (hunk by hunk) and drop the patch —
    `shared_namespaces`, `legacy_env` and `legacy_env_first` cover the usual
    reasons for those forks.
-6. **Crossing template v1.2.9.** The gate gains an "external
+7. **Crossing template v1.2.9.** The gate gains an "external
    dependencies" step: declare in `[[tool.rb.external]]` every program the
    code runs (the step names each one) — including other CLIs called via
    `require_cli`, whose `min_version` can then move into the registry.
@@ -314,7 +315,7 @@ template, `_commit` is the template release it was last synced to):
    `HttpProvider` updates with `--data include_http_provider=false` (and
    drops `httpx`); one that imports `providers.HttpProvider` keeps working
    (lazy export) but new code imports `from .http import HttpProvider`.
-7. **Crossing template v1.5.0** (`describe --json`, OpenCLI). After the
+8. **Crossing template v1.5.0** (`describe --json`, OpenCLI). After the
    update `uv run pytest --snapshot-update` renders
    `tests/snapshots/describe.json` — read it: it is the contract the tools
    catalog publishes. With `include_db`: give every table in `tables.py`
@@ -328,7 +329,7 @@ template, `_commit` is the template release it was last synced to):
    (TDD): `uv lock` (new `mutation` dependency group), and the gate gains
    an `existing tests` step that only reports — from then on every report
    carries the red run and the changed existing tests with reasons.
-8. **Crossing template v1.6.0** (kind="cache" → PostgreSQL schema
+9. **Crossing template v1.6.0** (kind="cache" → PostgreSQL schema
    `cache`, T30). `copier update` no longer touches
    `migrations/versions/` — they're the tool's history. With `include_db`:
    the template's example `<tool>_responses` table and `v1_responses` view
@@ -343,7 +344,7 @@ template, `_commit` is the template release it was last synced to):
    is a clear error) must pass. Schema `cache` and the role's USAGE +
    CREATE on it in production are the infrastructure's — ask through the
    root agent before the release that moves anything.
-9. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
+10. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
    §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
    and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
    and `tests/contracts/fixtures.yaml` come with the update; consumers'
@@ -351,7 +352,7 @@ template, `_commit` is the template release it was last synced to):
    `run` cases need this tool's offline data: fill `fixtures.yaml`
    (`placeholders`, `offline_cache`/`no_cache` fixtures in
    `tests/conftest.py`) — runs have no network and no real keys.
-10. **Changing `include_auth` / `include_providers`** (`--data
+11. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -420,8 +421,9 @@ sitting installable-from-nowhere without asking.
    (Scaffold mode): `git init -b main && git add -A && git commit -m
    "Initial commit"`, then tag it — the version comes from the tag, and
    `antagor publish` needs one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
-   Then `antagor hooks install` and, if `.agents/antagor/` is missing,
-   `antagor init --prefix <PREFIX> --name <cli_name>`.
+   A scaffolded project already has `.agents/antagor/` from the template:
+   run `antagor hooks install`. A refactored project without it gets
+   `antagor init` in the Refactor step above, which installs the hooks too.
    In Refactor mode you're on a feature branch; merging it is the user's
    call. Fill in the repo URL now (step 5) so the first push already
    carries it.
