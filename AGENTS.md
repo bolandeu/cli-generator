@@ -37,7 +37,7 @@ semver tag `vX.Y.Z` (PEP 440), changelog from ticket titles. Nobody
 pushes by hand. Docs: `CONTEXT.md` (terms), `docs/adr/` (decisions),
 `CODING_STANDARDS.md` (review rules). TDD applies: a new behaviour of the
 template's code (`scripts/`, `core/`) gets its test first, failing. The
-gate for a template ticket is the regeneration loop below, for both
+gate for a template ticket is `scripts/check_template.sh` (see below), for both
 `include_auth` variants (and `include_db` when touched).
 
 ## Testing a change to `template/`
@@ -46,16 +46,12 @@ Never trust a template edit without regenerating and running it — a
 Jinja/copier mistake fails silently as literal `{{ package_name }}` text
 in generated files, not as an error.
 
+The gate is one command (both `include_auth` variants: copier copy into a
+temp dir, `uv sync`, ruff, ty, pytest, then `git init` + tag `v0.1.0` +
+`scripts/release.py --check`; temp dirs removed, non-zero exit on any failure):
+
 ```bash
-rm -rf /tmp/cli-gen-test
-uvx copier copy . /tmp/cli-gen-test \
-  --data package_name=demotool --data project_name="Demo" \
-  --data description="d" --data author_name="A" --data include_auth=true \
-  --defaults --trust -q --vcs-ref HEAD
-cd /tmp/cli-gen-test && uv sync -q && uv run ruff check . && uv run ruff format --check . \
-  && uv run ty check && uv run pytest -q
-# and, after `git init && git add -A && git commit -m i && git tag -a v0.1.0 -m v0.1.0`:
-uv run scripts/release.py --check   # the full gate generated projects actually use
+sh scripts/check_template.sh
 ```
 
 `--vcs-ref HEAD` matters: without it copier renders the **latest release
@@ -65,9 +61,8 @@ tag**, not your working tree, and the loop tests the old template. Dirty
 --snapshot-update` renders `tests/snapshots/help/` in the new project,
 which is why `--trust` is required.
 
-Also regenerate once with `--data include_auth=false` and run the same
-loop — this branch drops `commands/auth.py`, `credentials/` and
-`tests/test_auth.py` via `copier.yml`'s templated `_exclude`, and it's easy
+The script covers `include_auth=false` too — this branch drops
+`commands/auth.py`, `credentials/` and `tests/test_auth.py` via `copier.yml`'s templated `_exclude`, and it's easy
 to change `cli.py.jinja`/`commands/`/tests in a way that only the
 `include_auth=true` branch was ever exercised with.
 
