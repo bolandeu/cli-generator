@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.10.0 — 2026-10-06
+
+### Added
+
+- Шаблон: убрать свои хуки проекта (.githooks, install_hooks.sh, .claude/settings.json) (CG-004)
+
 ## v1.9.0 — 2026-10-06
 
 ### Added
