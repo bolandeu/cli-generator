@@ -7,7 +7,7 @@
 ```bash
 uv sync
 uv run {{ cli_name }} --help
-uv run scripts/release.py --check   # the full gate (what releases and CI run)
+uv run scripts/release.py --check   # the full gate (run before every commit; CI runs it too)
 uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
 ```
 

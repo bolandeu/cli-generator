@@ -42,7 +42,7 @@
   Команды только над локальными файлами проекта (`init`, `config set`) этого не требуют.
 {%- if include_db %}
 - **Данные — через `core/db.py`** (cli-generator `architecture.md` §12).
-  `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → общий PostgreSQL, иначе локальный SQLite
+  `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → общий PostgreSQL, иначе локальный SQLite в `platformdirs.user_data_dir("<tool>")`, никогда в репозитории
   (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DB_PATH` переносит файл). Кэш — туда же; что хранится
   локально иначе — перечислить здесь с причиной. Таблицы, представления, индексы — только
   `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_*`, объявлены в `core/tables.py`, создаются миграцией, написанной
@@ -111,11 +111,7 @@
 - **Серверы Linux без экрана.** Сначала переменные окружения, keychain необязателен (без keychain при заданной
   переменной — не ошибка); существующие имена переменных переиспользовать; без TTY никаких вопросов; без путей
   только для Mac.
-{%- if include_db %}
-- **Данные** — в общем PostgreSQL (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL`) или
-  локальном SQLite в `platformdirs.user_data_dir("<tool>")`, никогда в репозитории; между ними — только через
-  `db import-sqlite` и `db push` (cli-generator `architecture.md` §12).
-{%- else %}
+{%- if not include_db %}
 - **Локальные данные** — в `platformdirs.user_data_dir("<tool>")`, никогда в репозитории; всё состояние — в файле
   базы, миграции запускает сам инструмент; инструмент сам не выгружает и не синхронизирует данные.
 {%- endif %}
