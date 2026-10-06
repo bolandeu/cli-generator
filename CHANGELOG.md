@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.14.0 — 2026-10-06
+
+### Changed
+
+- Шаблон: убрать мёртвый staged и укрепить default antagor_prefix (CG-008)
+- Шаблон: правки CODING_STANDARDS, CONTEXT и README по ревью CG-006 (CG-010)
+
+### Documentation
+
+- Навык и справочники плагина: Antagor вместо towncrier, хуков и ручного релиза (CG-007)
+
 ## v1.13.0 — 2026-10-06
 
 ### Added
