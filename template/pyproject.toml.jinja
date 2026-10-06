@@ -69,48 +69,8 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "syrupy>=4.8",
-    "towncrier>=24.8",
     "ty>=0.0.80",
 ]
-
-# Changelog from fragments: each change adds changelog.d/+<slug>.<type>.md
-# (`uv run towncrier create +<slug>.<type>.md -c "..."`); scripts/release.py assembles them.
-[tool.towncrier]
-filename = "CHANGELOG.md"
-directory = "changelog.d"
-start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}] - {project_date}"
-issue_format = "#{issue}"
-
-[[tool.towncrier.type]]
-directory = "added"
-name = "Added"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "changed"
-name = "Changed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "deprecated"
-name = "Deprecated"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "removed"
-name = "Removed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "fixed"
-name = "Fixed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "security"
-name = "Security"
-showcontent = true
 
 # External (non-Python) dependencies — every CLI this tool runs (require_cli,
 # shutil.which, subprocess with a literal program, npx). The gate checks this
@@ -127,13 +87,11 @@ showcontent = true
 # url = "https://github.com/bolandeu/serp"  # its repo: DEPENDENCY_TOO_OLD then prints a pinned install
 
 [tool.cli-generator]
-# Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
+# Where scripts/check_command_docstrings.py (called by the project's checks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
 commands = ["src/{{ package_name }}/commands/*.py"]
-# scripts/release.py: extras to install before ruff/ty/pytest in the gate, and
-# the release commit message (e.g. for Conventional Commits hooks).
+# scripts/release.py: extras to install before ruff/ty/pytest in the gate.
 # gate_extras = ["browser"]
-# release_commit = "chore(release): v{version}"
 
 [tool.pytest.ini_options]
 # Only tests/: mutmut leaves a copy of the tree in mutants/.
