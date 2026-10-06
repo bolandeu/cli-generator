@@ -31,15 +31,14 @@ contradicts the documented contract is a bug.
 
 ## Releasing this repo
 
-A template change ships as an annotated tag `vX.Y.Z` (PEP 440, see
-Known sharp edges) on a commit `vX.Y.Z: <what>`. Nobody here pushes: report each
-tag separately to the root agent — `~/Work/tools/scripts/agent_say.sh
-tools "<repo, branch, tag, what's inside, gate result>"`, the gate being
-the regeneration loop below for both `include_auth`/`include_db`
-variants. It queues the release for dev, who pushes after the user's yes. TDD
-applies here too: a new behaviour of the template's code (`scripts/`,
-`core/`) gets its test committed first, failing — the red run and any
-changed existing test (with its reason) go into the report.
+Project under Antagor (methodology: skill `antagor-method`). A template
+change goes through a ticket; release is `antagor publish --bump` —
+semver tag `vX.Y.Z` (PEP 440), changelog from ticket titles. Nobody
+pushes by hand. Docs: `CONTEXT.md` (terms), `docs/adr/` (decisions),
+`CODING_STANDARDS.md` (review rules). TDD applies: a new behaviour of the
+template's code (`scripts/`, `core/`) gets its test first, failing. The
+gate for a template ticket is the regeneration loop below, for both
+`include_auth` variants (and `include_db` when touched).
 
 ## Testing a change to `template/`
 
