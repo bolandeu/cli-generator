@@ -16,7 +16,7 @@ run() {
 }
 
 command -v antagor >/dev/null 2>&1 || {
-    echo "antagor не найден в PATH: нужен для antagor layout check" >&2
+    printf '\nFAILED: antagor не найден в PATH: нужен для antagor layout check\n' >&2
     exit 1
 }
 
