@@ -91,16 +91,13 @@ def _commands(source: str) -> dict[str, tuple[str | None, str]]:
     return commands
 
 
-def stale_commands(paths: list[str], *, staged: bool) -> list[str]:
-    """Commands in `paths` (repo-relative) whose logic differs from HEAD while their docstring doesn't.
-
-    `staged` compares the index (what's being committed); otherwise the working tree.
-    """
+def stale_commands(paths: list[str]) -> list[str]:
+    """Commands in `paths` (repo-relative) whose logic differs from HEAD while their docstring doesn't."""
     stale: list[str] = []
     for path in paths:
-        new_source = _git("show", f":{path}") if staged else (Path(path).read_text() if Path(path).is_file() else None)
-        if new_source is None:
+        if not Path(path).is_file():
             continue
+        new_source = Path(path).read_text()
         try:
             new = _commands(new_source)
             head_source = _git("show", f"HEAD:{path}")
@@ -139,7 +136,7 @@ def main(argv: list[str]) -> int:
         return 0  # not a git checkout: nothing to compare against
     os.chdir(root.strip())
 
-    stale = stale_commands(_changed_command_files(), staged=False)
+    stale = stale_commands(_changed_command_files())
     if stale:
         _report(
             stale,

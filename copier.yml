@@ -59,7 +59,10 @@ cli_name:
 antagor_prefix:
   type: str
   help: "Antagor ticket prefix: 2-4 capital letters (tickets are <PREFIX>-001)"
-  default: "{{ (cli_name | upper | regex_replace('[^A-Z]', ''))[:3] }}"
+  default: >-
+    {%- set from_cli = cli_name | upper | regex_replace('[^A-Z]', '') -%}
+    {%- set from_pkg = package_name | upper | regex_replace('[^A-Z]', '') -%}
+    {{ (from_cli if from_cli | length >= 2 else (from_pkg if from_pkg | length >= 2 else 'TL'))[:3] }}
   validator: >-
     {% if not (antagor_prefix | regex_search('^[A-Z]{2,4}$')) %}
     antagor_prefix must be 2-4 capital letters
