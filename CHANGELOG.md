@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.11.0 — 2026-10-06
+
+### Added
+
+- Шаблон: .agents/antagor, deploy.sh и вопрос antagor_prefix (CG-005)
+
 ## v1.10.0 — 2026-10-06
 
 ### Added
