@@ -217,3 +217,11 @@ def test_antagor_layout() -> None:
     assert "antagor publish" in readme
     assert "install_hooks" not in readme
     assert "towncrier" not in readme
+
+
+def test_docstring_check_reads_the_working_tree_only() -> None:
+    import inspect
+
+    check = _load("check_command_docstrings")
+    assert list(inspect.signature(check.stale_commands).parameters) == ["paths"]
+    assert "index" not in (check.stale_commands.__doc__ or "")
