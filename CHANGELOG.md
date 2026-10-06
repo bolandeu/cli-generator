@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.12.0 — 2026-10-06
+
+### Added
+
+- Шаблон: раскладка методологии (AGENTS-указатели, CONTEXT, CODING_STANDARDS, docs/adr) (CG-006)
+
 ## v1.11.0 — 2026-10-06
 
 ### Added
