@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.9.0 — 2026-10-06
+
+### Added
+
+- Шаблон без towncrier и фрагментов, release.py — только --check (CG-003)
+
 ## v1.8.3 — 2026-10-06
 
 ### Changed
