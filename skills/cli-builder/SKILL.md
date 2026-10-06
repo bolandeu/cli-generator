@@ -140,10 +140,10 @@ function) is governed by these four rules instead
    - Any new command group (`<cli> thing list|add`) is created with
      `output.group("...")`, never `typer.Typer(...)`, so a bare
      `<cli> thing` prints help instead of a usage error.
-   - Record what you built as a changelog fragment, never by editing
-     `CHANGELOG.md`: `uv run towncrier create +<slug>.added.md -c "..."`
-     (types: added/changed/deprecated/removed/fixed/security;
-     `reference/architecture.md` §8).
+   - Do not edit `CHANGELOG.md` and do not add changelog fragments:
+     `antagor publish` writes the changelog from the titles of the
+     tickets it publishes. Put the user-visible meaning of a change into
+     the ticket title (`reference/architecture.md` §8).
    - Depending on another of our tools? Pin it by release tag in
      `[tool.uv.sources]` (`tag = "vX.Y.Z"`, never `branch = "main"` or a
      committed `path =`) — `architecture.md` §8, "Depending on another tool".
@@ -153,11 +153,13 @@ function) is governed by these four rules instead
    cd <dest-dir> && uv sync && uv run scripts/release.py --check && uv run <package_name> doctor
    ```
    It runs `uv lock --check`, ruff check + format, ty, pytest (coverage
-   floor, help contract + snapshots, `auth status` shape), the changelog
-   fragment check, and builds + installs the wheel into a throwaway venv
+   floor, help contract + snapshots, `auth status` shape), and builds + installs the wheel into a throwaway venv
    to run `<cli> --version`/`--help`; the first failing step is named with
    its output. `uv sync` writes `uv.lock` — it's committed. **Run
    `release.py --check` before every commit**, not only at the end.
+   Under Antagor the same gate runs as the ticket's `checks`
+   (`.agents/antagor/antagor.toml`, with
+   `scripts/check_command_docstrings.py`).
 5. Publish — follow "Publish to GitHub" below. Scaffolding is local
    until the user says otherwise: nothing reaches GitHub before the root
    agent has the user's yes (that section, step 3).
@@ -190,10 +192,12 @@ business logic).
      structural reference to copy specific files from (`core/errors.py`,
      `output/`, `credentials/manager.py` rarely need project-specific
      changes — copy them near-verbatim) — do not overwrite the target
-     directory with it. `scripts/`, `.githooks/`, `.claude/settings.json`
+     directory with it. `scripts/`, `.agents/antagor/antagor.toml`
      and `tests/test_help.py` (the --help contract) rarely need
      project-specific changes either — copy them near-verbatim, run
-     `scripts/install_hooks.sh` once in the target repo, then
+     `antagor init --prefix <PREFIX> --name <cli_name>` once in the target
+     repo (it installs the git hooks; the prefix is 2–4 capital letters,
+     the `antagor_prefix` answer), then
      `uv run pytest --snapshot-update` to create the help snapshots.
    - If the existing code is a small/ad-hoc script with little worth
      preserving beyond its core logic: scaffold fresh (Scaffold mode) into
@@ -245,24 +249,17 @@ template, `_commit` is the template release it was last synced to):
    project's existing code now fails — fix the code, don't lower the
    gate. A template release that changes a command's help (e.g. new
    `auth status` options) fails the help snapshots: run
-   `uv run pytest --snapshot-update` and read the diff. Add a changelog fragment naming the template version
-   (`uv run towncrier create +template-update.changed.md -c "Template vX.Y.Z: ..."`).
+   `uv run pytest --snapshot-update` and read the diff. Make the update its own ticket, titled
+   `Template vX.Y.Z: ...` — that title becomes the changelog line.
 4. **Crossing template v1.1.0** (the release standard: version from the
-   git tag, towncrier fragments). Before `copier update`: if the
+   git tag). Before `copier update`: if the
    project's current `version = "X.Y.Z"` has no tag, tag the current
    `main` commit with it (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`) — otherwise
    the next build reports `0.0.0`. During the merge: `pyproject.toml`
-   drops `version =` for `dynamic = ["version"]`; in `CHANGELOG.md` keep
-   the released sections, put `<!-- towncrier release notes start -->`
-   right above the newest one, move anything under `## [Unreleased]` into
-   `changelog.d/` fragments and delete that heading — **unless the package
-   has never been released** (no `v*` tag): then its first tag `vX.Y.Z`
-   already contains those changes, so rename `## [Unreleased]` to
-   `## [X.Y.Z] - <date>` (under the marker) instead of making fragments
-   that would repeat them in the next release; a hand-edited
-   `scripts/release.py` is replaced by the template's verbatim. After:
-   `uv lock`, re-run `scripts/install_hooks.sh` (git hooks now live in
-   the versioned `.githooks/`), `uv run pytest --snapshot-update` once
+   drops `version =` for `dynamic = ["version"]`; a hand-edited
+   `scripts/release.py` is replaced by the template's verbatim. The
+   changelog and the hooks move in step 5. After:
+   `uv lock`, `uv run pytest --snapshot-update` once
    (help snapshots are only rendered on `copier copy`) and read the
    generated `tests/snapshots/help/` — fix any command the new
    `test_help.py` contract flags (missing `Example:` line or `help=`),
@@ -270,13 +267,36 @@ template, `_commit` is the template release it was last synced to):
    `credential_fields`/`required`) — `test_providers.py` names the ones
    missing it. `auth status` now emits the §8 report instead of
    `{"provider", "authenticated"}`: a breaking change for the CLI's own
-   callers, so release it as a breaking bump (minor at `0.x`) with a
-   `changed` fragment. Then the
+   callers, so release it as a breaking bump (minor at `0.x`) in a
+   ticket titled as a breaking change. Then the
    full verify loop, and once the tag is on GitHub check
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
    report instead of working around it.
-5. **Crossing template v1.2.6** (credential namespace = command name).
+5. **Crossing the Antagor template** (release by `antagor publish`, no
+   towncrier, no hand-made hooks). A project on an older template moves
+   like this:
+   1. Delete `.githooks/`, `scripts/install_hooks.sh`, the
+      `.claude/settings.json` hooks and `herdr_name` files, and run
+      `git config --unset core.hooksPath`.
+   2. Remove `towncrier` from `pyproject.toml` (the `[tool.towncrier]`
+      table and the dev dependency), delete `changelog.d/` and the
+      `<!-- towncrier release notes start -->` marker. Keep the released
+      sections of `CHANGELOG.md`: Antagor adds new sections above them.
+      Delete a `## [Unreleased]` heading. If the package has **never been
+      released** (no `v*` tag), rename it to `## [X.Y.Z] - <date>`
+      instead, because its first tag already contains those changes.
+   3. Take `.agents/antagor/antagor.toml`, `scripts/deploy.sh` and
+      `scripts/release.py` from the template (`copier update` brings
+      them). Check `prefix` and `name` in `antagor.toml`; the project may
+      not have the `antagor_prefix` answer yet, so pass
+      `--data antagor_prefix=<PREFIX>`.
+   4. Run `antagor hooks install` (it installs Antagor's pre-commit,
+      post-commit and pre-push hooks and refuses while `core.hooksPath`
+      is set), then `uv lock`, then the gate.
+   5. From now on every change is a ticket and a release is
+      `antagor publish --bump patch|minor|major` (Publish step 7).
+6. **Crossing template v1.2.6** (credential namespace = command name).
    Keychain service and env vars moved from the package name to
    `cli_name` (`rb_serp` → `serp`: `SERP_XMLRIVER_API_KEY`). If the two
    differ and the project didn't already override this, credentials stored
@@ -287,7 +307,7 @@ template, `_commit` is the template release it was last synced to):
    by hand, take the template's version (hunk by hunk) and drop the patch —
    `shared_namespaces`, `legacy_env` and `legacy_env_first` cover the usual
    reasons for those forks.
-6. **Crossing template v1.2.9.** The gate gains an "external
+7. **Crossing template v1.2.9.** The gate gains an "external
    dependencies" step: declare in `[[tool.rb.external]]` every program the
    code runs (the step names each one) — including other CLIs called via
    `require_cli`, whose `min_version` can then move into the registry.
@@ -295,7 +315,7 @@ template, `_commit` is the template release it was last synced to):
    `HttpProvider` updates with `--data include_http_provider=false` (and
    drops `httpx`); one that imports `providers.HttpProvider` keeps working
    (lazy export) but new code imports `from .http import HttpProvider`.
-7. **Crossing template v1.5.0** (`describe --json`, OpenCLI). After the
+8. **Crossing template v1.5.0** (`describe --json`, OpenCLI). After the
    update `uv run pytest --snapshot-update` renders
    `tests/snapshots/describe.json` — read it: it is the contract the tools
    catalog publishes. With `include_db`: give every table in `tables.py`
@@ -309,7 +329,7 @@ template, `_commit` is the template release it was last synced to):
    (TDD): `uv lock` (new `mutation` dependency group), and the gate gains
    an `existing tests` step that only reports — from then on every report
    carries the red run and the changed existing tests with reasons.
-8. **Crossing template v1.6.0** (kind="cache" → PostgreSQL schema
+9. **Crossing template v1.6.0** (kind="cache" → PostgreSQL schema
    `cache`, T30). `copier update` no longer touches
    `migrations/versions/` — they're the tool's history. With `include_db`:
    the template's example `<tool>_responses` table and `v1_responses` view
@@ -324,7 +344,7 @@ template, `_commit` is the template release it was last synced to):
    is a clear error) must pass. Schema `cache` and the role's USAGE +
    CREATE on it in production are the infrastructure's — ask through the
    root agent before the release that moves anything.
-9. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
+10. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
    §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
    and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
    and `tests/contracts/fixtures.yaml` come with the update; consumers'
@@ -332,7 +352,7 @@ template, `_commit` is the template release it was last synced to):
    `run` cases need this tool's offline data: fill `fixtures.yaml`
    (`placeholders`, `offline_cache`/`no_cache` fixtures in
    `tests/conftest.py`) — runs have no network and no real keys.
-10. **Changing `include_auth` / `include_providers`** (`--data
+11. **Changing `include_auth` / `include_providers`** (`--data
    include_auth=false`): copier deletes the files the new answers no longer
    generate (`credentials/`, `commands/login.py`, `tests/test_auth.py`;
    `providers/`, `tests/test_providers.py`) — **except files the project
@@ -363,14 +383,14 @@ The command (`cli_name`) and the import package don't change; only
    reinstalled (standard §10); clear it (`--data dist_name_legacy=`) in a
    later release once every machine has the new name.
 2. It is a **breaking change** for consumers: breaking bump (minor at
-   `0.x`) with a `changed` fragment naming the old and new names.
+   `0.x`) in a ticket whose title names the old and new names.
 3. Every consumer, in the same wave: rename the dependency and its
    `[tool.uv.sources]` key (`"yandex-oauth>=0.2,<0.3"` →
    `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { git = …, tag = … }`),
    `uv lock`, gate, release.
 4. Machines with the tool installed: `uv tool uninstall <old name>` first,
    then `uv tool install "rb-<slug> @ git+<repo-url>@vX.Y.Z"` — otherwise
-   two tools claim the same command. Mention this in the release fragment.
+   two tools claim the same command. Put this in the ticket title, so it reaches the changelog.
 
 ## Publish to GitHub (both modes)
 
@@ -400,7 +420,10 @@ sitting installable-from-nowhere without asking.
 2. **Prepare the local repo.** If the directory isn't a git repo yet
    (Scaffold mode): `git init -b main && git add -A && git commit -m
    "Initial commit"`, then tag it — the version comes from the tag, and
-   `release.py` needs one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
+   `antagor publish` needs one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
+   A scaffolded project already has `.agents/antagor/` from the template:
+   run `antagor hooks install`. A refactored project without it gets
+   `antagor init` in the Refactor step above, which installs the hooks too.
    In Refactor mode you're on a feature branch; merging it is the user's
    call. Fill in the repo URL now (step 5) so the first push already
    carries it.
@@ -461,17 +484,18 @@ sitting installable-from-nowhere without asking.
    `git+ssh://git@github.com/<owner>/<repo>.git`. Both are documented in
    the generated README.md and SKILL.md — don't re-explain them per
    project.
-7. **Releases after that**: `uv run scripts/release.py patch|minor|major`
-   from a clean, up-to-date `main` with fragments in `changelog.d/`. It
-   runs the full gate (a failing step aborts the release), bumps the last tag, assembles `CHANGELOG.md` with
-   towncrier, commits `Release vX.Y.Z` and tags. It never pushes, and
-   neither do you: report each release tag separately to the root agent
-   (`~/Work/tools/scripts/agent_say.sh tools "<repo, branch, tags, what's
-   inside, release.py --check result, the red run, changed existing tests
-   with reasons>"`); dev pushes after the user's yes. Pick the
-   part by SemVer (`architecture.md` §8: at `0.x` fixes and compatible
-   features are patch, a breaking change is minor). There is no `version =` to edit and no `[Unreleased]`
-   section — one fragment per change, `release.py` when it should ship.
+7. **Releases after that**: `antagor publish --bump patch|minor|major`
+   (Human only) merges the accepted tickets, writes `CHANGELOG.md` from
+   their titles, tags `vX.Y.Z` (semver, PEP 440) and runs
+   `scripts/deploy.sh`, which pushes `main` with the tags and tells the
+   root agent. The gate (`release.py --check`) is a ticket check, so it
+   has already passed. You never push by hand: report each ready tag to
+   the root agent (`~/Work/tools/scripts/agent_say.sh tools "<repo,
+   branch, tags, what's inside, release.py --check result, the red run,
+   changed existing tests with reasons>"`). Pick the part by SemVer
+   (`architecture.md` §8: at `0.x` fixes and compatible features are
+   patch, a breaking change is minor). There is no `version =` to edit,
+   no `[Unreleased]` section and no fragment — one ticket per change.
    `uv tool upgrade <package_name>` moves other machines forward.
 
 ## Non-negotiables (apply in both modes)
@@ -516,20 +540,17 @@ skipped under time pressure — check them explicitly:
   commit**, then `uv run pytest --snapshot-update` and check the
   `tests/snapshots/help/` diff reads right. The docstring and `help=`
   strings are the `--help` text agents read. This is enforced, not
-  advisory (`architecture.md` §5): Claude Code PostToolUse/Stop hooks in
-  `.claude/settings.json`, the versioned git pre-commit in `.githooks/`
-  (`scripts/install_hooks.sh` once per clone; Claude sessions set it up
-  themselves), and blocking tests — each docstring has an
+  advisory (`architecture.md` §5): the ticket check
+  `scripts/check_command_docstrings.py` (Antagor runs it; the git hooks
+  come from `antagor hooks install`), and blocking tests — each docstring has an
   `Example: {cli} <command> ...` line, each parameter a `help=`, each
   help page a snapshot. Don't bypass them: for a behaviour-neutral edit
   (a lint or type fix inside a command) keep the body AST-identical with
   `# noqa` / `# ty: ignore[...]` comments; never `SKIP_DOCSTRING_CHECK`
   (humans only). Every command is wrapped in `@output.guard` — the help
   contract test fails otherwise.
-- The pre-commit hook also warns (never blocks) on a `src/` change with
-  no changelog fragment on the branch (`scripts/check_changelog_fragment.py`).
-- Versions come only from git tags cut by `scripts/release.py`, the
-  changelog only from `changelog.d/` fragments, dependencies on our other
+- Versions come only from git tags cut by `antagor publish`, the
+  changelog only from ticket titles, dependencies on our other
   tools only by tag pin. SemVer is a promise about the CLI surface
   (flags, `--json` shape, exit/error codes) — `architecture.md` §8.
 - Prefer `pathlib`/`shutil`/`platformdirs` over shelling out or hardcoded

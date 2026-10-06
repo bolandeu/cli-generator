@@ -33,7 +33,7 @@ uv tool install "git+https://github.com/<owner>/<repo>.git"
 
 No PyPI publish step is needed for this to work — `uv tool install`
 resolves and builds directly from the git URL. Pin a release by appending
-`@vX.Y.Z` (a tag cut by `scripts/release.py`, see §8). This is wired into every generated package
+`@vX.Y.Z` (a tag cut by `antagor publish`, see §8). This is wired into every generated package
 automatically: the `repository_url` copier question fills in this exact
 command in both `README.md` (for the human) and
 `src/{{ package_name }}/data/SKILL.md` (for an agent that finds the skill
@@ -286,13 +286,10 @@ commit.** Enforced at three deterministic levels, one shared check
 `src/*/commands/*.py` decorated with `output.guard`; its "logic" is its
 signature + body without the docstring, compared with `HEAD`):
 
-1. **Claude Code hooks** (`.claude/settings.json`, versioned). PostToolUse
-   on `Edit|Write|MultiEdit` of a command file exits 2 with "update the
-   docstring of command X" when its logic changed and its docstring did
-   not; the Stop hook refuses to end the turn while any command in the
-   working tree is in that state (once per turn — `stop_hook_active`
-   lets the second attempt through, so a genuinely behaviour-neutral
-   refactor can't loop). SessionStart points git at `.githooks/`.
+1. **The ticket check** `scripts/check_command_docstrings.py` (listed in
+   `checks` of `.agents/antagor/antagor.toml`, so Antagor runs it on every
+   ticket). It exits non-zero when a command's logic changed and its
+   docstring did not. There are no hand-made Claude Code hooks.
 2. **Blocking tests in the gate** (`tests/test_help.py`), walking the
    app's command registry so a new command is covered automatically:
    every command has a docstring with an `Example: <cli> <command> ...`
@@ -306,9 +303,8 @@ signature + body without the docstring, compared with `HEAD`):
    Snapshots contain the CLI's name, so copier renders them at `copier
    copy` time (`_tasks`) instead of shipping them.
 
-Plus the git pre-commit hook in `.githooks/pre-commit` (versioned; active
-after `scripts/install_hooks.sh`, which sets `core.hooksPath`) runs the
-same check on the staged files and blocks the commit. For a change that
+The project keeps no `.githooks/` and sets no `core.hooksPath`: Antagor's
+git hooks (`antagor hooks install`) only work without it. For a change that
 truly doesn't alter behaviour an **agent** keeps the command body
 AST-identical — a lint/type fix goes in as a `# noqa` / `# ty: ignore[...]`
 comment, which doesn't change the AST — instead of the
@@ -373,31 +369,16 @@ the template implements it):
   hard-coded string. `[tool.uv] cache-keys` includes git commit + tags so
   `uv run` rebuilds when a tag moves. A new repo is tagged `v0.1.0` on its
   first commit.
-- **The changelog is assembled from fragments.** Nobody edits
-  `CHANGELOG.md` between releases — every user-visible change adds
-  `changelog.d/+<slug>.<type>.md` (`uv run towncrier create +<slug>.<type>.md
-  -c "..."`; type = added/changed/deprecated/removed/fixed/security). Two
-  branches never touch the same line, so they never conflict. The gate
-  (below) requires one whenever something user-visible changed since the
-  last tag — tooling-only changes (`uv.lock`, `.github/`, `scripts/`,
-  `tests/`, `docs/` (backlog, findings — notes for maintainers),
-  `.githooks/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, and
-  `pyproject.toml` when its `[project]` table — name, version,
-  dependencies, scripts, optional-dependencies — is unchanged: `[tool.*]`
-  and `[dependency-groups]` are tooling; compared with `tomllib` against
-  the last tag, or HEAD in the pre-commit hook) need none,
-  so the changelog stays about the package; the pre-commit hook
-  (`scripts/check_changelog_fragment.py`) warns locally, never blocks.
+- **The changelog is written by Antagor.** Nobody edits `CHANGELOG.md`
+  and there are no fragments (no towncrier, no `changelog.d/`):
+  `antagor publish` appends a section built from the titles of the
+  published tickets. A user-visible change therefore needs a ticket with
+  a title that says what changed for the user.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
-  runs only this, the root agent's `tools-watch` runs it too: `uv lock
-  --check`, ruff check, ruff format --check, ty, pytest, a changelog
-  fragment present whenever anything user-visible changed since the last
-  tag (checked in the working tree — `towncrier check` only sees commits;
-  the tooling-only paths above need none — `NO_FRAGMENT_NEEDED`, the same
-  list in `release.py` and `check_changelog_fragment.py`, pinned by
-  `tests/test_scripts.py`),
-  `uv build` + install of the wheel into a throwaway venv where
+  runs only this, the root agent's `tools-watch` runs it too, and it is a
+  ticket check in `antagor.toml`: `uv lock --check`, ruff check, ruff
+  format --check, ty, pytest, `uv build` + install of the wheel into a throwaway venv where
   `<cli> --version` must equal the wheel's METADATA version and
   `<cli> --help` must work (a library without a console script: every
   top-level package imports and `importlib.metadata.version()` equals the
@@ -407,15 +388,17 @@ the template implements it):
   and a last line `release: code failed` (exit 1) — or `release: audit
   failed` (exit 3) when only the vulnerability audit failed, so
   `tools-watch` can tell "broken code" from "bump a dependency".
-- **`release.py patch|minor|major`** is the only way a version moves: on a
-  clean `main` not behind its upstream, it runs the same gate (building
-  the wheel as the new version via `UV_DYNAMIC_VERSIONING_BYPASS`, since
-  the tag doesn't exist yet), bumps the last `v*` tag, runs
-  `towncrier build`, commits `Release vX.Y.Z` and creates the annotated
-  tag. It does **not** push, and neither does the agent: the release goes
-  to the root tools agent, which runs `git push --follow-tags` after the
-  user's yes. The template's copy is canonical: every repo
-  following the standard uses it verbatim.
+- **`antagor publish --bump patch|minor|major`** is the only way a version
+  moves (`[publish] versioning = "semver"` in `.agents/antagor/antagor.toml`;
+  default `patch`). It merges the accepted tickets, writes the changelog
+  from their titles, creates the tag `vX.Y.Z` (a valid PEP 440 version)
+  and runs `deploy_command` (`sh scripts/deploy.sh`: it pushes `main`
+  with the tags and tells the root tools agent about the release). Only
+  the Human runs it. An
+  agent never pushes by hand: it reports each ready tag to the root tools
+  agent. `scripts/release.py` has no bump mode any more; it is only the
+  gate. The template's copy is canonical: every repo following the
+  standard uses it verbatim.
 - **CI is optional**: one `ubuntu-24.04` job on the lowest supported
   Python that installs osv-scanner and runs `release.py --check` —
   nothing else of its own. Delete the workflow to save Actions minutes;
@@ -426,7 +409,7 @@ the template implements it):
   — is a major bump; a new feature with old behaviour intact is minor; a
   fix is patch. While at `0.x` (Cargo convention): fixes **and**
   compatible features are patch, anything breaking is minor
-  (`0.2 → 0.3`). Deprecate first (warning + a `deprecated` fragment),
+  (`0.2 → 0.3`). Deprecate first (warning + a ticket titled `deprecate ...`),
   remove in the next breaking release. Tables: `conventions.md`.
 
 A tag is what makes `uv tool install "git+<url>@v1.2.0"` reproducible on
