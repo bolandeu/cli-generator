@@ -28,13 +28,13 @@
 
 - **Команда тонкая.** `commands/` — только разбор аргументов; вся логика — в `core/`.
 - **Внешние API — в `providers/`.** HTTP-сервис наследует `providers.HttpProvider` (повторы, таймауты,
-  401/429/5xx → `AuthRequired`/`ProviderError`); `httpx` напрямую из `core/` и `commands/` не вызывают.
+  401/429/5xx → `AuthRequired`/`ProviderError`); `httpx` вне `providers/` ruff не пропускает (TID251).
   У провайдера есть `name`, `credential_fields`, `required` и `health_check()` — один дешёвый бесплатный вызов
   на чтение. JSON `auth status --check --json` — контракт между инструментами: изменить его — ломающее изменение.
 - **Секреты — только keychain и переменные окружения** (`credentials/`), никогда в `.{{ package_name }}/config.toml`
   или другом файле проекта.
 - **Вывод — через `output/`.** Каждая команда умеет human и `--json` (`output.emit_success` / `output.guard`),
-  без `print()`. stdout — только данные; ошибки, `--verbose` и `logging` — в stderr. Группа команд —
+  `print()` ruff не пропускает (T20). stdout — только данные; ошибки, `--verbose` и `logging` — в stderr. Группа команд —
   `output.group("...")`, не `typer.Typer(...)`: так `{{ cli_name }} <group>` без подкоманды печатает help.
 - **Ошибки — `CliError` со стабильным `code`** и фиксированной таблицей exit-кодов (`core/errors.py`), не голые
   исключения.
