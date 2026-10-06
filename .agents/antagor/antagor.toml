@@ -12,3 +12,4 @@ required_types = ["feature", "bugfix"]  # chore and docs: the short path without
 tag_prefix = "v"
 versioning = "semver"
 changelog = "CHANGELOG.md"
+deploy_command = "sh scripts/deploy.sh"
