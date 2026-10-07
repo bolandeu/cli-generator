@@ -9,6 +9,8 @@ checks = ["sh scripts/check_template.sh", "claude plugin validate . --strict"]
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
 [publish]
+# Template gate on the merged main, before the tag and the deploy (Antagor gate_command).
+gate_command = "sh scripts/check_template.sh"
 tag_prefix = "v"
 versioning = "semver"
 changelog = "CHANGELOG.md"
