@@ -26,6 +26,7 @@ check_variant() {
     run uvx copier copy "$ROOT" "$dest" \
         --data package_name=demotool --data project_name=Demo \
         --data description=d --data author_name=A --data "include_auth=${2}" \
+        --data "install_homeserver_users=${3-rbtools}" --data "install_mac=${4-true}" \
         --defaults --trust -q --vcs-ref HEAD
     cd "$dest"
     run uv sync -q
@@ -44,5 +45,6 @@ check_variant() {
 
 check_variant auth-true true
 check_variant auth-false false
+check_variant publish-only true "" false
 
-printf '\nOK: template gate passed (include_auth=true, include_auth=false)\n'
+printf '\nOK: template gate passed (include_auth=true, include_auth=false, publish-only)\n'
