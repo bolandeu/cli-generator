@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.18.2 — 2026-10-18
+
+### Outside epics
+
+- Шаблон: тесты проходят в Gitea Actions — снимки справки при GITHUB_ACTIONS, detach видит зомби как завершённый (CG-020)
+
 ## v1.18.1 — 2026-10-18
 
 ### Outside epics
