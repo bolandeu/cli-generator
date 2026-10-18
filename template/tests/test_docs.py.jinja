@@ -51,7 +51,7 @@ def _probe() -> typer.Typer:
         color: Color = typer.Option(Color.RED, "--color", help="Which color."),
         coats: int = typer.Option(10, "--coats", help="How many coats."),
         mode: Mode = typer.Option(Mode.A, "--mode", help="Which mode."),
-        finish: Mode = typer.Option("10", "--finish", help="Which finish."),
+        finish: Mode = typer.Option(Mode.B, "--finish", help="Which finish."),
         tag: list[str] = typer.Option([], "--tag", help="A tag, repeatable."),
         dry: bool = typer.Option(False, "--dry", help="Paint nothing."),
     ) -> None:
@@ -182,10 +182,10 @@ def test_an_option_ends_with_its_default_and_allowed_values() -> None:
     assert options["--mode"]["description"].splitlines()[-1] == "Default: a. Allowed: a, b."
 
 
-def test_an_option_with_default_10_and_choices_a_b_ends_with_the_line_of_both() -> None:
+def test_an_option_with_default_b_and_choices_a_b_ends_with_the_line_of_both() -> None:
     finish = _by_name(_by_name(_probe_document()["commands"])["paint"]["options"])["--finish"]
 
-    assert finish["description"] == "Which finish.\nDefault: 10. Allowed: a, b."
+    assert finish["description"] == "Which finish.\nDefault: b. Allowed: a, b."
 
 
 def test_a_flag_ends_with_default_off_and_has_no_arity_and_a_multiple_option_has_no_maximum() -> None:

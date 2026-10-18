@@ -1,10 +1,11 @@
 """The help of this CLI as one document for people: OpenCLI 0.1 with the commands at the root, as InSpectra reads it.
 
 Built from the Click tree with no hand step, by the help standard of cli-generator
-(skills/cli-builder/reference/help-standard.md), so the same code gives the same document byte for byte. The entries of options and arguments are those of `core.opencli`; on top of them a
-command's docstring is split into the description (the summary, then the paragraphs without the option lines and the
-example lines) and the examples («<command>  # -> <result>»), an option's description ends with its default and
-allowed values, and an option that does not repeat takes at most one value.
+(skills/cli-builder/reference/help-standard.md), so the same code gives the same document byte for byte. The entries of
+options and arguments are those of `core.opencli`; on top of them a command's docstring is split into the description
+(the summary, then the paragraphs without the option lines and the example lines) and the examples («<command>  # ->
+<result>»), an option's description ends with its default and allowed values, and an option that does not repeat takes
+at most one value.
 
 A docstring line «name: text» explains the parameters it names (`ARGUMENT_LINE`); `doc_lines` joins the lines of a
 paragraph but keeps such a line, an item of a list and an example line apart.
@@ -159,7 +160,10 @@ def _description(paragraphs: list[list[str]]) -> str:
 
 
 def _examples(lines: list[str], hook: Hook, path: tuple[str, ...]) -> list[str]:
-    """Each example line as one string, without «<program> <command path>», with the result line after it: «<rest>  # -> <result>»."""
+    """Each example line as one string, without «<program> <command path>».
+
+    The result line goes after it: «<rest>  # -> <result>».
+    """
     found: list[list[str]] = []
     for previous, line in pairwise(["", *lines]):
         if line.startswith(EXAMPLE):

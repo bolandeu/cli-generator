@@ -107,6 +107,7 @@ per project when one of these fits:
 | `CREDENTIALS_UNHEALTHY`        | 3    | `auth status` when a required credential isn't ok, or any is invalid/expired (envelope also carries the full report) |
 | `CREDENTIAL_STORE_UNAVAILABLE` | 1    | `credentials.manager` on write/delete when the keychain is unusable |
 | `ABORTED`                      | 1    | the user answered "no" to `require_confirmation` |
+| `EXAMPLE_OUTSIDE_PATH`         | 1    | `core.docs` (`<cli> docs`) when a docstring example does not start with its command path |
 | `UNEXPECTED`                   | 1    | `output.guard` — any exception nobody mapped |
 
 `UNEXPECTED` is the safety net, not a design: every command goes through
