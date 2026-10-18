@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.18.1 — 2026-10-18
+
+### Outside epics
+
+- Справка: правки по ревью E-001 — пример не запускает callback, код EXAMPLE_OUTSIDE_PATH, тексты (CG-019)
+
 ## v1.18.0 — 2026-10-18
 
 ### E-001 — Human help for every CLI: docs command and help standard in the template
