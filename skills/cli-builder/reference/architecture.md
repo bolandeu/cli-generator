@@ -317,6 +317,16 @@ function decorated with `output.guard` or registered with
 command to be wrapped in `output.guard` (JSON error envelope, local
 `--json`, the `{cli}` substitution).
 
+Two documents come out of the same commands, for two readers. `describe
+--json` is the machine contract (conventions.md): the tools catalog,
+Windmill and the architect read it; it changes only by adding safe fields
+(`arity.maximum`). `docs` is the document for people: an OpenCLI file with
+the commands at the root, built from the docstrings by `core/docs.py`,
+byte for byte the same on every run. The CLI does not render HTML: the
+shared `clidocs` tool turns that file into a page with InSpectra (Mac only).
+How a docstring is written, and what the help test enforces, is
+`help-standard.md`.
+
 Write `{cli}` for the CLI's name in docstrings (`Example: {cli} status
 --json`): `output.guard` substitutes it, so commands stay plain `.py`
 files that survive a rename. syrupy over inline-snapshot: help pages are
@@ -702,4 +712,8 @@ from pytest: `contracts ... ok (N cases from K consumers)`; a failure
 prints each failing `<consumer>:<section>:<name>` with what exactly is
 wrong, and the release doesn't go out. Every template ships one real
 contract: `tests/contracts/tools-catalog/<cli>.yaml` — the tools catalog
+reads `describe --json`.
+`<cli> docs` is not part of any consumer contract: it is the human
+document for InSpectra, rendered by `clidocs`, and may change with the
+docstrings (`help-standard.md`). A consumer that needs a machine contract
 reads `describe --json`.

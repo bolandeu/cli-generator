@@ -153,7 +153,7 @@ function) is governed by these four rules instead
    cd <dest-dir> && uv sync && uv run scripts/release.py --check && uv run <package_name> doctor
    ```
    It runs `uv lock --check`, ruff check + format, ty, pytest (coverage
-   floor, help contract + snapshots, `auth status` shape), and builds + installs the wheel into a throwaway venv
+   floor, help contract + snapshots, `auth status` shape, `docs` document), and builds + installs the wheel into a throwaway venv
    to run `<cli> --version`/`--help`; the first failing step is named with
    its output. `uv sync` writes `uv.lock` — it's committed. **Run
    `release.py --check` before every commit**, not only at the end.
@@ -209,7 +209,8 @@ business logic).
 4. Secrets found hardcoded, in `.env`, or in committed config **must** move
    to `credentials/manager.py` (keyring + env var fallback) — flag this
    explicitly to the user, it's a real security fix, not just style.
-5. Verify the same way as Scaffold mode (`uv sync && pytest && doctor`), plus
+5. Verify the same way as Scaffold mode (`uv sync && pytest && doctor`; the
+   help test also checks `docs`), plus
    confirm any behavior that existed before the refactor still produces the
    same result.
 6. Publish — follow "Publish" below (checklist item 12). A
@@ -379,6 +380,14 @@ template, `_commit` is the template release it was last synced to):
 11. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
+12. **Crossing the template release with `docs`** (`<cli> docs`, help
+   standard: `reference/help-standard.md`). After the update run the help
+   test (`uv run pytest tests/test_help.py`): it prints the command paths
+   whose docstring does not meet the standard. Paste them into
+   `tests/help_allowlist.txt` (the file is the project's; `copier update`
+   never overwrites it), so the gate passes. Then empty the list over
+   time: bring one docstring at a time to the standard, delete its line.
+   New commands may not be added to the list.
 
 ### Renaming the distribution (standard §10: `rb-<slug>`)
 

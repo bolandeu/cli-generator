@@ -57,6 +57,8 @@ every installed tool.
 - `command` tree, `options`, `arguments`, `required`, `aliases`, `hidden`,
   `acceptedValues` — introspected from Typer/Click (`core/opencli.py`),
   never written by hand.
+- `arity` of each option and argument: `minimum` and `maximum` (`maximum`
+  is absent for a repeatable one).
 - `exitCodes` on the root — from `core/errors.py` `EXIT_CODES` (the table
   below).
 - What OpenCLI has no field for goes into `metadata` as `x-rb-*`:
@@ -194,6 +196,7 @@ breaking release.
 <cli> skill install [--tool claude-code|agents] [--project]
 <cli> run
 <cli> describe [--json]                                   # OpenCLI document, no envelope
+<cli> docs [--out FILE]                                   # OpenCLI document for people (help-standard.md)
 <cli> --ai
 ```
 
