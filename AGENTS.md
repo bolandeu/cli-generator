@@ -179,8 +179,8 @@ before (missing answers file, wrong `copier.yml` location).
   `include_http_provider` (drops `providers/http.py`,
   `tests/test_http_provider.py` and `httpx`), `include_db` (keeps
   `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,
-  `tests/test_db.py`, `tests/conftest.py` and the SQLAlchemy/Alembic/psycopg
-  deps; its PostgreSQL test runs only under `scripts/pg_test.sh` in the
+  `tests/test_db.py`, the database fixture in `tests/conftest.py` and the
+  SQLAlchemy/Alembic/psycopg deps; its PostgreSQL test runs only under `scripts/pg_test.sh` in the
   generated project — a throwaway container on a Docker-assigned port), `include_ci`,
   `private_deps` (CI job env `GH_TOKEN` from the `GITHUB_READ_TOKEN`
   secret + `gh auth setup-git`), `dist_name_legacy` (rename transition).

@@ -17,7 +17,7 @@ import json
 import os
 {%- endif %}
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import jsonschema
@@ -132,6 +132,10 @@ class DescribeSnapshot(SingleFileSnapshotExtension):
     @classmethod
     def get_snapshot_name(cls, *, test_location, index=0) -> str:
         return "describe"
+
+
+def test_describe_is_the_same_in_ci(same_in_ci: Callable[[str], None]) -> None:
+    same_in_ci("test_describe_snapshot")
 
 
 def test_describe_snapshot(snapshot) -> None:
