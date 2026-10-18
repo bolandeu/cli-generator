@@ -138,3 +138,13 @@ repository_url:
   type: str
   help: "GitHub mirror URL of this package (e.g. https://github.com/bolandeu/mycli); Gitea is the primary store, the mirror is private and nobody pushes to it — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
   default: ""
+
+install_homeserver_users:
+  type: str
+  help: "Homeserver users the tool-updater installs this tool for, comma-separated ([tool.rb.install] homeserver); blank = build and publish only"
+  default: "rbtools"
+
+install_mac:
+  type: bool
+  help: "Install this tool on the Mac too ([tool.rb.install] mac)?"
+  default: true

@@ -86,6 +86,14 @@ dev = [
 # dist = "rb-serp"              # for one of our CLIs: its distribution (default rb-<name>)
 # url = "https://github.com/bolandeu/serp"  # its repo: DEPENDENCY_TOO_OLD then prints a pinned install
 
+# Where sysadmin's tool-updater installs this tool after its first tag. The
+# installation is sysadmin's; this section only says where. homeserver: users
+# to install for (empty = build and publish only); mac: install on the Mac.
+# extras (optional): the extras to install with, e.g. extras = ["browser"].
+[tool.rb.install]
+homeserver = [{{ install_homeserver_users.split(',') | map('trim') | select | map('tojson') | join(', ') }}]
+mac = {{ 'true' if install_mac else 'false' }}
+
 [tool.cli-generator]
 # Where scripts/check_command_docstrings.py (called by the project's checks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
