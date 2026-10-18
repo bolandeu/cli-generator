@@ -52,7 +52,7 @@ pushes by hand. Docs: `CONTEXT.md` (terms), `docs/adr/` (decisions),
 `CODING_STANDARDS.md` (review rules). TDD applies: a new behaviour of the
 template's code (`scripts/`, `core/`) gets its test first, failing. The
 gate for a template ticket is `scripts/check_template.sh` (see below), for both
-`include_auth` variants (and `include_db` when touched).
+`include_auth` variants and the publish-only variant (and `include_db` when touched).
 
 ## Testing a change to `template/`
 
@@ -60,8 +60,10 @@ Never trust a template edit without regenerating and running it — a
 Jinja/copier mistake fails silently as literal `{{ package_name }}` text
 in generated files, not as an error.
 
-The gate is one command (both `include_auth` variants: copier copy into a
-temp dir, `uv sync`, ruff, ty, pytest, then `git init` + tag `v0.1.0` +
+The gate is one command (both `include_auth` variants with the default
+`[tool.rb.install]`, and a publish-only variant — no homeserver users, no
+Mac: copier copy into a temp dir, `uv sync`, a literal check of the rendered
+`[tool.rb.install]`, ruff, ty, pytest, then `git init` + tag `v0.1.0` +
 `scripts/release.py --check`; temp dirs removed, non-zero exit on any failure):
 
 ```bash
