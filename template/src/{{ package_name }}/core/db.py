@@ -148,7 +148,7 @@ def _check_cache_schema(connection: sa.Connection) -> None:
     ).scalar()
     action = (
         f"Schema '{CACHE_SCHEMA}' with USAGE and CREATE for this tool's role is set up by the infrastructure "
-        "— report it to the root agent; nothing was migrated."
+        "— ask the user (sysadmin sets it up); nothing was migrated."
     )
     if not exists:
         raise DatabaseUnavailable(

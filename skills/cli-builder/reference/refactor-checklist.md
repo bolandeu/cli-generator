@@ -132,7 +132,7 @@ order before moving to the next item.
     in `pyproject.toml`, package data (the bundled SKILL.md) not shipped in
     the wheel, or README.md / `data/SKILL.md` still carrying an
     `<owner>/<repo>` placeholder instead of the real URL. Fix via
-    SKILL.md's "Publish to GitHub" section (private repo by default; ask
+    SKILL.md's "Publish" section (Gitea primary, private GitHub mirror; ask
     before creating anything). This is the item that makes the previous
     eleven usable from anywhere but the dev checkout.
 

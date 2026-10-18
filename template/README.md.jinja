@@ -27,8 +27,8 @@ antagor publish --bump   # SemVer; at 0.x: patch = fix/feature, minor = breaking
 ```
 
 It tags the release, builds `CHANGELOG.md` from the ticket titles and runs
-`scripts/deploy.sh`: push `main` with tags, then report the release to the
-root tools agent. Nobody tags or pushes by hand.
+`scripts/deploy.sh`: push `main` with tags to `origin`. Nobody tags or
+pushes by hand.
 
 ## Install
 

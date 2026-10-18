@@ -21,11 +21,13 @@ project-c/.mycli/config.toml
 Never vendor the CLI's own `.venv`/source into a consuming project unless
 that project *is* the CLI's own dev checkout.
 
-### Distribution: develop locally, install from GitHub — no PyPI required
+### Distribution: develop locally, store in Gitea, install from the GitHub mirror — no PyPI required
 
-The intended lifecycle is: develop on one machine, push to a GitHub repo,
-then install that exact package on any other machine (any OS) straight
-from the repo:
+The intended lifecycle is: develop on one machine, push to a Gitea repo
+(`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`, the primary
+store), and install that exact package on any other machine (any OS)
+straight from its private GitHub mirror `bolandeu/<name>` (Gitea syncs all
+refs, tags included; nobody pushes to GitHub):
 
 ```bash
 uv tool install "git+https://github.com/<owner>/<repo>.git"
@@ -53,12 +55,13 @@ README.md and SKILL.md say this, so a fresh machine or an agent in a
 sandbox knows what to do when the plain HTTPS install is refused with an
 auth error. Later updates on any machine are `uv tool upgrade <pkg>`.
 
-Creating that repo is part of the skill's job (SKILL.md, "Publish to
-GitHub"): after the package verifies, it prepares the local repo and
-hands it to the root tools agent, which creates the private repo and
-pushes after the user's yes (agents never write to GitHub themselves);
-then the skill proves the from-GitHub install works — in both Scaffold
-and Refactor mode.
+Creating that repo is part of the skill's job (SKILL.md, "Publish"):
+after the package verifies, it prepares the local repo, runs `git init`,
+`git remote add origin` and the first `git push -u origin main` to Gitea
+itself (allowed on repo init without asking); until Gitea push-to-create
+is live, the Human first creates the repo with sysadmin's
+`scripts/new-repo-in-gitea.sh <name> --from <path>`. Then the skill proves
+the from-mirror install works — in both Scaffold and Refactor mode.
 
 ## 2. Four layers
 
@@ -375,7 +378,7 @@ standard, the template implements it):
   a title that says what changed for the user.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
-  runs only this, the root agent's `tools-watch` runs it too, and it is a
+  runs only this, `tools-watch` runs it too, and it is a
   ticket check in `antagor.toml`: `uv lock --check`, ruff check, ruff
   format --check, ty, pytest, `uv build` + install of the wheel into a throwaway venv where
   `<cli> --version` must equal the wheel's METADATA version and
@@ -392,10 +395,9 @@ standard, the template implements it):
   default `patch`). It merges the accepted tickets, writes the changelog
   from their titles, creates the tag `vX.Y.Z` (a valid PEP 440 version)
   and runs `deploy_command` (`sh scripts/deploy.sh`: it pushes `main`
-  with the tags and tells the root tools agent about the release). Only
+  with the tags to `origin`, Gitea). Only
   the Human runs it. An
-  agent never pushes by hand: it reports each ready tag to the root tools
-  agent. `scripts/release.py` has no bump mode any more; it is only the
+  agent never pushes by hand. `scripts/release.py` has no bump mode any more; it is only the
   gate. The template's copy is canonical: every repo following the
   standard uses it verbatim.
 - **CI is optional**: one `ubuntu-24.04` job on the lowest supported
@@ -608,8 +610,7 @@ table must be empty, sequences moved past the imported ids. `doctor`
 reports `database` (connection) and `database_schema` (revision).
 
 **Dev → prod: `db push`.** A dev machine works on its local SQLite;
-production is the PostgreSQL in `<TOOL>_PROD_DATABASE_URL` (Doppler
-`tools/dev`). `db push [--table T] [--since DATE] [--where SQL]
+production is the PostgreSQL in `<TOOL>_PROD_DATABASE_URL` (Doppler). `db push [--table T] [--since DATE] [--where SQL]
 [--dry-run]` sends the local rows of the *push tables* there: tables
 marked `info={"push": {"since": "<timestamp column>"}}` in `tables.py` —
 append-only, with a unique constraint on the natural key and no foreign
@@ -619,20 +620,20 @@ harmless. Production's revision is checked first, as on open (behind →
 `DATABASE_NOT_MIGRATED`, newer → `CLI_TOO_OLD`). One transaction;
 `--dry-run` rolls it back, so its counts (`selected`, `sent`, `skipped`
 per table) are exact. A table that is updated in place is not a push
-table. Only the root tools agent runs anything against production —
+table. An agent never runs anything against production —
 `db push` (dry run included), reads through `<TOOL>_PROD_DATABASE_URL`,
-ssh to the server; a tool's agent hands it the exact command.
+ssh to the server; it gives the Human the exact command.
 
 
 ## 13. Consumer contracts
 
 What other tools, Windmill flows, the Astro build and the platform rely on in
 a CLI is pinned by **their** tests, run by **its** gate (consumer-driven
-contracts, `~/Work/dev/docs/testing.md`). The consumer writes the contract
+contracts). The consumer writes the contract
 (the source of truth is the consumer's repo, the tool keeps a copy, both
-through dev); the tool's agent never edits it to pass — a contract that
+through the Human); the tool's agent never edits it to pass — a contract that
 changed or vanished shows up in the gate's `existing tests` list. The format
-is the consumers'; a change to it goes through the root agent with a reason.
+is the consumers'; a change to it goes to the Human with a reason.
 
 **Where.** `tests/contracts/<consumer>/<provider>.yaml` (e.g.
 `tests/contracts/windmill/serp.yaml`), format `contract: 1` in

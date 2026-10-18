@@ -1,4 +1,4 @@
-"""The `auth status [--check] --json` report (tools/docs/standard-release.md §8).
+"""The `auth status [--check] --json` report (CLI standard, architecture.md §4).
 
 Its shape is a cross-tool contract — `tools-watch` reads it from every CLI
 without knowing any provider — so it is pinned by `tests/test_auth.py`, and

@@ -196,7 +196,7 @@ def test_antagor_project_config() -> None:
     # The Human sets the mode (`antagor mode set`, `antagor new --mode`).
     assert config.get("mode") in (None, "strict", "default", "free", "fast")
     assert (root / ".agents" / "antagor" / ".gitignore").read_text().split() == ["state/", "receipts/"]
-    assert "ANTAGOR_VERSION" in (SCRIPTS / "deploy.sh").read_text()
+    assert "git push origin main --follow-tags" in (SCRIPTS / "deploy.sh").read_text()
 
 
 def test_antagor_layout() -> None:
