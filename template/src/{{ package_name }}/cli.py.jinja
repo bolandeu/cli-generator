@@ -5,7 +5,7 @@ from importlib import resources
 import typer
 
 from . import output
-from .commands import auth{% if include_db %}, db{% endif %}, describe, doctor, init, run, skill, status
+from .commands import auth{% if include_db %}, db{% endif %}, describe, docs, doctor, init, run, skill, status
 from .commands import config as config_cmd
 from .core.version import DEV_VERSION, cli_name, installed_version, package_summary
 
@@ -31,6 +31,7 @@ app.command(name="status")(status.status)
 app.command(name="doctor")(doctor.doctor)
 app.command(name="run")(run.run)
 app.command(name="describe")(describe.describe)
+app.command(name="docs")(docs.docs)
 
 
 def _version_callback(value: bool) -> None:

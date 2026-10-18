@@ -201,6 +201,8 @@ def test_parameter_shapes() -> None:
     assert _meta(options["--color"])["x-rb-default"] == "red"
     assert _meta(options["--out"])["x-rb-default"] == "out"
     assert _meta(options["--tag"])["x-rb-multiple"] is True
+    assert options["--color"]["arguments"][0]["arity"] == {"maximum": 1}
+    assert "arity" not in options["--tag"]["arguments"][0]
     assert options["--secret"]["hidden"] is True
     assert options["--force"]["aliases"] == ["--no-force"] and "arguments" not in options["--force"]
     assert options["--name"]["required"] is True
