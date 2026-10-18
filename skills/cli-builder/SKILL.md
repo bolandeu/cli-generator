@@ -79,9 +79,10 @@ function) is governed by these four rules instead
      into README.md, the bundled SKILL.md and `.copier-answers.yml` from
      the start instead of an `<owner>/<repo>` placeholder to chase later.
    - The install answers (`[tool.rb.install]`, `reference/architecture.md` §1):
-     `install_homeserver` (list of homeserver users) and `install_mac`
-     (bool). Default for a tool in rbtools: the user's homeserver user +
-     Mac. A library: publish only (`install_homeserver=[]`, `install_mac=false`).
+     `install_homeserver_users` (comma-separated homeserver users, blank =
+     build and publish only) and `install_mac` (bool). Default: homeserver
+     user `rbtools` + Mac. A library: publish only
+     (`--data install_homeserver_users= --data install_mac=false`).
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
 2. Generate the skeleton with copier from **`gh:bolandeu/cli-generator`** —

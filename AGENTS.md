@@ -176,7 +176,7 @@ before (missing answers file, wrong `copier.yml` location).
   mode instead.
 - Optional generated parts are copier questions, not deletions:
   `include_auth`, `include_providers` (only without auth), the install
-  questions `install_homeserver` and `install_mac` (`[tool.rb.install]`),
+  questions `install_homeserver_users` and `install_mac` (`[tool.rb.install]`),
   `include_http_provider` (drops `providers/http.py`,
   `tests/test_http_provider.py` and `httpx`), `include_db` (keeps
   `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,

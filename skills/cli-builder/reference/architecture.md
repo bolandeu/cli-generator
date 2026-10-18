@@ -29,7 +29,7 @@ how it is installed:
 
 ```toml
 [tool.rb.install]
-homeserver = ["roman"]   # homeserver users to install for; [] = build and publish only
+homeserver = ["rbtools"] # homeserver users to install for; [] = build and publish only
 mac = true               # install on the Mac
 extras = ["tui"]         # optional: extras to install
 ```
@@ -48,7 +48,9 @@ The section present means the repo is a tool or library. Then:
 The command that sysadmin checks is the first entry of `[project.scripts]`.
 A library not made from this template adds the section by hand, with
 `homeserver = []` and `mac = false`. The gate refuses a project without the
-section (`scripts/release.py --check`).
+section (`scripts/release.py --check`). The `repository_url` copier question
+fills the install line in `README.md` and `src/{{ package_name }}/data/SKILL.md`
+(placeholder `<owner>/<repo>` if left blank).
 
 Installation itself is sysadmin's area; this repo only defines what the
 package declares. The skill (SKILL.md, "Publish") pushes the first tag and
