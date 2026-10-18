@@ -37,9 +37,8 @@ session without the flag), then ask for either:
 Both modes end by offering to publish: the skill prepares the local repo
 and pushes it to Gitea (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`,
 the primary store; GitHub `bolandeu/<name>` is a private push mirror, nobody
-pushes there). Until Gitea push-to-create is live, you first create the repo
-with sysadmin's `scripts/new-repo-in-gitea.sh <name> --from <path>`. The skill
-then verifies that `uv tool install "git+https://github.com/<owner>/<repo>.git@vX.Y.Z"`
+pushes there). The first push creates the repo, and the skill tells sysadmin
+about it. The skill then verifies that `uv tool install "git+https://github.com/<owner>/<repo>.git@vX.Y.Z"`
 works from the mirror — the one-command install every generated README/SKILL.md
 points other machines (and agents) at.
 

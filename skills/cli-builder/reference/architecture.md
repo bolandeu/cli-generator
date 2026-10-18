@@ -58,10 +58,9 @@ auth error. Later updates on any machine are `uv tool upgrade <pkg>`.
 Creating that repo is part of the skill's job (SKILL.md, "Publish"):
 after the package verifies, it prepares the local repo, runs `git init`,
 `git remote add origin` and the first `git push -u origin main` to Gitea
-itself (allowed on repo init without asking); until Gitea push-to-create
-is live, the Human first creates the repo with sysadmin's
-`scripts/new-repo-in-gitea.sh <name> --from <path>`. Then the skill proves
-the from-mirror install works — in both Scaffold and Refactor mode.
+itself (allowed on repo init without asking); the push creates the repo.
+It then tells sysadmin about the new repo and proves the from-mirror
+install works (the mirror appears within about 5 minutes) — in both Scaffold and Refactor mode.
 
 ## 2. Four layers
 
