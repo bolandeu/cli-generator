@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.19.0 — 2026-10-18
+
+### E-002 — Auto-install: every package declares [tool.rb.install]; the skill no longer messages sysadmin
+
+A package made by the skill carries [tool.rb.install]; after its first tag sysadmin's tool-updater (homeserver) and Mac agent install it with no message and no tools.toml edit; the skill installs it once on the Mac right after the first tag for instant use.
+Time: 0.2h since the epic was approved
+
+- Template: [tool.rb.install] in every generated project, from copier questions (CG-023)
+
 ## v1.18.2 — 2026-10-18
 
 ### Outside epics
