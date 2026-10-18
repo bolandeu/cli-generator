@@ -307,7 +307,7 @@ template, `_commit` is the template release it was last synced to):
       "uv run scripts/release.py --check"]`: the command docstring check
       and `release.py --check`. Then run `uv lock` and the gate.
    6. From now on every change is a ticket and a release is
-      `antagor publish --bump patch|minor|major` (Publish step 7).
+      `antagor publish --bump patch|minor|major` (Publish step 8).
 6. **Crossing template v1.2.6** (credential namespace = command name).
    Keychain service and env vars moved from the package name to
    `cli_name` (`rb_serp` → `serp`: `SERP_XMLRIVER_API_KEY`). If the two
@@ -438,7 +438,7 @@ package sitting installable-from-nowhere without asking.
    run `antagor hooks install`. A refactored project without it gets
    `antagor init` in the Refactor step above, which installs the hooks too.
    In Refactor mode you're on a feature branch; merging it is the user's
-   call. Fill in the repo URL now (step 4) so the first push already
+   call. Fill in the repo URL now (step 5) so the first push already
    carries it.
 3. **Push to Gitea.** The first push on repo init is allowed without
    asking (Human, 2026-10-18):
@@ -447,15 +447,23 @@ package sitting installable-from-nowhere without asking.
    git push -u origin main --follow-tags
    ```
    `<name>` is the repo name decided in Scaffold step 1 / the refactored
-   project's existing name. Until Gitea push-to-create is live, the Human
-   creates the repo first: give them the ready command
-   `scripts/new-repo-in-gitea.sh <name> --from <absolute path>` (sysadmin's
-   script) and wait for the answer; do what doesn't depend on it meanwhile.
+   project's existing name. The first push creates the repo (push-to-create
+   in the `bolandeu` org; outside it Gitea refuses with 403). Within about
+   5 minutes sysadmin's repo-sync creates the private GitHub copy
+   `bolandeu/<name>` with a push mirror.
    A new tool going into service needs the user's yes **before** its repo
    exists. If the user declines, say that the placeholder in README.md and
    `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
    don't silently leave it.
-4. **Make sure the package knows its own URL** (the GitHub mirror URL). In
+4. **Tell sysadmin about the new repo**, right after the push:
+   ```bash
+   herdr agent prompt sysadmin "<text>"
+   ```
+   For a new tool the text gives the repo name and the command
+   (`cli_name`): sysadmin adds it to `tools.toml` (tool-updater). For a
+   repo that is not a tool (a template, a product) the text gives only its
+   name: sysadmin adds it to `not_tools`, else the daily check alerts.
+5. **Make sure the package knows its own URL** (the GitHub mirror URL). In
    Scaffold mode with `repository_url` passed to copier this is already
    true. Otherwise replace the `<owner>/<repo>` placeholder in README.md
    ("Install") and `src/<package_name>/data/SKILL.md` ("Installation"), and
@@ -463,15 +471,16 @@ package sitting installable-from-nowhere without asking.
    `.copier-answers.yml` — that file is the answer store `copier update`
    reads, so without this the next update would render the placeholder
    back. Commit these edits before the push.
-5. **CI and its secret.** CI is optional (it only repeats
+6. **CI and its secret.** CI is optional (it only repeats
    `release.py --check`; the local gate is authoritative) — to save
    Actions minutes on a private repo, generate (or update) with
    `--data include_ci=false`. A tool depending on our **private** repos
    needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
    (fine-grained, Contents: read on those repos) — without it CI can't
    fetch them (standard §9); the user creates the secret, never you.
-6. **Verify from the mirror, not from the checkout**, once Gitea has
-   synced it — this is the command every other machine (and every agent
+7. **Verify from the mirror, not from the checkout.** The mirror appears
+   within about 5 minutes after the first push; wait for it before the
+   install check. This is the command every other machine (and every agent
    reading the bundled SKILL.md) will run:
    ```bash
    uv tool install --reinstall "<dist_name> @ git+https://github.com/<owner>/<repo>.git@vX.Y.Z" && <cli_name> --version
@@ -489,7 +498,7 @@ package sitting installable-from-nowhere without asking.
    `git+ssh://git@github.com/<owner>/<repo>.git`. Both are documented in
    the generated README.md and SKILL.md — don't re-explain them per
    project.
-7. **Releases after that**: `antagor publish --bump patch|minor|major`
+8. **Releases after that**: `antagor publish --bump patch|minor|major`
    (Human only, or the project's Architect) merges the accepted tickets,
    writes `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440)
    and runs `scripts/deploy.sh`, which pushes `main` with the tags to
