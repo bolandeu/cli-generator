@@ -28,7 +28,6 @@ _exclude:
   - "{% if not include_db %}src/{{ package_name }}/migrations{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
   - "{% if not include_db %}tests/test_db.py{% endif %}"
-  - "{% if not include_db %}tests/conftest.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
   # Migrations are the project's own history once generated: on `copier update` the
   # template's example revisions must never land in a tool's chain (a second 0002...).
