@@ -4,6 +4,7 @@ _subdirectory: template
 # prose into a README the project has rewritten.
 _skip_if_exists:
   - "README.md"
+  - "tests/help_allowlist.txt"
 
 _exclude:
   - "copier.yaml"
