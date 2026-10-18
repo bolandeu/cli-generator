@@ -175,7 +175,8 @@ before (missing answers file, wrong `copier.yml` location).
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
 - Optional generated parts are copier questions, not deletions:
-  `include_auth`, `include_providers` (only without auth),
+  `include_auth`, `include_providers` (only without auth), the install
+  questions `install_homeserver` and `install_mac` (`[tool.rb.install]`),
   `include_http_provider` (drops `providers/http.py`,
   `tests/test_http_provider.py` and `httpx`), `include_db` (keeps
   `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,

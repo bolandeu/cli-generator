@@ -78,6 +78,10 @@ function) is governed by these four rules instead
      it to copier is what puts the real `uv tool install "git+…"` command
      into README.md, the bundled SKILL.md and `.copier-answers.yml` from
      the start instead of an `<owner>/<repo>` placeholder to chase later.
+   - The install answers (`[tool.rb.install]`, `reference/architecture.md` §1):
+     `install_homeserver` (list of homeserver users) and `install_mac`
+     (bool). Default for a tool in rbtools: the user's homeserver user +
+     Mac. A library: publish only (`install_homeserver=[]`, `install_mac=false`).
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
 2. Generate the skeleton with copier from **`gh:bolandeu/cli-generator`** —
@@ -162,7 +166,7 @@ function) is governed by these four rules instead
    `scripts/check_command_docstrings.py`).
 5. Publish — follow "Publish" below. Scaffolding is local
    until the user says otherwise: nothing leaves the machine before the
-   user's yes (that section, step 3).
+   user's yes (that section, step 2).
 
 ## Mode: Refactor
 
@@ -244,7 +248,10 @@ template, `_commit` is the template release it was last synced to):
    resolve by taking one side wholesale (`git checkout --theirs/--ours`,
    copying the template file over): that silently deletes the project's
    own commands or the template's fixes. Delete each `.rej` afterwards and
-   check `git diff` reads as intended before the gate.
+   check `git diff` reads as intended before the gate. The update brings
+   `[tool.rb.install]` into `pyproject.toml`; the gate now refuses a
+   project without it. Check the answers: a library gets `homeserver = []`
+   and `mac = false` (`reference/architecture.md` §1).
 3. Run the full verify loop (Scaffold step 4). Read the diff: a template
    release can add a gate (coverage floor, a lint rule) that the
    project's existing code now fails — fix the code, don't lower the
@@ -270,10 +277,7 @@ template, `_commit` is the template release it was last synced to):
    `{"provider", "authenticated"}`: a breaking change for the CLI's own
    callers, so release it as a breaking bump (minor at `0.x`) in a
    ticket titled as a breaking change. Then the
-   full verify loop, and once the tag is synced to the mirror check
-   `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
-   `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
-   report instead of working around it.
+   full verify loop. Releasing it is the Publish step below.
 5. **Crossing the Antagor template** (release by `antagor publish`, no
    towncrier, no hand-made hooks). Use it for a project with its own old
    release: towncrier and fragments, `.githooks/`, `scripts/release.py
@@ -308,7 +312,7 @@ template, `_commit` is the template release it was last synced to):
       "uv run scripts/release.py --check"]`: the command docstring check
       and `release.py --check`. Then run `uv lock` and the gate.
    6. From now on every change is a ticket and a release is
-      `antagor publish --bump patch|minor|major` (Publish step 8).
+      `antagor publish --bump patch|minor|major` (Publish step 6).
 6. **Crossing template v1.2.6** (credential namespace = command name).
    Keychain service and env vars moved from the package name to
    `cli_name` (`rb_serp` → `serp`: `SERP_XMLRIVER_API_KEY`). If the two
@@ -408,38 +412,24 @@ The command (`cli_name`) and the import package don't change; only
    `[tool.uv.sources]` key (`"yandex-oauth>=0.2,<0.3"` →
    `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { git = …, tag = … }`),
    `uv lock`, gate, release.
-4. Machines with the tool installed: `uv tool uninstall <old name>` first,
-   then `uv tool install "rb-<slug> @ git+<repo-url>@vX.Y.Z"` — otherwise
-   two tools claim the same command. Put this in the ticket title, so it reaches the changelog.
+4. Machines: no uninstall step. Sysadmin's tool-updater follows the new
+   name. Put the old and the new name in the ticket title, so it reaches the changelog.
 
 ## Publish (both modes)
 
-The end state for every package is: installable on any machine, any OS,
-with one command and no PyPI account —
-
-```bash
-uv tool install "git+https://github.com/<owner>/<repo>.git@vX.Y.Z"
-```
-
 The primary store is Gitea:
-`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`. GitHub
-`bolandeu/<name>` is a private push mirror: Gitea syncs all refs to it,
-tags included, so that install line points at the mirror. Nobody pushes to
-GitHub — never run `gh repo create` or a push to a GitHub remote.
+`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`. Nobody pushes
+to GitHub — never run `gh repo create` or a push to a GitHub remote.
+`[tool.rb.install]` in `pyproject.toml` decides who installs the package
+(`reference/architecture.md` §1): sysadmin's tool-updater builds every tag
+and a Mac agent keeps the Mac current. This skill sends no message to
+sysadmin. Installability is proven by `release.py --check` (the built wheel
+in a throwaway venv), which is part of the verify loop.
 
 Do this after the verify step. Always *offer* publishing; don't leave the
-package sitting installable-from-nowhere without asking.
+package sitting unreleased without asking.
 
-1. **Prove it's installable locally first.** This catches packaging
-   mistakes (missing `[build-system]`, no `[project.scripts]`, package
-   data not shipped) before the repo exists, where they're confusing to
-   debug:
-   ```bash
-   uv tool install --reinstall . && <package_name> --version
-   ```
-   The template's `pyproject.toml` has everything needed; a refactored
-   project may not — fix it here, not later.
-2. **Prepare the local repo.** If the directory isn't a git repo yet
+1. **Prepare the local repo.** If the directory isn't a git repo yet
    (Scaffold mode): `git init -b main && git add -A && git commit -m
    "Initial commit"`, then tag it — the version comes from the tag, and
    `antagor publish` needs one to bump from: `git tag -a v0.1.0 -m v0.1.0`.
@@ -447,9 +437,9 @@ package sitting installable-from-nowhere without asking.
    run `antagor hooks install`. A refactored project without it gets
    `antagor init` in the Refactor step above, which installs the hooks too.
    In Refactor mode you're on a feature branch; merging it is the user's
-   call. Fill in the repo URL now (step 5) so the first push already
+   call. Fill in the repo URL now (step 4) so the first push already
    carries it.
-3. **Push to Gitea.** The first push on repo init is allowed without
+2. **Push to Gitea.** The first push on repo init is allowed without
    asking (Human, 2026-10-18):
    ```bash
    git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git
@@ -459,20 +449,22 @@ package sitting installable-from-nowhere without asking.
    project's existing name. The first push creates the repo (push-to-create
    in the `bolandeu` org; outside it Gitea refuses with 403). Within about
    5 minutes sysadmin's repo-sync creates the private GitHub copy
-   `bolandeu/<name>` with a push mirror.
+   `bolandeu/<name>` with a push mirror. Nothing waits for it.
    A new tool going into service needs the user's yes **before** its repo
    exists. If the user declines, say that the placeholder in README.md and
    `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
    don't silently leave it.
-4. **Tell sysadmin about the new repo**, right after the push:
+3. **Install once on the Mac**, for instant use (the Mac agent of
+   sysadmin takes over upgrades). Skip it when `install_mac` is false.
+   After the first tag is pushed:
    ```bash
-   herdr agent prompt sysadmin "<text>"
+   uv tool install --index gitea=https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple <dist_name> && <cli_name> --version
    ```
-   For a new tool the text gives the repo name and the command
-   (`cli_name`): sysadmin adds it to `tools.toml` (tool-updater). For a
-   repo that is not a tool (a template, a product) the text gives only its
-   name: sysadmin adds it to `not_tools`, else the daily check alerts.
-5. **Make sure the package knows its own URL** (the GitHub mirror URL). In
+   It must print `0.1.0`. If the registry has no wheel yet (the tool-updater
+   builds the tag within minutes), retry later; do not install the checkout
+   (`uv tool install .`) and do not use the mirror instead. No message to
+   sysadmin.
+4. **Make sure the package knows its own URL** (the GitHub mirror URL). In
    Scaffold mode with `repository_url` passed to copier this is already
    true. Otherwise replace the `<owner>/<repo>` placeholder in README.md
    ("Install") and `src/<package_name>/data/SKILL.md` ("Installation"), and
@@ -480,34 +472,14 @@ package sitting installable-from-nowhere without asking.
    `.copier-answers.yml` — that file is the answer store `copier update`
    reads, so without this the next update would render the placeholder
    back. Commit these edits before the push.
-6. **CI and its secret.** CI is optional (it only repeats
+5. **CI and its secret.** CI is optional (it only repeats
    `release.py --check`; the local gate is authoritative) — to save
    Actions minutes on a private repo, generate (or update) with
    `--data include_ci=false`. A tool depending on our **private** repos
    needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
    (fine-grained, Contents: read on those repos) — without it CI can't
    fetch them (standard §9); the user creates the secret, never you.
-7. **Verify from the mirror, not from the checkout.** The mirror appears
-   within about 5 minutes after the first push; wait for it before the
-   install check. This is the command every other machine (and every agent
-   reading the bundled SKILL.md) will run:
-   ```bash
-   uv tool install --reinstall "<dist_name> @ git+https://github.com/<owner>/<repo>.git@vX.Y.Z" && <cli_name> --version
-   ```
-   Replace `vX.Y.Z` with the latest release tag (`v0.1.0` right after
-   step 3) — always a tag, never a branch (standard §9). It must print
-   `X.Y.Z`, not `0.0.0` — `0.0.0` means the build saw no
-   tag (not synced yet, or uv's checkout lacks tag info); stop and tell
-   the user.
-   (`--reinstall` because step 1 installed the same tool from the local
-   path.) For a private repo this works over plain HTTPS because
-   `gh auth login` also configured git's credential helper; on a machine
-   where it wasn't done interactively (`gh auth login --with-token`, CI)
-   it needs `gh auth setup-git` once, or the SSH form
-   `git+ssh://git@github.com/<owner>/<repo>.git`. Both are documented in
-   the generated README.md and SKILL.md — don't re-explain them per
-   project.
-8. **Releases after that**: `antagor publish --bump patch|minor|major`
+6. **Releases after that**: `antagor publish --bump patch|minor|major`
    (Human only, or the project's Architect) merges the accepted tickets,
    writes `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440)
    and runs `scripts/deploy.sh`, which pushes `main` with the tags to
@@ -516,7 +488,7 @@ package sitting installable-from-nowhere without asking.
    (`architecture.md` §8: at `0.x` fixes and compatible features are
    patch, a breaking change is minor). There is no `version =` to edit,
    no `[Unreleased]` section and no fragment — one ticket per change.
-   `uv tool upgrade <package_name>` moves other machines forward.
+   Other machines follow by `[tool.rb.install]`; you do not upgrade them.
 
 ## Non-negotiables (apply in both modes)
 
@@ -551,9 +523,8 @@ skipped under time pressure — check them explicitly:
   ruff's `S` (security) rules, and the osv-scanner audit of `uv.lock`
   (a gate step when osv-scanner is installed; CI installs it). `uv run scripts/release.py --check` runs every gate locally
   and is what an agent runs before each commit. A refactored project gets all three.
-- The package is installable with `uv tool install "git+<repo-url>"` and
-  its README.md + bundled SKILL.md carry that exact command with the real
-  URL, not a placeholder — see "Publish". A CLI that only runs
+- The package declares `[tool.rb.install]` and is installable (the wheel
+  passes `release.py --check`) — see "Publish". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
   project" premise in `reference/architecture.md`.
 - **Changed a command's behaviour → update its docstring in the same

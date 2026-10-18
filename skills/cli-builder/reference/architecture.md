@@ -21,46 +21,40 @@ project-c/.mycli/config.toml
 Never vendor the CLI's own `.venv`/source into a consuming project unless
 that project *is* the CLI's own dev checkout.
 
-### Distribution: develop locally, store in Gitea, install from the GitHub mirror — no PyPI required
+### Distribution: `[tool.rb.install]` decides installation
 
-The intended lifecycle is: develop on one machine, push to a Gitea repo
-(`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`, the primary
-store), and install that exact package on any other machine (any OS)
-straight from its private GitHub mirror `bolandeu/<name>` (Gitea syncs all
-refs, tags included; nobody pushes to GitHub):
+The package lives in Gitea (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`,
+the primary store; nobody pushes to GitHub). It declares in `pyproject.toml`
+how it is installed:
 
-```bash
-uv tool install "git+https://github.com/<owner>/<repo>.git"
+```toml
+[tool.rb.install]
+homeserver = ["roman"]   # homeserver users to install for; [] = build and publish only
+mac = true               # install on the Mac
+extras = ["tui"]         # optional: extras to install
 ```
 
-No PyPI publish step is needed for this to work — `uv tool install`
-resolves and builds directly from the git URL. Pin a release by appending
-`@vX.Y.Z` (a tag cut by `antagor publish`, see §8). This is wired into every generated package
-automatically: the `repository_url` copier question fills in this exact
-command in both `README.md` (for the human) and
-`src/{{ package_name }}/data/SKILL.md` (for an agent that finds the skill
-installed on a machine before the CLI binary itself is — e.g. a synced
-`~/.claude/skills/` directory reaching a fresh machine ahead of the tool).
-If `repository_url` was left blank at generation time, both files carry a
-`<owner>/<repo>` placeholder to fill in once the repo exists.
+The section present means the repo is a tool or library. Then:
 
-The repo is **private by default**. These CLIs usually wrap one person's
-accounts and providers, and nothing about the install path needs a public
-repo: `uv tool install` shells out to git, so it authenticates exactly like
-`git clone` does — over HTTPS through the credential helper that
-`gh auth login` configures (`gh auth setup-git` if `gh` was logged in
-non-interactively), or over SSH with the
-`git+ssh://git@github.com/<owner>/<repo>.git` form. Both the generated
-README.md and SKILL.md say this, so a fresh machine or an agent in a
-sandbox knows what to do when the plain HTTPS install is refused with an
-auth error. Later updates on any machine are `uv tool upgrade <pkg>`.
+1. Sysadmin's tool-updater builds every `vX.Y.Z` tag and publishes the wheel
+   to the Gitea PyPI registry. Simple index:
+   `https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple`
+   (anonymous read).
+2. The tool-updater installs the wheel for the `homeserver` users.
+3. A Mac agent of sysadmin installs and upgrades the packages with `mac = true`.
+4. `tools.toml` on sysadmin's side overrides the section (pins, other users,
+   legacy repos).
 
-Creating that repo is part of the skill's job (SKILL.md, "Publish"):
-after the package verifies, it prepares the local repo, runs `git init`,
-`git remote add origin` and the first `git push -u origin main` to Gitea
-itself (allowed on repo init without asking); the push creates the repo.
-It then tells sysadmin about the new repo and proves the from-mirror
-install works (the mirror appears within about 5 minutes) — in both Scaffold and Refactor mode.
+The command that sysadmin checks is the first entry of `[project.scripts]`.
+A library not made from this template adds the section by hand, with
+`homeserver = []` and `mac = false`. The gate refuses a project without the
+section (`scripts/release.py --check`).
+
+Installation itself is sysadmin's area; this repo only defines what the
+package declares. The skill (SKILL.md, "Publish") pushes the first tag and
+installs the package once on the Mac for instant use; it sends no message to
+sysadmin. Installability is proven by `release.py --check`, which installs
+the built wheel into a throwaway venv (§8).
 
 ## 2. Four layers
 
