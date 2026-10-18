@@ -31,8 +31,7 @@ command the caller (human or agent) can run to unblock itself.
 
 ## JSON report envelope (data that can also be a problem)
 
-A command whose output is a report — `auth status` (§8 of the release
-standard), a health or audit command — emits the data **whether or not** it
+A command whose output is a report — `auth status` (`architecture.md` §4), a health or audit command — emits the data **whether or not** it
 found a problem, via `output.emit_report(ctx, payload, render_human, problem)`:
 
 ```json

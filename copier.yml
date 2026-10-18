@@ -136,5 +136,5 @@ private_deps:
 
 repository_url:
   type: str
-  help: "GitHub repo URL this package will live at (e.g. https://github.com/you/mycli; the skill creates it as a private repo after generation) — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
+  help: "GitHub mirror URL of this package (e.g. https://github.com/bolandeu/mycli); Gitea is the primary store, the mirror is private and nobody pushes to it — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
   default: ""

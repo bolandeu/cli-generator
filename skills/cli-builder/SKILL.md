@@ -69,7 +69,7 @@ function) is governed by these four rules instead
      mentions any external API/provider. Only without credentials:
      `include_providers=false` drops `providers/` for a CLI that calls no
      external service.
-   - `repository_url` — the GitHub URL this will live at. Decide it
+   - `repository_url` — the GitHub mirror URL this will live at (Gitea is primary). Decide it
      **now**, before generating, even though the repo itself is only
      created in the Publish step below: default to
      `https://github.com/<owner>/<repo>` with `<owner>` from
@@ -160,9 +160,9 @@ function) is governed by these four rules instead
    Under Antagor the same gate runs as the ticket's `checks`
    (`.agents/antagor/antagor.toml`, with
    `scripts/check_command_docstrings.py`).
-5. Publish — follow "Publish to GitHub" below. Scaffolding is local
-   until the user says otherwise: nothing reaches GitHub before the root
-   agent has the user's yes (that section, step 3).
+5. Publish — follow "Publish" below. Scaffolding is local
+   until the user says otherwise: nothing leaves the machine before the
+   user's yes (that section, step 3).
 
 ## Mode: Refactor
 
@@ -212,7 +212,7 @@ business logic).
 5. Verify the same way as Scaffold mode (`uv sync && pytest && doctor`), plus
    confirm any behavior that existed before the refactor still produces the
    same result.
-6. Publish — follow "Publish to GitHub" below (checklist item 12). A
+6. Publish — follow "Publish" below (checklist item 12). A
    refactored script usually has never been `uv tool install`-able from
    anywhere; leaving it that way means the "works on any machine" half of
    the architecture is still missing after all the other items pass.
@@ -269,14 +269,14 @@ template, `_commit` is the template release it was last synced to):
    `{"provider", "authenticated"}`: a breaking change for the CLI's own
    callers, so release it as a breaking bump (minor at `0.x`) in a
    ticket titled as a breaking change. Then the
-   full verify loop, and once the tag is on GitHub check
+   full verify loop, and once the tag is synced to the mirror check
    `uv tool install --reinstall "git+<repo-url>@vX.Y.Z"` then
    `<cli> --version` prints `X.Y.Z` — if it prints `0.0.0`, stop and
    report instead of working around it.
 5. **Crossing the Antagor template** (release by `antagor publish`, no
    towncrier, no hand-made hooks). Use it for a project with its own old
    release: towncrier and fragments, `.githooks/`, `scripts/release.py
-   patch|minor|major`, and a pre-push hook that pushes and notifies tools.
+   patch|minor|major`, and a pre-push hook that pushes and notifies.
    Move it in this order:
    1. Hooks. Delete `.githooks/`, `scripts/install_hooks.sh`, the
       `.claude/settings.json` hooks and `herdr_name` files, and run
@@ -294,7 +294,7 @@ template, `_commit` is the template release it was last synced to):
       the `patch|minor|major` modes from `scripts/release.py`; keep only
       `--check` (the template's `release.py` is verbatim: take it).
    3. Deploy. Take `scripts/deploy.sh` from the template. It does the same
-      as the old pre-push hook: push, then notify tools. Do not keep that
+      as the old pre-push hook: push `main` with tags. Do not keep that
       logic in a hook.
    4. Antagor config. Take `.agents/antagor/antagor.toml` from the template
       (`copier update` brings it, with `scripts/deploy.sh` and
@@ -354,8 +354,7 @@ template, `_commit` is the template release it was last synced to):
    T30 tests (move keeps rows and dates, view still works, previous release
    gets CLI_TOO_OLD, push lands in `cache.<t>`, missing schema or rights
    is a clear error) must pass. Schema `cache` and the role's USAGE +
-   CREATE on it in production are the infrastructure's — ask through the
-   root agent before the release that moves anything.
+   CREATE on it in production are the infrastructure's — ask the user (sysadmin sets it up) before the release that moves anything.
 10. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
    §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
    and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
@@ -404,21 +403,23 @@ The command (`cli_name`) and the import package don't change; only
    then `uv tool install "rb-<slug> @ git+<repo-url>@vX.Y.Z"` — otherwise
    two tools claim the same command. Put this in the ticket title, so it reaches the changelog.
 
-## Publish to GitHub (both modes)
+## Publish (both modes)
 
 The end state for every package is: installable on any machine, any OS,
 with one command and no PyPI account —
 
 ```bash
-uv tool install "git+https://github.com/<owner>/<repo>.git"
+uv tool install "git+https://github.com/<owner>/<repo>.git@vX.Y.Z"
 ```
 
-Do this after the verify step. You prepare everything locally and report
-it to the root agent `tools`; whatever touches GitHub — creating the repo,
-the first and every later push, the ruleset — is done by dev after the
-user's yes. One rule, no exceptions: you never run `gh repo create`,
-`git push` or anything else that writes to GitHub. Always *offer* publishing; don't leave the package
-sitting installable-from-nowhere without asking.
+The primary store is Gitea:
+`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`. GitHub
+`bolandeu/<name>` is a private push mirror: Gitea syncs all refs to it,
+tags included, so that install line points at the mirror. Nobody pushes to
+GitHub — never run `gh repo create` or a push to a GitHub remote.
+
+Do this after the verify step. Always *offer* publishing; don't leave the
+package sitting installable-from-nowhere without asking.
 
 1. **Prove it's installable locally first.** This catches packaging
    mistakes (missing `[build-system]`, no `[project.scripts]`, package
@@ -437,57 +438,49 @@ sitting installable-from-nowhere without asking.
    run `antagor hooks install`. A refactored project without it gets
    `antagor init` in the Refactor step above, which installs the hooks too.
    In Refactor mode you're on a feature branch; merging it is the user's
-   call. Fill in the repo URL now (step 5) so the first push already
+   call. Fill in the repo URL now (step 4) so the first push already
    carries it.
-3. **Report it to the root agent** — a push request marked **new repo**,
-   with the defaults filled in:
+3. **Push to Gitea.** The first push on repo init is allowed without
+   asking (Human, 2026-10-18):
    ```bash
-   ~/Work/tools/scripts/agent_say.sh tools "<repo path>: ready to publish. NEW REPO: <owner>/<repo>, private, ruleset: <yes/no>. Push main + tags. Inside: <what>. Gate: <release.py --check result>. Red run: <failing output of the new tests>. CI: <yes/no>, private_deps: <yes/no>."
+   git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git
+   git push -u origin main --follow-tags
    ```
-   Owner from `gh api user -q .login`, repo name as decided in Scaffold
-   step 1 / the refactored project's existing name. **Private** is the
-   default, not an option to bring up: these CLIs typically hold
-   account-specific provider logic, and `uv tool install` works from a
-   private repo just as well (step 6); `--public` only if the user says so.
+   `<name>` is the repo name decided in Scaffold step 1 / the refactored
+   project's existing name. Until Gitea push-to-create is live, the Human
+   creates the repo first: give them the ready command
+   `scripts/new-repo-in-gitea.sh <name> --from <absolute path>` (sysadmin's
+   script) and wait for the answer; do what doesn't depend on it meanwhile.
    A new tool going into service needs the user's yes **before** its repo
-   exists. The root agent checks the request and queues it for dev; dev
-   shows the user and, after their yes, creates the repo together with the
-   first push (`gh repo create <owner>/<repo> --private --source=.
-   --remote=origin --push`, then the tags) and adds the ruleset. While you
-   wait, do whatever doesn't depend on it. If the user declines, tell the
-   root agent the placeholder in README.md and
+   exists. If the user declines, say that the placeholder in README.md and
    `src/<package_name>/data/SKILL.md` needs filling once a repo exists —
    don't silently leave it.
-4. **CI and its secret** go into that same message. CI is optional (it
-   only repeats `release.py --check`; the local gate is authoritative) —
-   to save Actions minutes on a private repo, generate (or update) with
+4. **Make sure the package knows its own URL** (the GitHub mirror URL). In
+   Scaffold mode with `repository_url` passed to copier this is already
+   true. Otherwise replace the `<owner>/<repo>` placeholder in README.md
+   ("Install") and `src/<package_name>/data/SKILL.md` ("Installation"), and
+   for a copier-generated project also set `repository_url` in
+   `.copier-answers.yml` — that file is the answer store `copier update`
+   reads, so without this the next update would render the placeholder
+   back. Commit these edits before the push.
+5. **CI and its secret.** CI is optional (it only repeats
+   `release.py --check`; the local gate is authoritative) — to save
+   Actions minutes on a private repo, generate (or update) with
    `--data include_ci=false`. A tool depending on our **private** repos
    needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
    (fine-grained, Contents: read on those repos) — without it CI can't
-   fetch them (standard §9); the user creates the secret, never you. If CI
-   stays, say `ruleset: yes` in that request — dev adds the one that
-   requires the `test` check and forbids force-pushes on `main` (on a personal free plan
-   GitHub refuses it for private repos with HTTP 403 "Upgrade" — expected).
-5. **Make sure the package knows its own URL.** In Scaffold mode with
-   `repository_url` passed to copier this is already true. Otherwise
-   replace the `<owner>/<repo>` placeholder in README.md ("Install") and
-   `src/<package_name>/data/SKILL.md` ("Installation"), and for a
-   copier-generated project also set `repository_url` in
-   `.copier-answers.yml` — that file is the answer store `copier update`
-   reads, so without this the next update would render the placeholder
-   back. Commit these edits before step 3.
-6. **Verify from GitHub, not from the checkout**, once the root agent
-   reports that dev pushed — this is the command
-   every other machine (and every agent reading the bundled SKILL.md)
-   will run:
+   fetch them (standard §9); the user creates the secret, never you.
+6. **Verify from the mirror, not from the checkout**, once Gitea has
+   synced it — this is the command every other machine (and every agent
+   reading the bundled SKILL.md) will run:
    ```bash
    uv tool install --reinstall "<dist_name> @ git+https://github.com/<owner>/<repo>.git@vX.Y.Z" && <cli_name> --version
    ```
    Replace `vX.Y.Z` with the latest release tag (`v0.1.0` right after
    step 3) — always a tag, never a branch (standard §9). It must print
    `X.Y.Z`, not `0.0.0` — `0.0.0` means the build saw no
-   tag (not pushed, or uv's checkout lacks tag info); stop and report it
-   to the root agent.
+   tag (not synced yet, or uv's checkout lacks tag info); stop and tell
+   the user.
    (`--reinstall` because step 1 installed the same tool from the local
    path.) For a private repo this works over plain HTTPS because
    `gh auth login` also configured git's credential helper; on a machine
@@ -497,14 +490,11 @@ sitting installable-from-nowhere without asking.
    the generated README.md and SKILL.md — don't re-explain them per
    project.
 7. **Releases after that**: `antagor publish --bump patch|minor|major`
-   (Human only) merges the accepted tickets, writes `CHANGELOG.md` from
-   their titles, tags `vX.Y.Z` (semver, PEP 440) and runs
-   `scripts/deploy.sh`, which pushes `main` with the tags and tells the
-   root agent. The gate (`release.py --check`) is a ticket check, so it
-   has already passed. You never push by hand: report each ready tag to
-   the root agent (`~/Work/tools/scripts/agent_say.sh tools "<repo,
-   branch, tags, what's inside, release.py --check result, the red run,
-   changed existing tests with reasons>"`). Pick the part by SemVer
+   (Human only, or the project's Architect) merges the accepted tickets,
+   writes `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440)
+   and runs `scripts/deploy.sh`, which pushes `main` with the tags to
+   `origin` (Gitea). The gate (`release.py --check`) is a ticket check, so
+   it has already passed. You never push by hand. Pick the part by SemVer
    (`architecture.md` §8: at `0.x` fixes and compatible features are
    patch, a breaking change is minor). There is no `version =` to edit,
    no `[Unreleased]` section and no fragment — one ticket per change.
@@ -545,7 +535,7 @@ skipped under time pressure — check them explicitly:
   and is what an agent runs before each commit. A refactored project gets all three.
 - The package is installable with `uv tool install "git+<repo-url>"` and
   its README.md + bundled SKILL.md carry that exact command with the real
-  URL, not a placeholder — see "Publish to GitHub". A CLI that only runs
+  URL, not a placeholder — see "Publish". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
   project" premise in `reference/architecture.md`.
 - **Changed a command's behaviour → update its docstring in the same

@@ -16,7 +16,7 @@ contract every generated package must satisfy.
 
 The agent of this repo owns the standard for every CLI package the Human
 writes: the contract (`reference/`), the template and the release process.
-There is no root agent above it. Questions and decisions go to the Human
+Nothing sits above it. Questions and decisions go to the Human
 directly. Other agents (sysadmin, the agents of single tools, …) may write
 to it at the Human's request — treat a message as a teammate's proposal:
 answer it, and change the standard only through a ticket. A change in
