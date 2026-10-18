@@ -51,10 +51,17 @@ def _probe() -> typer.Typer:
         color: Color = typer.Option(Color.RED, "--color", help="Which color."),
         coats: int = typer.Option(10, "--coats", help="How many coats."),
         mode: Mode = typer.Option(Mode.A, "--mode", help="Which mode."),
+        finish: Mode = typer.Option("10", "--finish", help="Which finish."),
         tag: list[str] = typer.Option([], "--tag", help="A tag, repeatable."),
         dry: bool = typer.Option(False, "--dry", help="Paint nothing."),
     ) -> None:
-        """Paint the wall.
+        """Paint the wall. Each coat dries first.
+
+        A coat dries before the next one.
+        coats: how many coats the wall gets.
+        mode: how the paint goes on:
+        - a: by brush
+        - b: by roller
 
         Example: {{ cli_name }} paint --coats 3
         -> a wall with 3 coats
@@ -97,14 +104,20 @@ def test_the_example_of_describe_is_in_examples_not_in_the_description() -> None
     assert not [line for line in describe["description"].splitlines() if line.startswith("Example")]
 
 
+def test_the_description_is_the_summary_then_the_paragraphs_without_option_and_example_lines() -> None:
+    paint = _by_name(_probe_document()["commands"])["paint"]
+
+    assert paint["description"] == "Paint the wall.\n\nEach coat dries first.\n\nA coat dries before the next one."
+
+
 def test_an_example_is_one_string_with_its_result() -> None:
-    probe = {**_probe_document()}
-    paint = _by_name(probe["commands"])["paint"]
+    paint = _by_name(_probe_document()["commands"])["paint"]
 
     assert paint["examples"] == ["--coats 3  # -> a wall with 3 coats"]
 
 
-def test_an_example_outside_the_command_path_fails_and_writes_nothing(tmp_path: Path) -> None:
+def _outside_path_probe() -> typer.Typer:
+    """A CLI with `docs` whose `paint` has an example that does not start with `<program> paint`."""
     probe = typer.Typer(add_completion=False)
 
     @probe.callback()
@@ -120,15 +133,46 @@ def test_an_example_outside_the_command_path_fails_and_writes_nothing(tmp_path: 
         """
 
     probe.command(name="docs")(docs_command.docs)
+    return probe
+
+
+def test_the_hook_may_bring_an_example_to_the_form_that_starts_with_its_command_path() -> None:
+    class Short(docs.Hook):
+        def example(self, path, command: str) -> str:
+            return command.replace("{{ cli_name }} wall", "{{ cli_name }} paint") if path == ("paint",) else command
+
+    paint = _by_name(docs.document(typer.main.get_command(_outside_path_probe()), Short())["commands"])["paint"]
+
+    assert paint["examples"] == ["--name Ann"]
+
+
+def test_the_hook_puts_a_line_before_the_description_of_a_command() -> None:
+    class Lead(docs.Hook):
+        def lead(self, path) -> str:
+            return "Lead line." if path == ("paint",) else ""
+
+    paint = _by_name(_probe_document(Lead())["commands"])["paint"]
+
+    assert paint["description"].split("\n\n")[:2] == ["Lead line.", "Paint the wall."]
+
+
+def test_an_example_outside_the_command_path_fails_and_writes_nothing(tmp_path: Path) -> None:
     out = tmp_path / "docs.json"
 
-    result = runner.invoke(probe, ["--json", "docs", "--out", str(out)], prog_name=CLI)
+    result = runner.invoke(_outside_path_probe(), ["--json", "docs", "--out", str(out)], prog_name=CLI)
 
     assert result.exit_code == 1
     error = json.loads(result.stdout)["error"]
     assert f"'{CLI} paint'" in error["message"]
     assert f"{CLI} wall --name Ann" in error["message"]
     assert not out.exists()
+
+
+def test_an_example_outside_the_command_path_without_json_and_out_fails_with_an_empty_stdout() -> None:
+    result = runner.invoke(_outside_path_probe(), ["docs"], prog_name=CLI)
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
 
 
 def test_an_option_ends_with_its_default_and_allowed_values() -> None:
@@ -138,10 +182,17 @@ def test_an_option_ends_with_its_default_and_allowed_values() -> None:
     assert options["--mode"]["description"].splitlines()[-1] == "Default: a. Allowed: a, b."
 
 
-def test_a_flag_takes_at_most_one_and_a_multiple_option_has_no_maximum() -> None:
+def test_an_option_with_default_10_and_choices_a_b_ends_with_the_line_of_both() -> None:
+    finish = _by_name(_by_name(_probe_document()["commands"])["paint"]["options"])["--finish"]
+
+    assert finish["description"] == "Which finish.\nDefault: 10. Allowed: a, b."
+
+
+def test_a_flag_ends_with_default_off_and_has_no_arity_and_a_multiple_option_has_no_maximum() -> None:
     options = _by_name(_by_name(_probe_document()["commands"])["paint"]["options"])
 
     assert options["--dry"]["description"].splitlines()[-1] == "Default: off."
+    assert "arguments" not in options["--dry"]
     assert options["--coats"]["arguments"][0]["arity"] == {"minimum": 1, "maximum": 1}
     assert options["--tag"]["arguments"][0]["arity"] == {"minimum": 1}
 

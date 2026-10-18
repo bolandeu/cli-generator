@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 
 from .. import output
-from ..core import docs as document
+from ..core import docs as docs_module
 from ..core.errors import InvalidArguments
 
 
@@ -23,7 +23,7 @@ def docs(
 
     Example: {cli} docs --out docs.json
     """
-    text = document.text(ctx.find_root().command)
+    text = docs_module.text(ctx.find_root().command)
     if out is None:
         typer.echo(text, nl=False)
         return
