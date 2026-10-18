@@ -15,6 +15,7 @@ that also proves the built wheel installs and reports the right version,
 ```
 .claude-plugin/plugin.json    # plugin manifest
 skills/cli-builder/           # the skill: SKILL.md + reference docs
+                              #   (help-standard.md: docstrings and `<cli> docs`)
 copier.yml                    # copier config; _subdirectory points at template/
 template/                     # the actual copier template
 ```
