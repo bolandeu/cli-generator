@@ -263,10 +263,24 @@ def test_install_section_malformed_names_the_key(
     assert len(raised.value.output.splitlines()) == 1
 
 
+def test_install_section_not_a_table_names_the_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_section(tmp_path, monkeypatch, '[tool.rb]\ninstall = "x"\n')
+    with pytest.raises(release.StepFailed) as raised:
+        release.check_install_section()
+    assert all(word in raised.value.output for word in ("tool.rb.install", "table"))
+    assert len(raised.value.output.splitlines()) == 1
+
+
 @pytest.mark.parametrize(
-    "body",
-    ["homeserver = []\nmac = false", 'homeserver = ["rbtools"]\nmac = true\nextras = ["x"]'],
+    ("body", "ok"),
+    [
+        ("homeserver = []\nmac = false", "homeserver = [], mac = false"),
+        (
+            'homeserver = ["rbtools"]\nmac = true\nextras = ["x"]',
+            "homeserver = ['rbtools'], mac = true, extras = ['x']",
+        ),
+    ],
 )
-def test_install_section_valid_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> None:
+def test_install_section_valid_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, ok: str) -> None:
     _install_section(tmp_path, monkeypatch, f"[tool.rb.install]\n{body}\n")
-    assert release.check_install_section().startswith("homeserver")
+    assert release.check_install_section() == ok

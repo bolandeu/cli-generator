@@ -196,6 +196,7 @@ def check_external_deps() -> str:
     return f"{len(declared)} declared, all used" + (f" ({len(hidden)} with detect = false)" if hidden else "")
 
 
+# The defaults of copier.yml's `install_homeserver_users` and `install_mac`: this script ships verbatim, can't read it.
 INSTALL_DEFAULT = """[tool.rb.install]
 homeserver = ["rbtools"]
 mac = true"""
@@ -207,6 +208,8 @@ def check_install_section() -> str:
     install = _tool("rb").get("install")
     if install is None:
         raise StepFailed(f"pyproject.toml has no [tool.rb.install]; add:\n{INSTALL_DEFAULT}")
+    if not isinstance(install, dict):
+        raise StepFailed(f"pyproject.toml [tool.rb.install] must be a table, not {type(install).__name__}")
     users, mac, extras = install.get("homeserver"), install.get("mac"), install.get("extras", [])
     problems = [
         f"`{key}` is unknown (allowed: {', '.join(INSTALL_KEYS)})" for key in install if key not in INSTALL_KEYS
