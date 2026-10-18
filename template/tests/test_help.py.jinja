@@ -122,11 +122,19 @@ def _example_failure(path: tuple[str, ...], command: Any, example: str) -> str |
         return f"{exc}"
     if tokens[: len(path) + 1] != [CLI, *path]:
         return f"does not start with `{CLI} {' '.join(path)}`"
+    ctx = typer.Context(command, info_name=path[-1])
     try:
-        command.make_context(path[-1], tokens[len(path) + 1 :], resilient_parsing=False)
-    except Exception as exc:  # Click's own exception classes: UsageError (format_message) or Exit (exit_code)
+        values, _, _ = command.make_parser(ctx).parse_args(tokens[len(path) + 1 :])
+        for param in command.get_params(ctx):  # type_cast_value stops before the option callbacks
+            value, _ = param.consume_value(ctx, values)
+            if param.value_is_missing(value):
+                if param.required:
+                    return f"Missing {param.param_type_name} '{param.name}'"
+            else:
+                param.type_cast_value(ctx, value)
+    except Exception as exc:  # Click's own UsageError has format_message; anything else is a bug in the command
         format_message = getattr(exc, "format_message", None)
-        return format_message() if callable(format_message) else "asks for help or the version instead of a command"
+        return format_message() if callable(format_message) else f"raised {type(exc).__name__}: {exc}"
     return None
 
 
@@ -192,8 +200,10 @@ def check_help_standard(root: typer.Typer, allowlist: str) -> str:
     """The report of a run against the allowlist: empty when the help meets the standard."""
     failing, allowed = help_failures(root), _allowed(allowlist)
     report = [line for path, lines in failing.items() if path not in allowed for line in lines]
+    existing = {path for path, _ in _leaves(typer.main.get_command(root))}
     report += [
-        f"remove from tests/help_allowlist.txt, it meets the standard: {' '.join(p)}"
+        f"remove from tests/help_allowlist.txt, "
+        f"{'it meets the standard' if p in existing else 'no such command'}: {' '.join(p)}"
         for p in sorted(allowed - failing.keys())
     ]
     new = sorted(" ".join(path) for path in failing if path not in allowed)
@@ -277,6 +287,40 @@ def test_an_example_with_an_unknown_option_fails() -> None:
     report = _report(cmd)
     assert "`cmd`: example `{{ cli_name }} cmd --nope`" in report
     assert "No such option: --nope" in report
+
+
+def test_an_example_does_not_run_the_callback_of_an_option() -> None:
+    calls: list[str] = []
+
+    def record(value: str) -> str:
+        calls.append(value)
+        return value
+
+    def cmd(ctx: typer.Context, name: str = typer.Option("x", "--name", help="The name.", callback=record)) -> None:
+        """Do the thing.
+
+        Example: {cli} cmd --name Ann
+        """
+
+    assert _report(cmd) == ""
+    assert calls == []
+
+
+def test_an_error_that_is_not_click_names_its_type() -> None:
+    def explode(value: str) -> str:
+        raise ZeroDivisionError("boom")
+
+    def cmd(ctx: typer.Context, name: str = typer.Option("x", "--name", help="The name.", parser=explode)) -> None:
+        """Do the thing.
+
+        Example: {cli} cmd --name Ann
+        """
+
+    assert "ZeroDivisionError" in _report(cmd)
+
+
+def test_an_allowlist_line_for_a_missing_command_says_so() -> None:
+    assert "remove from tests/help_allowlist.txt, no such command: ghost" in _report(_good, "ghost\n")
 
 
 def test_an_example_outside_the_command_path_fails() -> None:
