@@ -220,8 +220,8 @@ Never invent a second storage mechanism for the "unusual" shape — extend
 `<cli> auth status [--check] [--provider NAME] --json` exists in **every**
 CLI — one generated with `include_auth=false` reports `credentials: []`
 and exits 0 (no `login`/`logout` there) — and reports every
-provider with credentials in one fixed shape (shared across all our tools,
-`tools/docs/standard-release.md` §8; `tools-watch` reads it without
+provider with credentials in one fixed shape (shared across all our tools;
+`tools-watch` reads it without
 knowing any provider):
 
 ```json
@@ -357,9 +357,8 @@ upgrade is always the fix. A bare source run (nothing installed, not even
 editable) has no version and skips the check.
 
 For `min_version` to mean anything, versions have to actually move — and
-the rules for that are the shared release standard
-(`~/Projects/tools/docs/standard-release.md`; this section is its summary,
-the template implements it):
+the rules for that are the shared release standard (this section is the
+standard, the template implements it):
 
 - **The version is the git tag.** `pyproject.toml` has no `version =`
   line: `dynamic = ["version"]` with `uv-dynamic-versioning` reads the

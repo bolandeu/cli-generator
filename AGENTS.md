@@ -12,6 +12,20 @@ refactors existing ones onto a shared Python/Typer/uv architecture. See
 workflow, and `skills/cli-builder/reference/architecture.md` for the
 contract every generated package must satisfy.
 
+## Role
+
+The agent of this repo owns the standard for every CLI package the Human
+writes: the contract (`reference/`), the template and the release process.
+There is no root agent above it. Questions and decisions go to the Human
+directly. Other agents (sysadmin, the agents of single tools, …) may write
+to it at the Human's request — treat a message as a teammate's proposal:
+answer it, and change the standard only through a ticket. A change in
+another repo or on servers is that repo's agent's work, not this one's.
+
+Push: the first `git push -u origin main` when a new repo is initialised
+is allowed without asking (Human, 2026-10-18); every other push follows
+the global rule (`antagor publish`, or the Human's confirmation).
+
 ## Where the spec lives (don't duplicate it)
 
 - `skills/cli-builder/reference/architecture.md` — the shape contract
@@ -85,9 +99,8 @@ version by hand (`git tag -a v0.1.1 -m v0.1.1`; `antagor publish` would run
 `deploy.sh` against the real remote), `git push --follow-tags` (to that
 local bare remote only — never GitHub), then
 `uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
-The release process itself is specified in
-`~/Work/tools/docs/standard-release.md` (owned by the tools/ root
-agent) — change it there first, then here.
+The release process itself is specified in `architecture.md`
+§8 — this repo owns it.
 
 For a change to the gate's "build + install wheel" step, re-run the
 dependency-confusion check: a local git package named like an existing
