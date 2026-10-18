@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.18.0 — 2026-10-18
+
+### E-001 — Human help for every CLI: docs command and help standard in the template
+
+Every generated CLI has '<cli> docs': a deterministic OpenCLI document InSpectra renders into a readable HTML page; the help standard lives in reference/help-standard.md and a test enforces it on every command, with a project allowlist for old commands; describe stays the same machine contract plus arity.maximum.
+Time: 1.3h since the epic was approved
+
+- Шаблон: тест стандарта справки над каждой командой и allowlist проекта (CG-017)
+
 ## v1.17.0 — 2026-10-18
 
 ### E-001 — Human help for every CLI: docs command and help standard in the template
