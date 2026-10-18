@@ -103,3 +103,57 @@ def test_bad_input(runs: Path) -> None:
     missing = sh("run_detached.sh", "ghost", "no-such-program-xyz")
     assert missing.returncode == 0
     assert wait_for("ghost", "done")["exit_code"] == 127
+
+
+def load_detach():
+    spec = importlib.util.spec_from_file_location("detach", SCRIPTS / "detach.py")
+    assert spec is not None and spec.loader is not None
+    detach = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(detach)
+    return detach
+
+
+def exited(pid: int) -> None:
+    """Wait until the child has exited, without reaping it: `ps` shows state Z."""
+    command = ["ps", "-o", "stat=", "-p", str(pid)]
+    deadline = time.monotonic() + 10
+    while not subprocess.run(command, capture_output=True, text=True, check=False).stdout.startswith("Z"):  # noqa: S603
+        assert time.monotonic() < deadline, f"pid {pid} did not become a zombie"
+        time.sleep(0.05)
+
+
+def zombie() -> subprocess.Popen[bytes]:
+    """A child that has exited and that nobody has waited for — what PID 1 `tail -f /dev/null` leaves behind."""
+    child = subprocess.Popen(["true"])  # noqa: S607
+    exited(child.pid)
+    return child
+
+
+def test_a_zombie_is_not_alive() -> None:
+    child = zombie()
+    try:
+        assert not load_detach()._alive(child.pid)
+    finally:
+        child.wait()
+
+
+def test_a_live_process_is_alive() -> None:
+    child = subprocess.Popen(py("import time; time.sleep(60)"))  # noqa: S603
+    try:
+        assert load_detach()._alive(child.pid)
+    finally:
+        child.kill()
+        child.wait()
+
+
+def test_a_killed_run_whose_supervisor_is_not_reaped_is_killed(runs: Path) -> None:
+    detach = load_detach()
+    runs.mkdir()
+    supervisor = subprocess.Popen(py("import time; time.sleep(60)"), start_new_session=True)  # noqa: S603
+    (runs / "victim.pid").write_text(f"{supervisor.pid}\n")
+    os.killpg(supervisor.pid, 9)
+    exited(supervisor.pid)
+    try:
+        assert detach._state(runs, "victim")["state"] == "killed"
+    finally:
+        supervisor.wait()
