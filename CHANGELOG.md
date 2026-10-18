@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.20.0 — 2026-10-18
+
+### E-002 — Auto-install: every package declares [tool.rb.install]; the skill no longer messages sysadmin
+
+A package made by the skill carries [tool.rb.install]; after its first tag sysadmin's tool-updater (homeserver) and Mac agent install it with no message and no tools.toml edit; the skill installs it once on the Mac right after the first tag for instant use.
+Time: 0.3h since the epic was approved
+
+- Gate: release.py --check refuses a missing or malformed [tool.rb.install] (CG-024)
+- Contract and skill: [tool.rb.install] decides installation; the skill installs once on the Mac and no longer messages sysadmin (CG-025)
+
 ## v1.19.0 — 2026-10-18
 
 ### E-002 — Auto-install: every package declares [tool.rb.install]; the skill no longer messages sysadmin
