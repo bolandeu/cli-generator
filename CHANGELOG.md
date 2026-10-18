@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.16.1 — 2026-10-18
+
+### Outside epics
+
+- Публикация: убрать запасной путь new-repo-in-gitea.sh, сообщать sysadmin о новом репо (CG-015)
+
 ## v1.16.0 — 2026-10-18
 
 ### Outside epics
