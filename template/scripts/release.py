@@ -20,6 +20,8 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     and has since changed or gone — a changed or removed test function, changed
     module-level code of a test file, a changed snapshot or data file; each goes
     into the release report with its reason, the review rejects it without one) ·
+    install section ([tool.rb.install] exists and is valid: homeserver a list
+    of user names, mac a bool, extras an optional list of strings, no other key) ·
     external dependencies (every program src/ runs is declared in
     [[tool.rb.external]] and vice versa) ·
     build the wheel and install
@@ -192,6 +194,35 @@ def check_external_deps() -> str:
     if not declared:
         return "none used, none declared"
     return f"{len(declared)} declared, all used" + (f" ({len(hidden)} with detect = false)" if hidden else "")
+
+
+# The defaults of copier.yml's `install_homeserver_users` and `install_mac`: this script ships verbatim, can't read it.
+INSTALL_DEFAULT = """[tool.rb.install]
+homeserver = ["rbtools"]
+mac = true"""
+INSTALL_KEYS = ("homeserver", "mac", "extras")
+
+
+def check_install_section() -> str:
+    """`[tool.rb.install]` exists and is valid: no package is released without an install declaration."""
+    install = _tool("rb").get("install")
+    if install is None:
+        raise StepFailed(f"pyproject.toml has no [tool.rb.install]; add:\n{INSTALL_DEFAULT}")
+    if not isinstance(install, dict):
+        raise StepFailed(f"pyproject.toml [tool.rb.install] must be a table, not {type(install).__name__}")
+    users, mac, extras = install.get("homeserver"), install.get("mac"), install.get("extras", [])
+    problems = [
+        f"`{key}` is unknown (allowed: {', '.join(INSTALL_KEYS)})" for key in install if key not in INSTALL_KEYS
+    ]
+    if not (isinstance(users, list) and all(isinstance(user, str) and user for user in users)):
+        problems.append("`homeserver` must be a list of user names (non-empty strings, may be empty)")
+    if not isinstance(mac, bool):
+        problems.append("`mac` must be a bool (true or false)")
+    if not (isinstance(extras, list) and all(isinstance(extra, str) for extra in extras)):
+        problems.append("`extras` must be a list of strings")
+    if problems:
+        raise StepFailed(f"pyproject.toml [tool.rb.install]: {problems[0]}")
+    return f"homeserver = {users}, mac = {str(mac).lower()}" + (f", extras = {extras}" if extras else "")
 
 
 def _top_level(source: str) -> tuple[dict[str, str], list[str]]:
@@ -391,6 +422,7 @@ def run_gate(version: str | None) -> None:
         *((name, lambda argv=argv: run_command(argv)) for name, argv in COMMANDS),
         ("contracts", lambda: check_contracts(version)),
         ("existing tests", check_existing_tests),
+        ("install section", check_install_section),
         ("external dependencies", check_external_deps),
         ("build + install wheel", lambda: check_installed_wheel(version)),
         (AUDIT_STEP, check_vulnerabilities),

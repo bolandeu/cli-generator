@@ -225,3 +225,62 @@ def test_docstring_check_reads_the_working_tree_only() -> None:
     check = _load("check_command_docstrings")
     assert list(inspect.signature(check.stale_commands).parameters) == ["paths"]
     assert "index" not in (check.stale_commands.__doc__ or "")
+
+
+def _install_section(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, section: str) -> None:
+    (tmp_path / "pyproject.toml").write_text(section)
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+
+
+def test_install_section_missing_prints_the_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_section(tmp_path, monkeypatch, '[project]\nname = "x"\n')
+    with pytest.raises(release.StepFailed) as raised:
+        release.check_install_section()
+    assert "tool.rb.install" in raised.value.output
+    assert '[tool.rb.install]\nhomeserver = ["rbtools"]\nmac = true' in raised.value.output
+
+
+@pytest.mark.parametrize(
+    ("body", "named"),
+    [
+        ('homeserver = []\nmac = "yes"', ("mac", "bool")),
+        ('homeserver = "rbtools"\nmac = true', ("homeserver", "list of user names")),
+        ("homeserver = [1]\nmac = true", ("homeserver", "list of user names")),
+        ('homeserver = [""]\nmac = true', ("homeserver", "list of user names")),
+        ("homeserver = []", ("mac", "bool")),
+        ("mac = true", ("homeserver", "list of user names")),
+        ("homeserver = []\nmac = true\nextras = 'x'", ("extras", "list of strings")),
+        ("homeserver = []\nmac = true\ntarget = 1", ("target", "unknown")),
+    ],
+)
+def test_install_section_malformed_names_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, named: tuple[str, str]
+) -> None:
+    _install_section(tmp_path, monkeypatch, f"[tool.rb.install]\n{body}\n")
+    with pytest.raises(release.StepFailed) as raised:
+        release.check_install_section()
+    assert all(word in raised.value.output for word in named)
+    assert len(raised.value.output.splitlines()) == 1
+
+
+def test_install_section_not_a_table_names_the_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_section(tmp_path, monkeypatch, '[tool.rb]\ninstall = "x"\n')
+    with pytest.raises(release.StepFailed) as raised:
+        release.check_install_section()
+    assert all(word in raised.value.output for word in ("tool.rb.install", "table"))
+    assert len(raised.value.output.splitlines()) == 1
+
+
+@pytest.mark.parametrize(
+    ("body", "ok"),
+    [
+        ("homeserver = []\nmac = false", "homeserver = [], mac = false"),
+        (
+            'homeserver = ["rbtools"]\nmac = true\nextras = ["x"]',
+            "homeserver = ['rbtools'], mac = true, extras = ['x']",
+        ),
+    ],
+)
+def test_install_section_valid_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, ok: str) -> None:
+    _install_section(tmp_path, monkeypatch, f"[tool.rb.install]\n{body}\n")
+    assert release.check_install_section() == ok
