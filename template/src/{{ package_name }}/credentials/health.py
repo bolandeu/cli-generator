@@ -1,6 +1,6 @@
 """The `auth status [--check] --json` report (CLI standard, architecture.md §4).
 
-Its shape is a cross-tool contract — `tools-watch` reads it from every CLI
+Its shape is a cross-tool contract — a consumer reads it from every CLI
 without knowing any provider — so it is pinned by `tests/test_auth.py`, and
 changing it is a breaking change. Credential values never leave this
 module: they are used only to scrub messages. Knows only `providers.Provider`:

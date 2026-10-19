@@ -69,12 +69,11 @@ function) is governed by these four rules instead
      mentions any external API/provider. Only without credentials:
      `include_providers=false` drops `providers/` for a CLI that calls no
      external service.
-   - `repository_url` — the GitHub mirror URL this will live at (Gitea is primary). Decide it
+   - `repository_url` — the Gitea repo URL this will live at. Decide it
      **now**, before generating, even though the repo itself is only
      created in the Publish step below: default to
-     `https://github.com/<owner>/<repo>` with `<owner>` from
-     `gh api user -q .login` and `<repo>` = `package_name` with `_` → `-`
-     (GitHub convention), unless the user names something else. Passing
+     `https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>` with `<repo>` = `package_name`
+     with `_` → `-`, unless the user names something else. Passing
      it to copier is what puts the real `uv tool install "git+…"` command
      into README.md, the bundled SKILL.md and `.copier-answers.yml` from
      the start instead of an `<owner>/<repo>` placeholder to chase later.
@@ -85,27 +84,27 @@ function) is governed by these four rules instead
      (`--data install_homeserver_users= --data install_mac=false`).
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
-2. Generate the skeleton with copier from **`gh:bolandeu/cli-generator`** —
+2. Generate the skeleton with copier from **`https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`** —
    the single template source: it becomes `_src_path` in the project's
    `.copier-answers.yml`, so every later `copier update` pulls released
-   tags from GitHub on any machine (never a local path or the
+   tags from Gitea on any machine (never a local path or the
    `~/.claude/skills/cli-generator` symlink). Its `copier.yml` has
    `_subdirectory: template`, so no `--subdirectory` flag is needed:
 
    ```bash
-   uvx copier copy gh:bolandeu/cli-generator <dest-dir> --trust \
+   uvx copier copy https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator <dest-dir> --trust \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
      --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
-     --data repository_url=https://github.com/<owner>/<repo>
+     --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>
    ```
 
    Copier picks the latest release tag; `--vcs-ref vX.Y.Z` pins one. A
    local checkout of this repo as the source is only for testing a
    template change before it is released (see this repo's AGENTS.md). An
    existing project with another `_src_path` switches by editing that one
-   line to `_src_path: gh:bolandeu/cli-generator` (commit
-   `chore(copier): template source gh:bolandeu/cli-generator`), then
+   line to `_src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` (commit
+   `chore(copier): template source https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`), then
    `uvx copier update --trust --defaults --pretend` must say "Updating to
    template version …".
 3. Implement the real logic:
@@ -149,9 +148,14 @@ function) is governed by these four rules instead
      `antagor publish` writes the changelog from the titles of the
      tickets it publishes. Put the user-visible meaning of a change into
      the ticket title (`reference/architecture.md` §8).
-   - Depending on another of our tools? Pin it by release tag in
-     `[tool.uv.sources]` (`tag = "vX.Y.Z"`, never `branch = "main"` or a
-     committed `path =`) — `architecture.md` §8, "Depending on another tool".
+   - Depending on another of our tools? A version range in `dependencies`
+     (`"rb-serp>=0.3"`) and `rb-serp = { index = "gitea" }` in
+     `[tool.uv.sources]` — never a git `tag =`, `branch = "main"` or a
+     committed `path =`; `architecture.md` §8, "Depending on another tool".
+   - A key one CLI shares with others (Google service account, S3, Telegram,
+     GitHub)? The provider reads the shared name through `legacy_env`
+     (`architecture.md` §4). A new key goes to sysadmin as a ticket
+     (`docs/contracts/sysadmin.md`, "Ключи").
 4. Verify before calling it done — the whole gate is one command, the
    same one every release and CI run (`architecture.md` §8):
    ```bash
@@ -394,6 +398,53 @@ template, `_commit` is the template release it was last synced to):
    time: bring one docstring at a time to the standard, delete its line.
    New commands may not be added to the list.
 
+13. **Crossing the sysadmin contract** (`docs/contracts/sysadmin.md`: Gitea
+   source, Gitea Actions CI, secret scan, registry dependencies). Use it
+   for a package on template v1.20.0 or older. The update runs without
+   questions and without keys.
+   1. Clean tree: `git status` shows nothing. Then switch the template
+      source: in `.copier-answers.yml` set `_src_path:
+      https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` and
+      `repository_url:` to the package's Gitea URL
+      (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>`). Commit
+      `chore(copier): template source Gitea`.
+   2. Check the source: `uvx copier update --trust --defaults --pretend`
+      must say "Updating to template version …". Then run
+      `uvx copier update --trust --defaults` and resolve conflicts hunk by
+      hunk (step 2 above). The update brings `.gitea/workflows/ci.yml`,
+      the `.gitignore` lines, `[[tool.uv.index]]` and the new gate.
+   3. CI move. Gitea Actions runs only `.gitea/workflows/`. Delete the old
+      workflow: `git rm -r .github/workflows` (and `.github/` if nothing
+      else is in it). A workflow of the project's own that still matters
+      is ported to `.gitea/workflows/` by hand. `tests/test_ci.py` fails
+      while `.github/` exists.
+   4. Secret scan. Install the scanner once: `brew install gitleaks`. The
+      gate now runs it over the whole git history. A finding is a leaked
+      key: do not commit, do not rewrite history. Tell the Human the
+      secret's name and file — revoking it at the provider is the Human's
+      (contract, "Ключи", rule 5).
+   5. `.env` in `.gitignore`. The update brings `.env` and `.env.*`; check
+      with `grep -n '^\.env' .gitignore`. A tracked env file:
+      `git rm --cached <file>`, and treat its values as leaked (step 4).
+   6. Dependencies on our packages. In `pyproject.toml` replace
+      `rb-x = { git = "…", tag = "vX.Y.Z" }` in `[tool.uv.sources]` with
+      `rb-x = { index = "gitea" }`, and `"rb-x>=X.Y"` stays in
+      `dependencies`. Then `uv lock`. The gate installs these packages as
+      locked, from the `gitea` index only.
+   7. Shared keys. A key several CLIs share has one Doppler name without a
+      CLI prefix (`GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON`). In the provider
+      declare it as the fallback:
+      `legacy_env: ClassVar[dict[str, str]] = {"api_key": "<SHARED_NAME>"}`
+      (`architecture.md` §4). Remove any jq-style renaming from wrappers.
+   8. New keys. For every env name `<CLI>_<PROVIDER>_<FIELD>` the package
+      reads that is not yet in Doppler `tools/prd`, write a ticket for
+      sysadmin: env name, where to get the value, who needs it. Give it to
+      the Human to send. The value never goes into the repo, a file or the
+      ticket.
+   9. Gate and release. Run `uv lock`, `uv run pytest --snapshot-update`
+      (read the diff), then `uv run scripts/release.py --check`. Ticket
+      title: `Template vX.Y.Z: Gitea CI, secret scan, registry dependencies`.
+
 ### Renaming the distribution (standard §10: `rb-<slug>`)
 
 The command (`cli_name`) and the import package don't change; only
@@ -411,7 +462,7 @@ The command (`cli_name`) and the import package don't change; only
    `0.x`) in a ticket whose title names the old and new names.
 3. Every consumer, in the same wave: rename the dependency and its
    `[tool.uv.sources]` key (`"yandex-oauth>=0.2,<0.3"` →
-   `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { git = …, tag = … }`),
+   `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { index = "gitea" }`),
    `uv lock`, gate, release.
 4. Machines: no uninstall step. Sysadmin's tool-updater follows the new
    name. Put the old and the new name in the ticket title, so it reaches the changelog.
@@ -465,7 +516,7 @@ package sitting unreleased without asking.
    builds the tag within minutes), retry later; do not install the checkout
    (`uv tool install .`) and do not use the mirror instead. No message to
    sysadmin.
-4. **Make sure the package knows its own URL** (the GitHub mirror URL). In
+4. **Make sure the package knows its own URL** (the Gitea repo URL). In
    Scaffold mode with `repository_url` passed to copier this is already
    true. Otherwise replace the `<owner>/<repo>` placeholder in README.md
    ("Install") and `src/<package_name>/data/SKILL.md` ("Installation"), and
@@ -473,13 +524,11 @@ package sitting unreleased without asking.
    `.copier-answers.yml` — that file is the answer store `copier update`
    reads, so without this the next update would render the placeholder
    back. Commit these edits before the push.
-5. **CI and its secret.** CI is optional (it only repeats
-   `release.py --check`; the local gate is authoritative) — to save
-   Actions minutes on a private repo, generate (or update) with
-   `--data include_ci=false`. A tool depending on our **private** repos
-   needs `--data private_deps=true` plus a repo secret `GITHUB_READ_TOKEN`
-   (fine-grained, Contents: read on those repos) — without it CI can't
-   fetch them (standard §9); the user creates the secret, never you.
+5. **CI.** CI is Gitea Actions: `.gitea/workflows/ci.yml` from the
+   template (`architecture.md` §8). It only repeats `release.py --check`;
+   the local gate is authoritative. To go without it, generate (or update)
+   with `--data include_ci=false`. It needs no secret: our packages come
+   from the Gitea registry, keys are never in the repo. No `.github/`.
 6. **Releases after that**: `antagor publish --bump patch|minor|major`
    (Human only, or the project's Architect) merges the accepted tickets,
    writes `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440)

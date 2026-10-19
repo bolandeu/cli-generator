@@ -166,12 +166,31 @@ the CLI, or point it at a project explicitly without changing cwd.
 | Project config             | `<project>/.{{package_name}}/config.toml`  | Yes |
 | Project state (generated)  | `<project>/.{{package_name}}/state.json`   | No |
 | User-level config           | OS user config dir (`platformdirs`)        | N/A |
-| Secrets                     | OS keychain via `keyring`, or env var       | Never |
+| Secrets                     | env var (production, Doppler); OS keychain only as a local dev override | Never |
 | Tool data (records, history) | shared PostgreSQL (`<TOOL>_DATABASE_URL`), else SQLite in the user data dir — §12 | Never |
 
 Credential resolution order: CLI argument → environment variable → OS
 keychain → legacy env var name if the provider declares one (never falls
 back to project or global config for secrets).
+
+Where a key comes from in production, and who adds one, is the sysadmin
+contract, `docs/contracts/sysadmin.md` ("Ключи"); this standard does not
+repeat it. What the package must do:
+
+- **One env name per key**, `<CLI>_<PROVIDER>_<FIELD>`: it is also the
+  Doppler name in `tools/prd`, so `doppler run` needs no renaming. Doppler
+  `tools/prd` is the source; the homeserver wrappers and, for packages with
+  `mac = true`, the Mac wrapper run the CLI under `doppler run`.
+- **The keychain (`auth login`) is a local dev override**, never the only
+  place a key lives: a key only in the keychain is a violation.
+- **A key shared by several CLIs** (Google service account, S3, Telegram,
+  GitHub) has one Doppler name without a CLI prefix. The provider reads it
+  as a fallback by declaring it in `legacy_env`
+  (`{"api_key": "GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON"}`); wrappers do not
+  rename keys.
+- **A new key is a ticket to sysadmin** (env name, where to get the value,
+  who needs it). A key never goes into the repo or a file: the gate's
+  secret scan (§8) catches it, and `.env` / `.env.*` are in `.gitignore`.
 
 **Namespace = the command name** (`cli_name`), not the Python package:
 keychain service `<cli>:<provider>`, env var `<CLI>_<PROVIDER>_<FIELD>` with
@@ -219,8 +238,7 @@ Never invent a second storage mechanism for the "unusual" shape — extend
 CLI — one generated with `include_auth=false` reports `credentials: []`
 and exits 0 (no `login`/`logout` there) — and reports every
 provider with credentials in one fixed shape (shared across all our tools;
-`tools-watch` reads it without
-knowing any provider):
+a consumer reads it without knowing any provider):
 
 ```json
 {"ok": true, "tool": "serp", "version": "0.3.0", "checked_at": "2026-09-27T12:00:00Z",
@@ -383,18 +401,22 @@ standard, the template implements it):
   a title that says what changed for the user.
 - **`scripts/release.py` is the authoritative gate.** `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
-  runs only this, `tools-watch` runs it too, and it is a
+  runs only this, and it is a
   ticket check in `antagor.toml`: `uv lock --check`, ruff check, ruff
   format --check, ty, pytest, `uv build` + install of the wheel into a throwaway venv where
   `<cli> --version` must equal the wheel's METADATA version and
   `<cli> --help` must work (a library without a console script: every
   top-level package imports and `importlib.metadata.version()` equals the
-  built version), and `osv-scanner --lockfile=uv.lock` when
-  osv-scanner is installed (skipped with a notice otherwise; `brew install
-  osv-scanner`). The first failing step stops it, named, with its output,
+  built version), a secret scan (`gitleaks` over the whole git
+  history, values redacted; skipped with a notice when gitleaks is not
+  installed, `brew install gitleaks`), and `osv-scanner --lockfile=uv.lock`
+  when osv-scanner is installed (skipped with a notice otherwise; `brew
+  install osv-scanner`). The wheel step installs the packages the project
+  takes from an explicit index (below) as locked, from that index only.
+  Keys: §4. The first failing step stops it, named, with its output,
   and a last line `release: code failed` (exit 1) — or `release: audit
-  failed` (exit 3) when only the vulnerability audit failed, so
-  `tools-watch` can tell "broken code" from "bump a dependency".
+  failed` (exit 3) when only the vulnerability audit failed, so a caller
+  can tell "broken code" from "bump a dependency".
 - **`antagor publish --bump patch|minor|major`** is the only way a version
   moves (`[publish] versioning = "semver"` in `.agents/antagor/antagor.toml`;
   default `patch`). It merges the accepted tickets, writes the changelog
@@ -405,10 +427,12 @@ standard, the template implements it):
   agent never pushes by hand. `scripts/release.py` has no bump mode any more; it is only the
   gate. The template's copy is canonical: every repo following the
   standard uses it verbatim.
-- **CI is optional**: one `ubuntu-24.04` job on the lowest supported
-  Python that installs osv-scanner and runs `release.py --check` —
-  nothing else of its own. Delete the workflow to save Actions minutes;
-  nothing depends on it.
+- **CI is optional and runs in Gitea Actions**: the workflow is
+  `.gitea/workflows/ci.yml` (Gitea runs nothing from `.github/`, and a
+  generated package has no `.github/`). One job on the runner labelled
+  `docker`, on the lowest supported Python, runs `release.py --check` —
+  nothing else of its own. `include_ci=false` drops it; nothing depends
+  on it. Runner and cache are sysadmin's (`docs/contracts/sysadmin.md`).
 - **Versions mean compatibility (SemVer).** Removing/renaming/changing
   anything public — Python API, CLI commands or flags, the `--json` shape,
   exit codes or error codes, the `auth status` report (`conventions.md`)
@@ -424,22 +448,29 @@ project's `min_version` needs to be able to refer to the change.
 
 ### Depending on another tool
 
-A CLI that imports another of our packages pins it to a released tag and
-allows compatible updates — never `branch = "main"`, never a bare git URL,
-never a committed `path =`:
+A CLI that imports another of our packages takes it from the Gitea
+registry through the explicit index and allows compatible updates — never
+a git `tag =`, `branch = "main"` or a bare git URL, never a committed
+`path =`:
 
 ```toml
 [project]
-dependencies = ["yandex-oauth>=0.2,<0.3"]
+dependencies = ["rb-yandex-oauth>=0.2,<0.3"]
 
 [tool.uv.sources]
-yandex-oauth = { git = "https://github.com/bolandeu/yandex-oauth", tag = "v0.2.1" }
+rb-yandex-oauth = { index = "gitea" }
 ```
+
+The template carries the index (`[[tool.uv.index]] name = "gitea"`,
+`explicit = true`). `explicit` means uv looks up only the packages named in
+`[tool.uv.sources]` there, and never takes them from PyPI, where an
+unrelated package of the same name may live. The gate installs them as
+locked from that index and fails if one came from another.
 
 - Working against an unreleased provider locally: `uv pip install -e
   ../<provider>` in your venv, uncommitted.
-- Bumping the pin is one commit: `tag = "vNEW"` + `uv lock
-  --upgrade-package <name>` + the full gate.
+- Bumping is one commit: the range in `dependencies` + `uv lock
+  --upgrade-package <name>` + the full gate (Renovate opens it for `rb-*`).
 - **External (non-Python) dependencies are declared** in `pyproject.toml`
   `[[tool.rb.external]]` — `name`, `required`, optional `min_version`,
   `check` (version command, default `<name> --version`), `why` (standard

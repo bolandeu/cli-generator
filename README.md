@@ -38,9 +38,9 @@ session without the flag), then ask for either:
 Both modes end by offering to publish: the skill prepares the local repo
 and pushes it to Gitea (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`,
 the primary store; GitHub `bolandeu/<name>` is a private push mirror, nobody
-pushes there). The first push creates the repo, and the skill tells sysadmin
-about it. The skill then verifies that `uv tool install "git+https://github.com/<owner>/<repo>.git@vX.Y.Z"`
-works from the mirror — the one-command install every generated README/SKILL.md
+pushes there). The first push creates the repo; the skill sends no message
+to sysadmin. The skill then verifies that `uv tool install --index gitea=https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple <dist_name>`
+works from the Gitea registry — the one-command install every generated README/SKILL.md
 points other machines (and agents) at.
 
 If it doesn't trigger automatically, invoke it explicitly:
@@ -54,7 +54,7 @@ generated package must satisfy.
 ## Using the template directly
 
 ```bash
-# `gh:bolandeu/cli-generator` in place of `.` works from anywhere (add
+# `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` in place of `.` works from anywhere (add
 # `--vcs-ref v1.0.0` to pin a template release)
 uvx copier copy . <dest-dir> \
   --data package_name=mycli \

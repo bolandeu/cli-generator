@@ -43,7 +43,7 @@ found a problem, via `output.emit_report(ctx, payload, render_human, problem)`:
 `problem=None` → exactly the success envelope. A `CliError` → `ok: false`,
 the standard `error` object **next to** the full payload, and the process
 exits with that error's exit code. Don't hand-roll this per command: a
-consumer (`tools-watch`) relies on `ok` meaning "exit code 0" and on the
+consumer relies on `ok` meaning "exit code 0" and on the
 report fields being there in both cases.
 
 ## `describe --json`: the tool's contract as an OpenCLI document
