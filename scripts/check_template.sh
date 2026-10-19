@@ -1,8 +1,9 @@
 #!/bin/sh
 # Template gate: run the repo tests, regenerate template/ for include_auth=true and false (default
-# [tool.rb.install]) and a publish-only variant (no homeserver users, no Mac), prove a
-# copier update round from the previous release tag, check the rendered [tool.rb.install],
-# run the generated project's checks and its release gate. Non-zero exit on any failure.
+# [tool.rb.install]), a publish-only variant (no homeserver users, no Mac) and adopt_core=true, prove
+# copier update rounds from the previous release tag (defaults, and a flip to adopt_core=true),
+# check the rendered [tool.rb.install], run the generated project's checks and its release gate
+# (scripts/release.py, or rb-release from rb-cli-core with adopt_core). Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
 
@@ -22,8 +23,28 @@ command -v antagor >/dev/null 2>&1 || {
     exit 1
 }
 
+# check_core_adopted: an adopt_core project has no copy of the gate, locks rb-cli-core from the
+# gitea index as a dev dependency only (its wheel does not require it) and skips the tests of
+# release.py with a reason naming rb-cli-core
+check_core_adopted() {
+    run test ! -e scripts/release.py
+    run uv build -q --wheel -o "$WORK/$VARIANT-dist"
+    run uv run python -c "import glob, zipfile; w = zipfile.ZipFile(glob.glob('$WORK/$VARIANT-dist/*.whl')[0]); \
+m = w.read(next(n for n in w.namelist() if n.endswith('.dist-info/METADATA'))).decode(); \
+core = [l for l in m.splitlines() if l.startswith('Requires-Dist: rb-cli-core')]; \
+assert not core, core"
+    run uv run python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb')); \
+gitea = next(i['url'] for i in p['tool']['uv']['index'] if i['name'] == 'gitea'); \
+core = [x for x in tomllib.load(open('uv.lock', 'rb'))['package'] if x['name'] == 'rb-cli-core']; \
+assert [x['source'] for x in core] == [{'registry': gitea}], core"
+    run uv run pytest -q --no-cov -p no:cacheprovider tests/test_scripts.py --junitxml="$WORK/$VARIANT-scripts.xml"
+    run uv run python -c "import xml.etree.ElementTree as E; \
+s = [e.get('message', '') for e in E.parse('$WORK/$VARIANT-scripts.xml').iter('skipped')]; \
+assert s and all('rb-cli-core' in m for m in s), s"
+}
+
 # verify_project <expected (homeserver, mac) as a Python literal>: the checks of a generated
-# project, run inside it
+# project, run inside it; the gate is scripts/release.py, or rb-release when it answered adopt_core
 verify_project() {
     expected_install=$1
     dest=$PWD
@@ -37,7 +58,16 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m i
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0
-    run uv run scripts/release.py --check
+    if grep -qx 'adopt_core: true' .copier-answers.yml; then
+        check_core_adopted
+        run uv run rb-release check
+    else
+        run test -e scripts/release.py
+        run uv run python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb')); \
+core = [d for d in p['project']['dependencies'] + p['dependency-groups']['dev'] if d.startswith('rb-cli-core')]; \
+assert not core and 'rb-cli-core' not in p['tool']['uv'].get('sources', {}), core"
+        run uv run scripts/release.py --check
+    fi
     run antagor -C "$dest" layout check
 }
 
@@ -57,10 +87,12 @@ check_variant() {
     cd "$ROOT"
 }
 
-# check_update_round: generate from the previous release tag, update to the working tree with
-# stdin closed and no credential variables, then run the full checks in the updated project.
+# check_update_round <name> [copier update --data args...]: generate from the previous release tag,
+# update to the working tree with stdin closed and no credential variables, then run the full
+# checks in the updated project.
 check_update_round() {
-    VARIANT=update-round
+    VARIANT=$1
+    shift
     previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
     [ -n "$previous" ] || { printf '\nFAILED [%s]: no release tag to update from\n' "$VARIANT" >&2; exit 1; }
     dest="$WORK/$VARIANT"
@@ -73,7 +105,7 @@ check_update_round() {
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
     run env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_READ_TOKEN -u GITEA_TOKEN -u DOPPLER_TOKEN \
-        uvx copier update --trust --defaults -q --vcs-ref HEAD </dev/null
+        uvx copier update --trust --defaults -q --vcs-ref HEAD "$@" </dev/null
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }
@@ -85,6 +117,8 @@ check_variant auth-true '(["rbtools"], True)' --data include_auth=true
 check_variant auth-false '(["rbtools"], True)' --data include_auth=false
 check_variant publish-only '([], False)' --data include_auth=true \
     --data install_homeserver_users= --data install_mac=false
-check_update_round
+check_variant core-true '(["rbtools"], True)' --data adopt_core=true
+check_update_round update-round
+check_update_round update-core-true --data adopt_core=true
 
-printf '\nOK: template gate passed (repo tests, include_auth=true, include_auth=false, publish-only, update round)\n'
+printf '\nOK: template gate passed (repo tests, include_auth=true, include_auth=false, publish-only, adopt_core=true, update rounds)\n'

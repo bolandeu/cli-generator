@@ -57,6 +57,10 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # same name may live there).
 # [tool.uv.sources]
 # rb-serp = { index = "gitea" }
+{%- if adopt_core %}
+[tool.uv.sources]
+rb-cli-core = { index = "gitea" }
+{%- endif %}
 [[tool.uv.index]]
 name = "gitea"
 url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
@@ -79,6 +83,9 @@ dev = [
     "pytest>=8.0",
     "pyyaml>=6.0",  # tests/contracts/*.yaml
     "pytest-cov>=5.0",
+{%- if adopt_core %}
+    "rb-cli-core>=0.1.2,<0.2",  # the release gate: `uv run rb-release check`
+{%- endif %}
     "ruff>=0.6",
     "syrupy>=4.8",
     "ty>=0.0.80",

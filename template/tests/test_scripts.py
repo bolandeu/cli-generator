@@ -23,9 +23,15 @@ def _load(name: str) -> ModuleType:
     return module
 
 
-release = _load("release")
+RELEASE_PY = SCRIPTS / "release.py"
+# adopt_core = true: the gate is `rb-release check` from rb-cli-core, and the project has no copy of it to test.
+needs_release_py = pytest.mark.skipif(
+    not RELEASE_PY.exists(), reason="the gate comes from rb-cli-core (rb-release check): no scripts/release.py"
+)
+release = _load("release") if RELEASE_PY.exists() else ModuleType("release")
 
 
+@needs_release_py
 def test_release_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     # Independent of this project's own [tool.cli-generator]: defaults, then configured values.
     monkeypatch.setattr(release, "_tool", lambda name: {})
@@ -36,6 +42,7 @@ def test_release_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert release.gate_extras() == ["browser"]
 
 
+@needs_release_py
 def test_release_only_checks() -> None:
     result = subprocess.run(  # noqa: S603
         [sys.executable, str(SCRIPTS / "release.py"), "patch"], capture_output=True, text=True, check=False
@@ -44,6 +51,7 @@ def test_release_only_checks() -> None:
     assert "--check" in result.stderr
 
 
+@needs_release_py
 def test_external_programs_found_by_literal_name() -> None:
     source = """
 import shutil, subprocess
@@ -57,6 +65,7 @@ subprocess.run([exe, "search"])  # built at runtime: covered by require_cli abov
     assert release.external_programs(source) == {"serp", "ffmpeg", "npx", "git"}
 
 
+@needs_release_py
 def test_external_registry_must_match_code(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "mod.py").write_text('import shutil\nshutil.which("ffmpeg")\n')
@@ -124,6 +133,7 @@ def test_new():
 """
 
 
+@needs_release_py
 def test_existing_tests_that_changed() -> None:
     """Changed or removed tests are listed; moved, untouched and new ones aren't."""
     assert release.changed_existing_tests("tests/t.py", OLD_TESTS, NEW_TESTS) == [
@@ -136,6 +146,7 @@ def test_existing_tests_that_changed() -> None:
     assert release.changed_existing_tests("tests/t.py", "def broken(:\n", NEW_TESTS) == ["tests/t.py changed"]
 
 
+@needs_release_py
 def test_existing_tests_step_reports_against_the_last_tag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def git(*args: str) -> None:
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
@@ -168,6 +179,7 @@ tests/test_contracts.py::test_contract[astro:pages-view] PASSED [100%]
 """
 
 
+@needs_release_py
 def test_contract_summary() -> None:
     assert release.contract_summary(CONTRACT_RUN) == "4 cases from 3 consumers: 1 failed, 1 skipped (provider version)"
     assert release.contract_summary("") == "0 cases"
@@ -175,6 +187,7 @@ def test_contract_summary() -> None:
     assert release.contract_summary(passed) == "4 cases from 3 consumers"
 
 
+@needs_release_py
 def test_gate_runs_contracts_as_their_own_step() -> None:
     pytest_step = dict(release.COMMANDS)["pytest"]
     assert "--ignore=tests/test_contracts.py" in pytest_step
@@ -233,6 +246,7 @@ def _install_section(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, section: s
     monkeypatch.setattr(release, "ROOT", tmp_path)
 
 
+@needs_release_py
 def test_install_section_missing_prints_the_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _install_section(tmp_path, monkeypatch, '[project]\nname = "x"\n')
     with pytest.raises(release.StepFailed) as raised:
@@ -241,6 +255,7 @@ def test_install_section_missing_prints_the_default(tmp_path: Path, monkeypatch:
     assert '[tool.rb.install]\nhomeserver = ["rbtools"]\nmac = true' in raised.value.output
 
 
+@needs_release_py
 @pytest.mark.parametrize(
     ("body", "named"),
     [
@@ -264,6 +279,7 @@ def test_install_section_malformed_names_the_key(
     assert len(raised.value.output.splitlines()) == 1
 
 
+@needs_release_py
 def test_install_section_not_a_table_names_the_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _install_section(tmp_path, monkeypatch, '[tool.rb]\ninstall = "x"\n')
     with pytest.raises(release.StepFailed) as raised:
@@ -272,6 +288,7 @@ def test_install_section_not_a_table_names_the_key(tmp_path: Path, monkeypatch: 
     assert len(raised.value.output.splitlines()) == 1
 
 
+@needs_release_py
 @pytest.mark.parametrize(
     ("body", "ok"),
     [
@@ -302,6 +319,7 @@ def _git(repo: Path, *args: str) -> str:
 FAKE_AWS_KEY = "AKIA" + "QYLPMN7RT2X4WB3K"
 
 
+@needs_release_py
 @pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks not installed")
 def test_gate_stops_at_a_committed_secret(tmp_path: Path) -> None:
     (tmp_path / "scripts").mkdir()
@@ -326,6 +344,7 @@ def test_gate_stops_at_a_committed_secret(tmp_path: Path) -> None:
     assert result.stderr.strip().splitlines()[-1] == "release: code failed"
 
 
+@needs_release_py
 def test_secret_scan_skipped_without_gitleaks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(release.shutil, "which", lambda name: None)
     assert release.check_secrets() == "skipped: gitleaks not installed (brew install gitleaks)"
@@ -390,6 +409,7 @@ def _rb_x_index(python: Path) -> str:
     return subprocess.run([str(python), "-c", code], capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603
 
 
+@needs_release_py
 def test_our_package_installs_only_from_its_explicit_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _project_with_rb_x_from_gitea(tmp_path)
     monkeypatch.setattr(release, "ROOT", tmp_path)
@@ -400,6 +420,7 @@ def test_our_package_installs_only_from_its_explicit_index(tmp_path: Path, monke
     assert _rb_x_index(python) == "gitea"
 
 
+@needs_release_py
 def test_our_package_installed_from_pypi_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _project_with_rb_x_from_gitea(tmp_path)
     monkeypatch.setattr(release, "ROOT", tmp_path)
