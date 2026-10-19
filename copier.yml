@@ -29,6 +29,7 @@ _exclude:
   - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
   - "{% if not include_db %}tests/test_db.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
+  - "{% if adopt_core %}scripts/release.py{% endif %}"
   # Migrations are the project's own history once generated: on `copier update` the
   # template's example revisions must never land in a tool's chain (a second 0002...).
   - "{% if _copier_operation == 'update' %}src/{{ package_name }}/migrations/versions{% endif %}"
@@ -127,6 +128,11 @@ include_ci:
   type: bool
   help: "Generate the Gitea Actions workflow (.gitea/workflows/ci.yml)? CI is optional (standard §6) — the local gate release.py --check is the check"
   default: true
+
+adopt_core:
+  type: bool
+  help: "Take the release gate from rb-cli-core (`uv run rb-release check`, Gitea registry) instead of a copy in scripts/release.py?"
+  default: false
 
 repository_url:
   type: str
