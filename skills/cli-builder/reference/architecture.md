@@ -399,7 +399,13 @@ standard, the template implements it):
   `antagor publish` appends a section built from the titles of the
   published tickets. A user-visible change therefore needs a ticket with
   a title that says what changed for the user.
-- **`scripts/release.py` is the authoritative gate.** `--check` runs it
+- **The gate is `uv run rb-release check` from `rb-cli-core`** (Gitea
+  registry, `>=0.1.2,<0.2`) when the package answers `adopt_core=true`; new
+  packages do. While `adopt_core=false` the gate is the copied
+  `scripts/release.py --check`. The checks are the same in both forms.
+  See `docs/adr/0010-shared-code-in-core-library.md` and
+  `docs/plans/cli-core.md`.
+- **`scripts/release.py` is the authoritative gate** (the copied form). `--check` runs it
   without releasing — agents run it before every commit, CI (optional)
   runs only this, and it is a
   ticket check in `antagor.toml`: `uv lock --check`, ruff check, ruff

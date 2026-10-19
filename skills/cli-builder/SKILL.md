@@ -96,7 +96,7 @@ function) is governed by these four rules instead
    uvx copier copy https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git <dest-dir> --trust \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
-     --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
+     --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true --data adopt_core=true \
      --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>
    ```
 
@@ -449,6 +449,28 @@ template, `_commit` is the template release it was last synced to):
    9. Gate and release. Run `uv lock`, `uv run pytest --snapshot-update`
       (read the diff), then `uv run scripts/release.py --check`. Ticket
       title: `Template vX.Y.Z: Gitea CI, secret scan, registry dependencies`.
+
+14. **Switching the gate to `rb-cli-core`** (`adopt_core`, ADR 0010,
+   `docs/plans/cli-core.md`). The gate becomes `uv run rb-release check`
+   from the library `rb-cli-core` (Gitea registry, `>=0.1.2,<0.2`); the
+   package's copy of `scripts/release.py` goes away. Output and exit codes
+   of the gate stay the same. A package that stays on `adopt_core=false`
+   is not touched.
+   1. Clean tree: `git status` shows nothing.
+   2. `uvx copier update --trust --defaults --data adopt_core=true`.
+      Resolve conflicts hunk by hunk (step 2 above).
+   3. Check the copy is gone: `test ! -e scripts/release.py`. CI,
+      `antagor.toml` and the project docs now call `uv run rb-release check`;
+      `grep -rn 'release\.py' .` must find nothing live.
+   4. `uv lock` (pulls `rb-cli-core` from the `gitea` index), then
+      `uv run rb-release check`. It must be green.
+   5. Release as in "Publish" step 6 (ticket title:
+      `Template vX.Y.Z: gate from rb-cli-core`).
+   6. The package edited its copy of `release.py` (see
+      `git log --follow scripts/release.py`): do not keep a local copy and
+      do not take the switch until the change is in the library. Port the
+      change into `rb-cli-core` through a ticket to `cli-generator`
+      (it owns the library), wait for its release, then do steps 1-5.
 
 ### Renaming the distribution (standard §10: `rb-<slug>`)
 
