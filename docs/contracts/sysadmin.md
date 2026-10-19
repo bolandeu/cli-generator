@@ -53,12 +53,12 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 
 | Что | Где | Запуск | Владелец | Сбой виден |
 |---|---|---|---|---|
-| tool-updater (сборка, реестр, установка, переустановка зависимых) | homeserver | systemd path на теги + таймер раз в час | sysadmin | `journalctl -u tool-updater`, `/var/lib/tool-updater/status.json`; уведомления нет, ловит repo-sync |
+| tool-updater (сборка, реестр, установка, переустановка зависимых; упавший тег — повтор раз в день, до 3 попыток) | homeserver | systemd path на теги + таймер раз в час | sysadmin | `journalctl -u tool-updater`, `/var/lib/tool-updater/status.json`; уведомления нет, ловит repo-sync |
 | tool-updater-arm.timer (слежение за тегами новых репо) | homeserver | каждые 5 мин | sysadmin | journalctl |
 | repo-sync mirror (приватная копия нового репо на GitHub) | homeserver | каждые 5 мин | sysadmin | repo-sync check |
 | repo-sync check (вся цепочка, установлено = последний тег) | homeserver | ежедневно 09:00 | sysadmin | Kuma push-монитор «Цепочка инструментов (repo-sync)», интервал 25 ч (пропуск прогона тоже тревога) → Telegram |
-| rb-tools-update | Mac | launchd, 15 мин и при входе | sysadmin | уведомление macOS, лог `~/Library/Logs/rb-tools-update.log` |
-| Renovate (подъём `rb-*` в зависимостях) | homeserver | ночью 02:30 | sysadmin | PR в репо; только репо из списка TOOLS |
+| rb-tools-update (+ обёртки `doppler run` в `~/.local/rb-bin`) | Mac | launchd, 15 мин и при входе | sysadmin | Kuma «Mac: инструменты (rb-tools-update)» (отставание > 1 ч) → Telegram; уведомление macOS, лог `~/Library/Logs/rb-tools-update.log` |
+| Renovate (подъём `rb-*` в зависимостях; `copier update` — готов, ждёт `_src_path` на Gitea) | homeserver | ночью 02:30 | sysadmin | PR в репо; все `bolandeu/*`, кроме PRODUCTS |
 | Gitea Actions (раннер `docker`, кэш `ci-cache`) | homeserver | push/PR, только `.gitea/workflows/` | sysadmin (раннер), cli-generator (workflow) | статус в Gitea |
 | ci-cache-prune.timer (`uv cache prune` тома CI) | homeserver | вс 05:00 | sysadmin | journalctl |
 | `release.py --check` | Mac, CI | перед коммитом, в тикете antagor | cli-generator | красный гейт |
@@ -92,13 +92,13 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 
 | Что | Кто |
 |---|---|
-| `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme |
-| Убрать дубли `ANYMODEL_`, `CCODE_`, `OLLAMA_`, `OPENROUTER_` рядом с `LLM_*`, когда их никто не читает | sysadmin |
+| `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme — открыто: сначала hostme читает `HOSTME_DEPLOY_<HOST>_PASSWORD` (тикет sysadmin → hostme) |
+| Убрать дубли `ANYMODEL_`, `CCODE_`, `OLLAMA_`, `OPENROUTER_` рядом с `LLM_*`, когда их никто не читает | sysadmin — частично 19.10.2026: `CCODE_API_KEY` удалён; `OPENROUTER_`, `ANYMODEL_`, `OLLAMA_` ещё читают манифест Windmill у marketer и старый rb-antagor на rbtools |
 | Разобрать `SPIDER_PROXY_KEY_API_KEY`, `YANDEX_OAUTH_YANDEX_*` | sysadmin + владельцы |
 | dataio читает `GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON` сам; jq-перевод из обёртки убрать | dataio + cli-generator |
 | §4: ссылка на этот раздел, общее имя ключа как запасное env, gitleaks в гейте, `.env*` в `.gitignore` | cli-generator |
-| Mac: обёртка `doppler run` для пакетов с `mac = true`, `doppler configure` | sysadmin |
-| `docs/tools-env.md`: убрать «ротация — заявкой через marketer» | sysadmin |
+| Mac: обёртка `doppler run` для пакетов с `mac = true`, `doppler configure` | sysadmin — сделано 19.10.2026: rb-tools-update пишет `~/.local/rb-bin/<cmd>` (`doppler run -p tools -c prd --silent`), `rb-bin` в PATH раньше `~/.local/bin`, ~0,7 с на вызов; подмена при разработке — прямой вызов `~/.local/bin/<cmd>`; только пакеты с `[tool.rb.install]` |
+| `docs/tools-env.md`: убрать «ротация — заявкой через marketer» | sysadmin — сделано 19.10.2026 |
 | Отзыв утёкших ключей: Google service account (история `wordpress-bulk-editor`), `XMLRIVER_TOKEN` (история `wordstat`) | Человек |
 
 ## Свежесть пакетов (версия стандарта)
@@ -119,8 +119,8 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 | ✅ CI шаблона лежит в `.github/workflows/`, Gitea Actions запускает только `.gitea/workflows/` — у CLI, кроме semkit, нет CI. Перенести в шаблон (образец — semkit) | cli-generator |
 | ✅ Стандарт велит закреплять наш пакет git-тегом в `[tool.uv.sources]`; Renovate и переустановка зависимых работают с реестром Gitea (`explicit = true`, `rb-x>=…`). Переписать §8 | cli-generator |
 | ✅ В стандарте упоминается `tools-watch` — такого инструмента нет; убрать | cli-generator |
-| ✅ Нет сверки версий Mac ↔ homeserver и нет Telegram-тревоги о сбоях на Mac | sysadmin |
-| ✅ Упавший тег не пересобирается сам | sysadmin |
-| ✅ Список репо Renovate ведётся руками → autodiscover `bolandeu/*` со списком исключений | sysadmin |
+| ✅ Нет сверки версий Mac ↔ homeserver и нет Telegram-тревоги о сбоях на Mac | sysadmin — сделано 19.10.2026: пакет на Mac не обновлён > 1 ч → Kuma «Mac: инструменты (rb-tools-update)» → Telegram |
+| ✅ Упавший тег не пересобирается сам | sysadmin — сделано 19.10.2026: повтор раз в день, до 3 попыток |
+| ✅ Список репо Renovate ведётся руками → autodiscover `bolandeu/*` со списком исключений | sysadmin — сделано 19.10.2026 (все `bolandeu/*`, кроме PRODUCTS); права бота на запись ждут скрипта Человека |
 | ✅ Старые пакеты без `[tool.rb.install]` — `copier update` по команде Человека; до этого — строка в `tools.toml` | агенты пакетов, sysadmin |
-| ✅ `docs/tools-env.md` описывает установку из git-тегов GitHub и заявки через `marketer` — устарело | sysadmin |
+| ✅ `docs/tools-env.md` описывает установку из git-тегов GitHub и заявки через `marketer` — устарело | sysadmin — сделано 19.10.2026 |
