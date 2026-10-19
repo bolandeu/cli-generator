@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -284,3 +285,131 @@ def test_install_section_not_a_table_names_the_key(tmp_path: Path, monkeypatch: 
 def test_install_section_valid_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, ok: str) -> None:
     _install_section(tmp_path, monkeypatch, f"[tool.rb.install]\n{body}\n")
     assert release.check_install_section() == ok
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(  # noqa: S603
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+# Split in two: the literal would trip gitleaks on this very file.
+FAKE_AWS_KEY = "AKIA" + "QYLPMN7RT2X4WB3K"
+
+
+@pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks not installed")
+def test_gate_stops_at_a_committed_secret(tmp_path: Path) -> None:
+    (tmp_path / "scripts").mkdir()
+    shutil.copy(SCRIPTS / "release.py", tmp_path / "scripts" / "release.py")
+    (tmp_path / "settings.py").write_text(f'AWS_ACCESS_KEY_ID = "{FAKE_AWS_KEY}"\n')
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "i")
+
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, str(tmp_path / "scripts" / "release.py"), "--check"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "release: gate step 'secret scan' failed" in result.stderr
+    assert "aws-access-token" in result.stderr
+    assert "settings.py" in result.stderr
+    assert FAKE_AWS_KEY not in result.stdout + result.stderr
+    assert result.stderr.strip().splitlines()[-1] == "release: code failed"
+
+
+def test_secret_scan_skipped_without_gitleaks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(release.shutil, "which", lambda name: None)
+    assert release.check_secrets() == "skipped: gitleaks not installed (brew install gitleaks)"
+
+
+def test_env_files_are_ignored(tmp_path: Path) -> None:
+    shutil.copy(SCRIPTS.parent / ".gitignore", tmp_path / ".gitignore")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "i")
+    (tmp_path / ".env").write_text("TOKEN=x\n")
+    (tmp_path / ".env.local").write_text("TOKEN=y\n")
+    assert _git(tmp_path, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+GITEA_INDEX = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
+
+
+def test_project_declares_the_gitea_index_explicit() -> None:
+    import tomllib
+
+    config = tomllib.loads((SCRIPTS.parent / "pyproject.toml").read_text())
+    assert {"name": "gitea", "url": GITEA_INDEX, "explicit": True} in config["tool"]["uv"]["index"]
+
+
+INDEXES = Path(__file__).resolve().parent / "data" / "index"  # rb-x 0.1.0 in gitea/, a higher rb-x 0.9.0 in pypi/
+
+
+def _project_with_rb_x_from_gitea(root: Path) -> None:
+    (root / "pyproject.toml").write_text(f"""
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["rb-x>=0.1"]
+
+[[tool.uv.index]]
+name = "pypi"  # stands in for PyPI, which has a higher rb-x
+url = "{INDEXES / "pypi"}"
+format = "flat"
+default = true
+
+[[tool.uv.index]]
+name = "gitea"
+url = "{INDEXES / "gitea"}"
+format = "flat"
+explicit = true
+
+[tool.uv.sources]
+rb-x = {{ index = "gitea" }}
+""")
+    subprocess.run(["uv", "lock", "--offline", "--quiet"], cwd=root, check=True)  # noqa: S607
+
+
+def _venv(path: Path) -> Path:
+    subprocess.run(["uv", "venv", "--offline", "--quiet", str(path)], check=True)  # noqa: S603, S607
+    return path / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+
+
+def _rb_x_index(python: Path) -> str:
+    code = "import rb_x; print(rb_x.INDEX)"
+    return subprocess.run([str(python), "-c", code], capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603
+
+
+def test_our_package_installs_only_from_its_explicit_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _project_with_rb_x_from_gitea(tmp_path)
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+    monkeypatch.setenv("UV_OFFLINE", "1")
+
+    python = _venv(tmp_path / "venv")
+    release.install_locked(python)
+    assert _rb_x_index(python) == "gitea"
+
+
+def test_our_package_installed_from_pypi_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _project_with_rb_x_from_gitea(tmp_path)
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+    python = _venv(tmp_path / "venv")
+    pypi = ("--no-index", "--find-links", str(INDEXES / "pypi"))
+    subprocess.run(["uv", "pip", "install", "--offline", "--quiet", "--python", str(python), *pypi, "rb-x"], check=True)  # noqa: S603, S607
+    assert _rb_x_index(python) == "pypi"
+
+    with pytest.raises(release.StepFailed) as raised:
+        release.check_index_sources(python)
+    assert raised.value.output == (
+        "installed from a package index other than their explicit index: rb-x 0.9.0 (uv.lock: 0.1.0 from `gitea`)"
+    )
