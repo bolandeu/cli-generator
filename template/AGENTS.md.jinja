@@ -6,4 +6,4 @@
 - Решения и почему так: `docs/adr/` (формат — `docs/adr/README.md`).
 - Правила кода для ревью: `CODING_STANDARDS.md`.
 - Тикеты и сценарии ведёт Antagor: `.agents/antagor/`.
-- Гейт перед коммитом: `uv run scripts/release.py --check`.
+- Гейт перед коммитом: `{% if adopt_core %}uv run rb-release check{% else %}uv run scripts/release.py --check{% endif %}`.

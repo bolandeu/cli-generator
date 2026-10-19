@@ -7,7 +7,7 @@
 ```bash
 uv sync
 uv run {{ cli_name }} --help
-uv run scripts/release.py --check   # the full gate (run before every commit; CI runs it too)
+{% if adopt_core %}uv run rb-release check{% else %}uv run scripts/release.py --check{% endif %}   # the full gate (run before every commit; CI runs it too)
 uv run pytest --snapshot-update  # after changing a command's help; review tests/snapshots/help/
 ```
 
@@ -16,7 +16,7 @@ the security (`S`) rules; the gate also scans the git history for committed
 secrets when `gitleaks` is installed (`brew install gitleaks`) and `uv.lock`
 for known vulnerabilities when `osv-scanner` is installed (`brew install
 osv-scanner`), and says it skipped a scan otherwise. CI is optional and only repeats
-`release.py --check`.
+`{% if adopt_core %}rb-release check{% else %}release.py --check{% endif %}`.
 
 ## Release
 

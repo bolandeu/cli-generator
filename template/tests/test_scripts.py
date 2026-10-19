@@ -203,7 +203,8 @@ def test_antagor_project_config() -> None:
     # The prefix is the Plane project identifier: the product's full name in capitals (`antagor new`).
     assert re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", config["prefix"])
     assert config["worker"] == "claude-code"
-    assert config["checks"] == ["python3 scripts/check_command_docstrings.py", "uv run scripts/release.py --check"]
+    gate = "uv run scripts/release.py --check" if (SCRIPTS / "release.py").exists() else "uv run rb-release check"
+    assert config["checks"] == ["python3 scripts/check_command_docstrings.py", gate]
     assert config["review"]["required_types"] == ["feature", "bugfix"]
     expected = {"versioning": "semver", "changelog": "CHANGELOG.md", "deploy_command": "sh scripts/deploy.sh"}
     assert {k: config["publish"].get(k) for k in expected} == expected  # Antagor may add its own keys
