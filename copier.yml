@@ -22,7 +22,7 @@ _exclude:
   - "{% if not include_providers %}tests/test_providers.py{% endif %}"
   - "{% if not (include_providers and include_http_provider) %}src/{{ package_name }}/providers/http.py{% endif %}"
   - "{% if not (include_providers and include_http_provider) %}tests/test_http_provider.py{% endif %}"
-  - "{% if not include_ci %}.github/workflows{% endif %}"
+  - "{% if not include_ci %}.gitea{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/core/db.py{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/core/tables.py{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/migrations{% endif %}"
@@ -125,14 +125,8 @@ include_db:
 
 include_ci:
   type: bool
-  help: "Generate the GitHub Actions workflow? CI is optional (standard §6) — the local gate release.py --check is the check"
+  help: "Generate the Gitea Actions workflow (.gitea/workflows/ci.yml)? CI is optional (standard §6) — the local gate release.py --check is the check"
   default: true
-
-private_deps:
-  type: bool
-  help: "Does it depend on our private git repos? CI then needs a GITHUB_READ_TOKEN repo secret (standard §9)"
-  default: false
-  when: "{{ include_ci }}"
 
 repository_url:
   type: str
