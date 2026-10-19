@@ -1,0 +1,6 @@
+base_url = "https://homeserver.tailee01ab.ts.net:3000"
+org = "bolandeu"
+template_repo = "cli-generator"
+answers_file = ".copier-answers.yml"
+page_size = 50
+timeout_seconds = 20
