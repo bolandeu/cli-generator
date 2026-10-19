@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.20.3 — 2026-10-19
+
+### E-003 — Packages under the sysadmin contract: Gitea CI, secret scan, registry deps, key names, update readiness
+
+A package generated or updated from the new template release has a green CI in Gitea, a gate that refuses a committed secret, dependencies on our packages through the Gitea registry, Gitea URLs in its copier answers, and a template update that runs without questions or keys. The skill's Update mode tells a package agent every step. A report shows which packages lag behind the latest template tag.
+Time: 0.6h since the epic was approved
+
+- Standard and skill follow the sysadmin contract; Update mode has the migration steps (CG-029)
+- Template CI installs osv-scanner and gitleaks, so CI runs the full gate (CG-030)
+
 ## v1.20.2 — 2026-10-19
 
 ### E-003 — Packages under the sysadmin contract: Gitea CI, secret scan, registry deps, key names, update readiness
