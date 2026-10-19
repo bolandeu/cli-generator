@@ -95,8 +95,8 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 | `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme — открыто: сначала hostme читает `HOSTME_DEPLOY_<HOST>_PASSWORD` (тикет sysadmin → hostme) |
 | Убрать дубли `ANYMODEL_`, `CCODE_`, `OLLAMA_`, `OPENROUTER_` рядом с `LLM_*`, когда их никто не читает | sysadmin — частично 19.10.2026: `CCODE_API_KEY` удалён; `OPENROUTER_`, `ANYMODEL_`, `OLLAMA_` ещё читают манифест Windmill у marketer и старый rb-antagor на rbtools |
 | Разобрать `SPIDER_PROXY_KEY_API_KEY`, `YANDEX_OAUTH_YANDEX_*` | sysadmin + владельцы |
-| dataio читает `GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON` сам; jq-перевод из обёртки убрать | dataio + cli-generator |
-| §4: ссылка на этот раздел, общее имя ключа как запасное env, gitleaks в гейте, `.env*` в `.gitignore` | cli-generator |
+| dataio читает `GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON` сам; jq-перевод из обёртки убрать | dataio + cli-generator — стандарт готов (v1.20.3: `legacy_env`, режим Update шаг 13.7); осталось dataio |
+| §4: ссылка на этот раздел, общее имя ключа как запасное env, gitleaks в гейте, `.env*` в `.gitignore` | cli-generator — сделано 19.10.2026, шаблон v1.20.3 (E-003) |
 | Mac: обёртка `doppler run` для пакетов с `mac = true`, `doppler configure` | sysadmin — сделано 19.10.2026: rb-tools-update пишет `~/.local/rb-bin/<cmd>` (`doppler run -p tools -c prd --silent`), `rb-bin` в PATH раньше `~/.local/bin`, ~0,7 с на вызов; подмена при разработке — прямой вызов `~/.local/bin/<cmd>`; только пакеты с `[tool.rb.install]` |
 | `docs/tools-env.md`: убрать «ротация — заявкой через marketer» | sysadmin — сделано 19.10.2026 |
 | Отзыв утёкших ключей: Google service account (история `wordpress-bulk-editor`), `XMLRIVER_TOKEN` (история `wordstat`) | Человек |
@@ -106,19 +106,19 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 - ✅ Стандарт выпускается тегами `vX.Y.Z` этого репо. Пакет хранит версию шаблона в `.copier-answers.yml`
   (`_commit`). Обновление — `copier update` + гейт, делает агент пакета по SKILL.md (режим Update).
 - ✅ Рассылка «обновитесь» агентам пакетов — только по команде Человека.
-- ✅ Отчёт об отставании: какой пакет на какой версии шаблона (из `.copier-answers.yml` репо Gitea) — `cli-generator`.
+- ✅ Отчёт об отставании: какой пакет на какой версии шаблона (из `.copier-answers.yml` репо Gitea) — `cli-generator`. Сделано 19.10.2026: `scripts/template_drift.py [--json]`.
 - ✅ Renovate (менеджер `copier`) открывает PR с `copier update` в репо пакетов после нового тега шаблона.
   sysadmin: `copier` и `uv` в PATH пользователя Renovate, `ignoreScripts: false` для этих репо. cli-generator:
   `_src_path` — Gitea-URL `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`; задачи шаблона
-  (`_tasks`) проходят без вопросов и без ключей. Риск (задачи шаблона выполняют код на хосте Renovate) принят Человеком 19.10.2026.
+  (`_tasks`) проходят без вопросов и без ключей. Сделано 19.10.2026 (v1.20.3): источник — `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` (copier требует `.git`), гейт шаблона проверяет раунд `copier update` без вопросов и ключей. Риск (задачи шаблона выполняют код на хосте Renovate) принят Человеком 19.10.2026.
 
 ## Пробелы (ещё не прописано или не сделано)
 
 | Пробел | Кто |
 |---|---|
-| ✅ CI шаблона лежит в `.github/workflows/`, Gitea Actions запускает только `.gitea/workflows/` — у CLI, кроме semkit, нет CI. Перенести в шаблон (образец — semkit) | cli-generator |
-| ✅ Стандарт велит закреплять наш пакет git-тегом в `[tool.uv.sources]`; Renovate и переустановка зависимых работают с реестром Gitea (`explicit = true`, `rb-x>=…`). Переписать §8 | cli-generator |
-| ✅ В стандарте упоминается `tools-watch` — такого инструмента нет; убрать | cli-generator |
+| ✅ CI шаблона лежит в `.github/workflows/`, Gitea Actions запускает только `.gitea/workflows/` — у CLI, кроме semkit, нет CI. Перенести в шаблон (образец — semkit) | cli-generator — сделано 19.10.2026, шаблон v1.20.3 (E-003); пакеты получают при `copier update` |
+| ✅ Стандарт велит закреплять наш пакет git-тегом в `[tool.uv.sources]`; Renovate и переустановка зависимых работают с реестром Gitea (`explicit = true`, `rb-x>=…`). Переписать §8 | cli-generator — сделано 19.10.2026, шаблон v1.20.3 (E-003) |
+| ✅ В стандарте упоминается `tools-watch` — такого инструмента нет; убрать | cli-generator — сделано 19.10.2026, шаблон v1.20.3 (E-003) |
 | ✅ Нет сверки версий Mac ↔ homeserver и нет Telegram-тревоги о сбоях на Mac | sysadmin — сделано 19.10.2026: пакет на Mac не обновлён > 1 ч → Kuma «Mac: инструменты (rb-tools-update)» → Telegram |
 | ✅ Упавший тег не пересобирается сам | sysadmin — сделано 19.10.2026: повтор раз в день, до 3 попыток |
 | ✅ Список репо Renovate ведётся руками → autodiscover `bolandeu/*` со списком исключений | sysadmin — сделано 19.10.2026 (все `bolandeu/*`, кроме PRODUCTS); права бота на запись ждут скрипта Человека |
