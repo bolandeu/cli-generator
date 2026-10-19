@@ -24,9 +24,15 @@ command -v antagor >/dev/null 2>&1 || {
 }
 
 # check_core_adopted: an adopt_core project has no copy of the gate, locks rb-cli-core from the
-# gitea index and skips the tests of release.py with a reason naming rb-cli-core
+# gitea index as a dev dependency only (its wheel does not require it) and skips the tests of
+# release.py with a reason naming rb-cli-core
 check_core_adopted() {
     run test ! -e scripts/release.py
+    run uv build -q --wheel -o "$WORK/$VARIANT-dist"
+    run uv run python -c "import glob, zipfile; w = zipfile.ZipFile(glob.glob('$WORK/$VARIANT-dist/*.whl')[0]); \
+m = w.read(next(n for n in w.namelist() if n.endswith('.dist-info/METADATA'))).decode(); \
+core = [l for l in m.splitlines() if l.startswith('Requires-Dist: rb-cli-core')]; \
+assert not core, core"
     run uv run python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb')); \
 gitea = next(i['url'] for i in p['tool']['uv']['index'] if i['name'] == 'gitea'); \
 core = [x for x in tomllib.load(open('uv.lock', 'rb'))['package'] if x['name'] == 'rb-cli-core']; \
@@ -58,7 +64,7 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     else
         run test -e scripts/release.py
         run uv run python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb')); \
-core = [d for d in p['project']['dependencies'] if d.startswith('rb-cli-core')]; \
+core = [d for d in p['project']['dependencies'] + p['dependency-groups']['dev'] if d.startswith('rb-cli-core')]; \
 assert not core and 'rb-cli-core' not in p['tool']['uv'].get('sources', {}), core"
         run uv run scripts/release.py --check
     fi
