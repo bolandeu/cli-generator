@@ -29,7 +29,7 @@ _Избегать_: клон, форк шаблона
 _Избегать_: CI как источник истины
 
 **Опциональная часть**:
-Часть шаблона, включаемая вопросом copier (`include_auth`, `include_providers`, `include_http_provider`, `include_db`, `include_ci`, `private_deps`, `dist_name_legacy`), а не удалением файлов.
+Часть шаблона, включаемая вопросом copier (`include_auth`, `include_providers`, `include_http_provider`, `include_db`, `include_ci`, `dist_name_legacy`), а не удалением файлов.
 
 **Контракт потребителя**:
 YAML в `tests/contracts/<потребитель>/` сгенерированного проекта (формат `contract: 1`): потребитель описывает, что ждёт от CLI; гейт прогоняет его отдельным шагом.
