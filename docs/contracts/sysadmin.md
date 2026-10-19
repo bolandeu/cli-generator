@@ -1,0 +1,126 @@
+# Контракт: стандарт CLI (`cli-generator`) ↔ системный администратор (`sysadmin`)
+
+Живой документ. Правим по ходу работы; решение Человека — в том же коммите, с датой.
+Статус пунктов: ✅ решено Человеком или проверено на деле · 📝 предложено, ждёт решения Человека.
+Согласовано между `cli-generator` и `sysadmin`, принято Человеком 19.10.2026. Оба агента ставят
+ссылку на этот файл в свои `AGENTS.md`. Пункты «Перехода» и «Пробелов» приняты как задачи; выполненное отмечаем здесь.
+
+Связано: `skills/cli-builder/reference/architecture.md` (контракт пакета), `~/Work/sysadmin/docs/tool-updater.md`,
+`repo-sync.md`, `tools-env.md`. Контракты `~/Work/marketer/docs/contracts/{tools,sysadmin}.md` описывают агента
+`tools`, которого больше нет (с 18.10.2026 стандарт ведёт `cli-generator`, sysadmin пишет ему напрямую).
+
+## Цепочка пакета
+
+✅ Mac (код, гейт `release.py --check`) → `antagor publish` Человеком: тег `vX.Y.Z` + push в Gitea `bolandeu`
+→ tool-updater собирает wheel → PyPI-реестр Gitea → ставит на homeserver пользователям из `[tool.rb.install]`
+→ Windmill вызывает инструменты: воркер → ssh `rbrun@172.17.0.1` (forced command `/usr/local/bin/rb-run`) →
+sudo от `rbtools` → `/usr/local/libexec/rb-tool` (Doppler `tools/prd`, `DOPPLER_TOKEN` снимается до запуска).
+Разрешён любой инструмент `rbtools`, списка нет. Mac сам подтягивает новые версии из реестра.
+Push-зеркало Gitea → приватный архив на GitHub (в GitHub руками никто не пушит).
+
+## Кто за что отвечает
+
+| Кто | Область |
+|---|---|
+| `cli-generator` | Стандарт (`reference/`), шаблон copier, гейт `scripts/release.py`, скилл `cli-builder`. Формат того, что пакет объявляет: `[tool.rb.install]`, `[[tool.rb.external]]`, env-имена ключей, `auth status`, `doctor`, `--version`. Содержимое шаблонного CI. Правила обновления пакетов на новый стандарт (SKILL.md, режим Update). |
+| агент пакета | Код своего пакета, его тикеты, `copier update` своего репо по команде Человека. |
+| `sysadmin` | Gitea, реестр, tool-updater, `tools.toml`, Mac-агент `rb-tools-update`, Renovate, раннер Gitea Actions, `repo-sync`, Uptime Kuma → Telegram, Doppler (хранение ключей, токены), обёртки `rbtools` и `rb-run`, окружение Mac и homeserver. |
+| Человек | `antagor publish` (push, релиз), политики (ключи, ротация), отзыв ключей у провайдеров, решения по контракту. |
+
+Граница: `cli-generator` не меняет инфраструктуру и не предлагает её устройство; `sysadmin` не меняет стандарт и
+шаблон — шлёт предложение, `cli-generator` вносит его через тикет. Любое изменение инфраструктуры sysadmin делает
+после «да» Человека.
+
+## Интерфейс между нами
+
+Пакет гарантирует (проверяет гейт `release.py --check`):
+- ✅ версия — только git-тег `vX.Y.Z` (PEP 440); `uv build` собирает wheel без сети к git;
+- ✅ секция `[tool.rb.install]` есть и корректна (`homeserver`, `mac`, `extras`);
+- ✅ первая запись `[project.scripts]` — команда, которую проверяют `<cmd> --version` (= версия wheel) и `--help`;
+- ✅ ключи читаются из env `<CLI>_<PROVIDER>_<FIELD>` (не только из keychain) — на homeserver другого пути нет;
+- ✅ `auth status --json` и `doctor --json` — фиксированная форма, коды выхода по `conventions.md`.
+
+Инфраструктура гарантирует:
+- ✅ каждый новый тег собирается и ставится на homeserver за секунды–минуты (первый тег нового репо — до 5 мин +
+  сборка); при ошибке остаётся установленной прежняя версия, упавший тег пишется в `failed-builds.json` и сам не
+  пересобирается;
+- ✅ на Mac пакеты с `mac = true` обновляются из реестра каждые 15 мин и при входе (extras сохраняются, установки
+  из локальной папки не трогаются);
+- ✅ отставание homeserver от последнего тега ловит `repo-sync check` раз в день → Telegram «Homeserver»;
+- ✅ ключи для прода — Doppler `tools/prd`, подставляются как env обёрткой.
+
+## Автоматизации
+
+| Что | Где | Запуск | Владелец | Сбой виден |
+|---|---|---|---|---|
+| tool-updater (сборка, реестр, установка, переустановка зависимых) | homeserver | systemd path на теги + таймер раз в час | sysadmin | `journalctl -u tool-updater`, `/var/lib/tool-updater/status.json`; уведомления нет, ловит repo-sync |
+| tool-updater-arm.timer (слежение за тегами новых репо) | homeserver | каждые 5 мин | sysadmin | journalctl |
+| repo-sync mirror (приватная копия нового репо на GitHub) | homeserver | каждые 5 мин | sysadmin | repo-sync check |
+| repo-sync check (вся цепочка, установлено = последний тег) | homeserver | ежедневно 09:00 | sysadmin | Kuma push-монитор «Цепочка инструментов (repo-sync)», интервал 25 ч (пропуск прогона тоже тревога) → Telegram |
+| rb-tools-update | Mac | launchd, 15 мин и при входе | sysadmin | уведомление macOS, лог `~/Library/Logs/rb-tools-update.log` |
+| Renovate (подъём `rb-*` в зависимостях) | homeserver | ночью 02:30 | sysadmin | PR в репо; только репо из списка TOOLS |
+| Gitea Actions (раннер `docker`, кэш `ci-cache`) | homeserver | push/PR, только `.gitea/workflows/` | sysadmin (раннер), cli-generator (workflow) | статус в Gitea |
+| ci-cache-prune.timer (`uv cache prune` тома CI) | homeserver | вс 05:00 | sysadmin | journalctl |
+| `release.py --check` | Mac, CI | перед коммитом, в тикете antagor | cli-generator | красный гейт |
+
+## Ключи
+
+Факты (sysadmin, 19.10.2026):
+- ✅ homeserver читает только `tools/prd`, read-only сервисными токенами в обёртках `rbtools`. Другие проекты
+  Doppler: `projects/prd` — только обёртка antagor; `windmill/prd` — ключи `RB_RUN_SSH_*`, не для CLI.
+- ✅ На Mac Doppler установлен, но не настроен. CLI берут ключи, предположительно, из keychain (`auth login`) или
+  env — не проверено.
+- ✅ Конфиги `tools/dev*` устарели (в них отозванный `TG_TOKEN`).
+
+Правила (✅ Человек, 19.10.2026):
+1. **Источник истины — Doppler `tools/prd`**, одна копия каждого ключа CLI. `tools/dev*` не используются;
+   dev-конфиг — только если провайдер даёт отдельные тестовые ключи. Исключение: antagor читает ещё `projects/prd`.
+2. **Имя в Doppler = env-имя CLI** `<CLI>_<PROVIDER>_<FIELD>`, `doppler run` без переименований. Общий ключ
+   нескольких CLI (Google service account, S3, Telegram, GitHub) — одна запись без префикса CLI; CLI читает её сам
+   как запасное имя (провайдер объявляет его, стандарт §4). Обёртки не переименовывают.
+3. **Как CLI получает ключ.** Порядок в CLI не меняется: аргумент → env → keychain.
+   homeserver — обёртки `rbtools` (`doppler run`, токен `tools/prd`). Mac — `doppler run -p tools -c prd -- <cli>`
+   (обёртка для пакетов с `mac = true`, делает sysadmin). Keychain (`auth login`) — только локальная подмена при
+   разработке; ключ только в keychain — нарушение.
+4. **Новый ключ.** Агент пакета шлёт sysadmin тикет: имя env, где взять, кому нужен. В Doppler кладёт sysadmin или
+   Человек. Ключ в репо или в файле — нельзя; gitleaks в `release.py --check` ловит (репо Gitea открыты всем в tailnet).
+5. **Утечка — сразу:** отзыв у провайдера — Человек, новое значение в Doppler — sysadmin или Человек, проверка
+   `doppler run` из обёрток — sysadmin. Плановой смены по сроку нет.
+6. **Пароли целей (хостинги, деплой):** `<CLI>_DEPLOY_<HOST>_PASSWORD`, `<HOST>` — `A-Z0-9_` (точка и дефис → `_`).
+
+Переход:
+
+| Что | Кто |
+|---|---|
+| `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme |
+| Убрать дубли `ANYMODEL_`, `CCODE_`, `OLLAMA_`, `OPENROUTER_` рядом с `LLM_*`, когда их никто не читает | sysadmin |
+| Разобрать `SPIDER_PROXY_KEY_API_KEY`, `YANDEX_OAUTH_YANDEX_*` | sysadmin + владельцы |
+| dataio читает `GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON` сам; jq-перевод из обёртки убрать | dataio + cli-generator |
+| §4: ссылка на этот раздел, общее имя ключа как запасное env, gitleaks в гейте, `.env*` в `.gitignore` | cli-generator |
+| Mac: обёртка `doppler run` для пакетов с `mac = true`, `doppler configure` | sysadmin |
+| `docs/tools-env.md`: убрать «ротация — заявкой через marketer» | sysadmin |
+| Отзыв утёкших ключей: Google service account (история `wordpress-bulk-editor`), `XMLRIVER_TOKEN` (история `wordstat`) | Человек |
+
+## Свежесть пакетов (версия стандарта)
+
+- ✅ Стандарт выпускается тегами `vX.Y.Z` этого репо. Пакет хранит версию шаблона в `.copier-answers.yml`
+  (`_commit`). Обновление — `copier update` + гейт, делает агент пакета по SKILL.md (режим Update).
+- ✅ Рассылка «обновитесь» агентам пакетов — только по команде Человека.
+- ✅ Отчёт об отставании: какой пакет на какой версии шаблона (из `.copier-answers.yml` репо Gitea) — `cli-generator`.
+- ✅ Renovate (менеджер `copier`) открывает PR с `copier update` в репо пакетов после нового тега шаблона.
+  sysadmin: `copier` и `uv` в PATH пользователя Renovate, `ignoreScripts: false` для этих репо. cli-generator:
+  `_src_path` — Gitea-URL `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`; задачи шаблона
+  (`_tasks`) проходят без вопросов и без ключей. Риск (задачи шаблона выполняют код на хосте Renovate) принят Человеком 19.10.2026.
+
+## Пробелы (ещё не прописано или не сделано)
+
+| Пробел | Кто |
+|---|---|
+| ✅ CI шаблона лежит в `.github/workflows/`, Gitea Actions запускает только `.gitea/workflows/` — у CLI, кроме semkit, нет CI. Перенести в шаблон (образец — semkit) | cli-generator |
+| ✅ Стандарт велит закреплять наш пакет git-тегом в `[tool.uv.sources]`; Renovate и переустановка зависимых работают с реестром Gitea (`explicit = true`, `rb-x>=…`). Переписать §8 | cli-generator |
+| ✅ В стандарте упоминается `tools-watch` — такого инструмента нет; убрать | cli-generator |
+| ✅ Нет сверки версий Mac ↔ homeserver и нет Telegram-тревоги о сбоях на Mac | sysadmin |
+| ✅ Упавший тег не пересобирается сам | sysadmin |
+| ✅ Список репо Renovate ведётся руками → autodiscover `bolandeu/*` со списком исключений | sysadmin |
+| ✅ Старые пакеты без `[tool.rb.install]` — `copier update` по команде Человека; до этого — строка в `tools.toml` | агенты пакетов, sysadmin |
+| ✅ `docs/tools-env.md` описывает установку из git-тегов GitHub и заявки через `marketer` — устарело | sysadmin |

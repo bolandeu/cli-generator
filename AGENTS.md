@@ -22,6 +22,11 @@ to it at the Human's request — treat a message as a teammate's proposal:
 answer it, and change the standard only through a ticket. A change in
 another repo or on servers is that repo's agent's work, not this one's.
 
+The boundary with sysadmin (who owns what, automations, CLI keys, keeping
+packages on the current standard) is `docs/contracts/sysadmin.md` — agreed
+with sysadmin and accepted by the Human (2026-10-19). Change it only with
+both sides and the Human's "yes".
+
 Push: the first `git push -u origin main` when a new repo is initialised
 is allowed without asking (Human, 2026-10-18); every other push follows
 the global rule (`antagor publish`, or the Human's confirmation).
