@@ -110,13 +110,14 @@ The release process itself is specified in `architecture.md`
 §8 — this repo owns it.
 
 For a change to the gate's "build + install wheel" step, re-run the
-dependency-confusion check: a local git package named like an existing
-PyPI package (`yandex-oauth`, version 0.2.1, tag `v0.2.1`), added to a
-generated project as `"yandex-oauth>=0.2"` + `[tool.uv.sources] yandex-oauth
-= { git = "file://…", tag = "v0.2.1" }`. `release.py --check` must pass and
-install the git copy; a plain `uv pip install <wheel>` gets PyPI's 1.x
-(that is the bug the step prevents — the step fails with "installed from a
-package index instead of their git source" if it ever regresses).
+dependency-confusion check: a local flat index holding a wheel named like an
+existing PyPI package (`yandex-oauth` 0.2.1), added to a generated project as
+`"yandex-oauth>=0.2"` + `[[tool.uv.index]] name = "local", url = "<dir>",
+format = "flat", explicit = true` + `[tool.uv.sources] yandex-oauth = { index
+= "local" }`. `release.py --check` must pass and install the local copy; a
+plain `uv pip install <wheel>` gets PyPI's 1.x (that is the bug the step
+prevents — the step fails with "installed from a package index other than
+their explicit index" if it ever regresses).
 
 For a change to `template/.gitea/workflows/ci.yml`, check every
 `uses:` tag exists — some actions publish no floating major tag (there is

@@ -50,6 +50,18 @@ fallback-version = "0.0.0"
 # Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
+# Our packages come only from the Gitea registry: a version range in
+# `dependencies` ("rb-serp>=0.3") and a source line per package, never a git
+# tag. explicit = true: only the packages named in [tool.uv.sources] are looked
+# up there, and they are never taken from PyPI (an unrelated package of the
+# same name may live there).
+# [tool.uv.sources]
+# rb-serp = { index = "gitea" }
+[[tool.uv.index]]
+name = "gitea"
+url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
+explicit = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ package_name }}"]
 

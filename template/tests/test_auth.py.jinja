@@ -18,7 +18,7 @@ from .test_cli import invoke, invoke_json
 
 NS = "{{ cli_name }}"  # keychain service and env prefix use the command name, not the package
 PREFIX = re.sub(r"[^A-Z0-9]", "_", NS.upper())
-GOOD, BAD = "good-secret-123", "bad-secret-456"
+GOOD, BAD = "good-secret-123", "bad-secret-456"  # gitleaks:allow (fake keys)
 
 
 @pytest.fixture

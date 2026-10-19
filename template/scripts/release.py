@@ -12,7 +12,9 @@ Gate steps, in order — the first failure stops everything and prints that
 step's name and output, then `release: code failed` (exit 1) or, when only
 the vulnerability audit failed, `release: audit failed` (exit 3):
 
-    uv lock --check · ruff check · ruff format --check · ty check · pytest ·
+    secret scan (gitleaks over the git history; skipped with a notice when
+    gitleaks isn't installed) · uv lock --check · ruff check ·
+    ruff format --check · ty check · pytest ·
     contracts (tests/test_contracts.py: the consumers' cases from
     tests/contracts/<consumer>/*.yaml, run apart from pytest — a failing case
     stops the release and is named with its consumer) ·
@@ -25,10 +27,12 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     external dependencies (every program src/ runs is declared in
     [[tool.rb.external]] and vice versa) ·
     build the wheel and install
-    it into a throwaway venv with exactly the uv.lock dependency set (`uv export`,
-    then the wheel with --no-deps, then `uv pip check` — never resolving from
-    an index, so git-sourced deps can't be swapped for a same-named PyPI
-    package), `<cli> --version` must print the version being
+    it into a throwaway venv with exactly the uv.lock dependency set (`uv sync
+    --frozen`, then the wheel with --no-deps, then `uv pip check` — never
+    resolving from an index, and every dependency [tool.uv.sources] takes from
+    an explicit index must be installed as locked from there, so our
+    packages can't be swapped for a same-named PyPI package),
+    `<cli> --version` must print the version being
     built, `<cli> --help` must work (a library without a console script:
     every top-level package imports and importlib.metadata reports that
     version) · osv-scanner over uv.lock (skipped with a
@@ -318,6 +322,15 @@ def check_contracts(version: str | None = None) -> str:
     return summary
 
 
+def check_secrets() -> str:
+    """No key, token or password anywhere in the git history (gitleaks; `--redact`: the value is never printed)."""
+    scanner = shutil.which("gitleaks")
+    if scanner is None:
+        return "skipped: gitleaks not installed (brew install gitleaks)"
+    step_output(scanner, "git", "--redact", "--verbose", "--no-banner", "--no-color", str(ROOT))
+    return "no secrets in the git history"
+
+
 def check_vulnerabilities() -> str:
     scanner = shutil.which("osv-scanner")
     if scanner is None:
@@ -358,20 +371,50 @@ def _check_library(python: Path, wheel: Path, dist: str, built: str) -> str:
     return f"{wheel.name}; imports {', '.join(tops)}; importlib.metadata version = {reported}"
 
 
-def _check_vcs_sources(python: Path, requirements: Path) -> None:
-    """Every `name @ git+...` in the locked set must be installed from git, not from an index."""
-    names = [line.split(" @ ", 1)[0].strip() for line in requirements.read_text().splitlines() if " @ git+" in line]
-    if not names:
+def _normalized(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def check_index_sources(python: Path) -> None:
+    """Every dependency [tool.uv.sources] takes from an explicit index is installed as uv.lock locked it from there."""
+    uv = _tool("uv")
+    explicit = {index["name"] for index in uv.get("index", []) if index.get("explicit")}
+    pinned = {
+        _normalized(name): source["index"]
+        for name, source in uv.get("sources", {}).items()
+        if isinstance(source, dict) and source.get("index") in explicit
+    }
+    if not pinned:
         return
+    lock = tomllib.loads((ROOT / "uv.lock").read_text())
+    locked = {package["name"]: package["version"] for package in lock["package"] if package["name"] in pinned}
     code = (
-        "import importlib.metadata as m, json\n"
-        f"for name in {names!r}:\n"
-        "    raw = m.distribution(name).read_text('direct_url.json')\n"
-        "    print(name, 'git' if raw and 'vcs_info' in json.loads(raw) else 'INDEX')"
+        "import importlib.metadata as m\n"
+        f"for name in {sorted(pinned)!r}:\n"
+        "    try: print(name, m.version(name))\n"
+        "    except m.PackageNotFoundError: pass"  # not in the installed set (an extra): nothing to check
     )
-    wrong = [line.split()[0] for line in step_output(str(python), "-c", code).splitlines() if line.endswith("INDEX")]
+    installed = dict(line.split() for line in step_output(str(python), "-c", code).splitlines())
+    wrong = [
+        f"{name} {version} (uv.lock: {locked.get(name)} from `{pinned[name]}`)"
+        for name, version in sorted(installed.items())
+        if version != locked.get(name)
+    ]
     if wrong:
-        raise StepFailed(f"installed from a package index instead of their git source: {', '.join(wrong)}")
+        raise StepFailed(f"installed from a package index other than their explicit index: {', '.join(wrong)}")
+
+
+def install_locked(python: Path) -> None:
+    """Install exactly uv.lock's dependency set into the venv of `python`, each package from its locked source.
+
+    Never `uv pip install <wheel>` or an exported requirements file: neither
+    carries [tool.uv.sources], so our packages (rb-x from the explicit Gitea
+    index) would be resolved from PyPI — where an unrelated package of the
+    same name may live (dependency confusion).
+    """
+    env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(python.parent.parent)}
+    step_output("uv", "sync", "--frozen", "--no-dev", "--no-install-project", "--quiet", env=env)
+    check_index_sources(python)
 
 
 def check_installed_wheel(version: str | None) -> str:
@@ -391,21 +434,11 @@ def check_installed_wheel(version: str | None) -> str:
             raise StepFailed(f"built version {built}: the build saw no v* tag (uv-dynamic-versioning fell back)")
         step_output("uv", "venv", "--quiet", str(venv))
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        # Never `uv pip install <wheel>` alone: a wheel's metadata has no
-        # [tool.uv.sources], so our git-only deps (yandex-oauth @ tag) would be
-        # resolved from PyPI — where an unrelated package of the same name
-        # lives (dependency confusion). Install exactly the locked set (git
-        # sources included), then the wheel without resolving anything, then
+        # The locked set, then the wheel without resolving anything, then
         # check the wheel's requirements are met by what's installed.
-        requirements = Path(tmp) / "requirements.txt"
-        step_output(
-            "uv", "export", "--frozen", "--no-dev", "--no-emit-project", "--no-hashes", "--quiet",
-            "--output-file", str(requirements),
-        )  # fmt: skip
-        step_output("uv", "pip", "install", "--quiet", "--python", str(python), "-r", str(requirements))
+        install_locked(python)
         step_output("uv", "pip", "install", "--quiet", "--no-deps", "--python", str(python), str(wheel))
         step_output("uv", "pip", "check", "--python", str(python))
-        _check_vcs_sources(python, requirements)
         if script is None:
             return _check_library(python, wheel, project["name"], built)
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
@@ -419,6 +452,7 @@ def check_installed_wheel(version: str | None) -> str:
 
 def run_gate(version: str | None) -> None:
     steps: list[tuple[str, Callable[[], str]]] = [
+        ("secret scan", check_secrets),
         *((name, lambda argv=argv: run_command(argv)) for name, argv in COMMANDS),
         ("contracts", lambda: check_contracts(version)),
         ("existing tests", check_existing_tests),
@@ -434,8 +468,8 @@ def run_gate(version: str | None) -> None:
         except StepFailed as exc:
             print("FAILED", flush=True)
             print(f"\nrelease: gate step '{name}' failed:\n{exc.output}", file=sys.stderr)
-            # Last line + exit code tell tools-watch whether the code is broken or
-            # only a dependency needs a security bump.
+            # Last line + exit code tell whoever runs the gate (an agent, CI) whether
+            # the code is broken or only a dependency needs a security bump.
             audit = name == AUDIT_STEP
             print(f"release: {'audit' if audit else 'code'} failed", file=sys.stderr)
             raise SystemExit(EXIT_AUDIT_FAILED if audit else EXIT_CODE_FAILED) from None
