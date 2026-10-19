@@ -57,6 +57,9 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
         run uv run rb-release check
     else
         run test -e scripts/release.py
+        run uv run python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb')); \
+core = [d for d in p['project']['dependencies'] if d.startswith('rb-cli-core')]; \
+assert not core and 'rb-cli-core' not in p['tool']['uv'].get('sources', {}), core"
         run uv run scripts/release.py --check
     fi
     run antagor -C "$dest" layout check
