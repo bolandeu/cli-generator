@@ -462,6 +462,8 @@ template, `_commit` is the template release it was last synced to):
    3. Check the copy is gone: `test ! -e scripts/release.py`. CI,
       `antagor.toml` and the project docs now call `uv run rb-release check`;
       `grep -rn 'release\.py' .` must find nothing live.
+      Copier does not update the project readme (`_skip_if_exists`): edit
+      the gate command in it by hand.
    4. `uv lock` (pulls `rb-cli-core` from the `gitea` index), then
       `uv run rb-release check`. It must be green.
    5. Release as in "Publish" step 6 (ticket title:

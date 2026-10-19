@@ -97,6 +97,7 @@ def test_project_files_name_the_gate_of_their_answer() -> None:
     checks = tomllib.loads((ROOT / ".agents" / "antagor" / "antagor.toml").read_text())["checks"]
     assert GATE in checks
     assert GATE in (ROOT / "AGENTS.md").read_text()
+    # README.md is the project's own (copier skips it on update): not checked here.
     if ADOPTED_CORE:
-        for name in (".agents/antagor/antagor.toml", "AGENTS.md", "CODING_STANDARDS.md", "README.md"):
+        for name in (".agents/antagor/antagor.toml", "AGENTS.md", "CODING_STANDARDS.md"):
             assert "scripts/release.py" not in (ROOT / name).read_text(), name
