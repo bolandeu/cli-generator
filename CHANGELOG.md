@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.20.4 — 2026-10-19
+
+### E-004 — Packages can take the release gate from rb-cli-core (adopt_core), first step of the core library
+
+A package that answers adopt_core=yes runs the gate as 'uv run rb-release check' from rb-cli-core (Gitea registry, version range >=0.1.2,<0.2); its copy of scripts/release.py is gone; CI, antagor.toml and the project docs call the command; the gate output and exit codes are the same as before. A package that answers no is untouched. The skill tells a package agent each step; new packages start with yes.
+Time: 0.3h since the epic was approved
+
+- Template: adopt_core question takes the gate from rb-cli-core (CG-031)
+
 ## v1.20.3 — 2026-10-19
 
 ### E-003 — Packages under the sysadmin contract: Gitea CI, secret scan, registry deps, key names, update readiness
