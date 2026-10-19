@@ -39,8 +39,19 @@ pushes by hand.
 uv tool install .
 ```
 
+{% set github = not repository_url or repository_url.startswith('https://github.com/') -%}
+{% if not github -%}
+**From the Gitea registry** (the package is released there):
+
+```bash
+uv tool install {{ dist_name }} --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
+```
+
+**Or from the git tag, on any other machine (any OS):**
+{%- else -%}
 **On any other machine (any OS), once this repo is pushed to GitHub — no
 PyPI publish needed:**
+{%- endif %}
 
 ```bash
 {% if repository_url -%}
@@ -54,7 +65,7 @@ Replace `vX.Y.Z` with the latest release tag (a tag cut by
 `antagor publish`; never install a branch). This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
 yet — see `src/{{ package_name }}/data/SKILL.md`.
-
+{% if github %}
 **Private repo?** The command above is unchanged — `uv` runs git under the
 hood, so it authenticates the same way `git clone` does. On a machine
 where the install is refused with an auth error, do one of these once:
@@ -73,7 +84,7 @@ uv tool install "{{ dist_name }} @ git+ssh://git@github.com/{{ repository_url | 
 uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@vX.Y.Z"
 {%- endif %}
 ```
-
+{% endif %}
 **Update** an installed copy to the latest commit:
 
 ```bash

@@ -114,9 +114,11 @@ VARIANT=repo-tests
 run uv run --with pytest pytest -q "$ROOT/tests"
 
 check_variant auth-true '(["rbtools"], True)' --data include_auth=true
-check_variant auth-false '(["rbtools"], True)' --data include_auth=false
+check_variant auth-false '(["rbtools"], True)' --data include_auth=false \
+    --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
 check_variant publish-only '([], False)' --data include_auth=true \
-    --data install_homeserver_users= --data install_mac=false
+    --data install_homeserver_users= --data install_mac=false \
+    --data repository_url=https://github.com/bolandeu/demo
 check_variant core-true '(["rbtools"], True)' --data adopt_core=true
 check_update_round update-round
 check_update_round update-core-true --data adopt_core=true
