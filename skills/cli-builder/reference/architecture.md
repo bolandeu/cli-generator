@@ -409,7 +409,8 @@ standard, the template implements it):
   top-level package imports and `importlib.metadata.version()` equals the
   built version), a secret scan (`gitleaks` over the whole git
   history, values redacted; skipped with a notice when gitleaks is not
-  installed, `brew install gitleaks`), and `osv-scanner --lockfile=uv.lock`
+  installed, `brew install gitleaks`; the root `.gitleaks.toml` keeps the
+  default rules and allows only fake test values, one exact string each), and `osv-scanner --lockfile=uv.lock`
   when osv-scanner is installed (skipped with a notice otherwise; `brew
   install osv-scanner`). The wheel step installs the packages the project
   takes from an explicit index (below) as locked, from that index only.

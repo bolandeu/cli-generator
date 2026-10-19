@@ -420,10 +420,14 @@ template, `_commit` is the template release it was last synced to):
       is ported to `.gitea/workflows/` by hand. `tests/test_ci.py` fails
       while `.github/` exists.
    4. Secret scan. Install the scanner once: `brew install gitleaks`. The
-      gate now runs it over the whole git history. A finding is a leaked
-      key: do not commit, do not rewrite history. Tell the Human the
-      secret's name and file — revoking it at the provider is the Human's
-      (contract, "Ключи", rule 5).
+      gate now runs it over the whole git history, with the template's
+      root `.gitleaks.toml` (it allows the template's own fake test values
+      from `tests/test_auth.py`). A fake test value of the package's own:
+      add it to that file's `regexes` as one exact string
+      (`'''^<value>$'''`), never a path or a rule disable. Any other
+      finding is a leaked key: do not commit, do not rewrite history. Tell
+      the Human the secret's name and file — revoking it at the provider
+      is the Human's (contract, "Ключи", rule 5).
    5. `.env` in `.gitignore`. The update brings `.env` and `.env.*`; check
       with `grep -n '^\.env' .gitignore`. A tracked env file:
       `git rm --cached <file>`, and treat its values as leaked (step 4).
