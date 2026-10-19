@@ -54,7 +54,7 @@ generated package must satisfy.
 ## Using the template directly
 
 ```bash
-# `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` in place of `.` works from anywhere (add
+# `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` in place of `.` works from anywhere (add
 # `--vcs-ref v1.0.0` to pin a template release)
 uvx copier copy . <dest-dir> \
   --data package_name=mycli \

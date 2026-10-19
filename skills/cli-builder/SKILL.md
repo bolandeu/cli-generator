@@ -84,15 +84,16 @@ function) is governed by these four rules instead
      (`--data install_homeserver_users= --data install_mac=false`).
    - What `run` should actually do — this is the one piece of real business
      logic the template does not provide.
-2. Generate the skeleton with copier from **`https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`** —
-   the single template source: it becomes `_src_path` in the project's
+2. Generate the skeleton with copier from **`https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git`** —
+   the single template source (keep the `.git` suffix: without it copier
+   takes the URL for a local path): it becomes `_src_path` in the project's
    `.copier-answers.yml`, so every later `copier update` pulls released
    tags from Gitea on any machine (never a local path or the
    `~/.claude/skills/cli-generator` symlink). Its `copier.yml` has
    `_subdirectory: template`, so no `--subdirectory` flag is needed:
 
    ```bash
-   uvx copier copy https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator <dest-dir> --trust \
+   uvx copier copy https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git <dest-dir> --trust \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
      --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
@@ -103,8 +104,8 @@ function) is governed by these four rules instead
    local checkout of this repo as the source is only for testing a
    template change before it is released (see this repo's AGENTS.md). An
    existing project with another `_src_path` switches by editing that one
-   line to `_src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` (commit
-   `chore(copier): template source https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`), then
+   line to `_src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` (commit
+   `chore(copier): template source https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git`), then
    `uvx copier update --trust --defaults --pretend` must say "Updating to
    template version …".
 3. Implement the real logic:
@@ -404,7 +405,7 @@ template, `_commit` is the template release it was last synced to):
    questions and without keys.
    1. Clean tree: `git status` shows nothing. Then switch the template
       source: in `.copier-answers.yml` set `_src_path:
-      https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator` and
+      https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` and
       `repository_url:` to the package's Gitea URL
       (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>`). Commit
       `chore(copier): template source Gitea`.
