@@ -92,7 +92,7 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 
 | Что | Кто |
 |---|---|
-| `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme — открыто: сначала hostme читает `HOSTME_DEPLOY_<HOST>_PASSWORD` (тикет sysadmin → hostme) |
+| `HOSTME_TOP_VED_RU_PASSWORD` → `HOSTME_DEPLOY_TOP_VED_RU_PASSWORD` | sysadmin + hostme — сделано 19.10.2026: старый ключ удалён из `tools/prd`, hostme 0.5.2 читает новое имя, `sitegen ci` 0.0.2 пишет его |
 | Убрать дубли `ANYMODEL_`, `CCODE_`, `OLLAMA_`, `OPENROUTER_` рядом с `LLM_*`, когда их никто не читает | sysadmin — частично 19.10.2026: `CCODE_API_KEY` удалён; `OPENROUTER_`, `ANYMODEL_`, `OLLAMA_` ещё читают манифест Windmill у marketer и старый rb-antagor на rbtools |
 | Разобрать `SPIDER_PROXY_KEY_API_KEY`, `YANDEX_OAUTH_YANDEX_*` | sysadmin + владельцы |
 | dataio читает `GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON` сам; jq-перевод из обёртки убрать | dataio + cli-generator — стандарт готов (v1.20.3: `legacy_env`, режим Update шаг 13.7); осталось dataio |
