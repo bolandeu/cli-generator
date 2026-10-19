@@ -110,21 +110,22 @@ The release process itself is specified in `architecture.md`
 §8 — this repo owns it.
 
 For a change to the gate's "build + install wheel" step, re-run the
-dependency-confusion check: a local git package named like an existing
-PyPI package (`yandex-oauth`, version 0.2.1, tag `v0.2.1`), added to a
-generated project as `"yandex-oauth>=0.2"` + `[tool.uv.sources] yandex-oauth
-= { git = "file://…", tag = "v0.2.1" }`. `release.py --check` must pass and
-install the git copy; a plain `uv pip install <wheel>` gets PyPI's 1.x
-(that is the bug the step prevents — the step fails with "installed from a
-package index instead of their git source" if it ever regresses).
+dependency-confusion check: a local flat index holding a wheel named like an
+existing PyPI package (`yandex-oauth` 0.2.1), added to a generated project as
+`"yandex-oauth>=0.2"` + `[[tool.uv.index]] name = "local", url = "<dir>",
+format = "flat", explicit = true` + `[tool.uv.sources] yandex-oauth = { index
+= "local" }`. `release.py --check` must pass and install the local copy; a
+plain `uv pip install <wheel>` gets PyPI's 1.x (that is the bug the step
+prevents — the step fails with "installed from a package index other than
+their explicit index" if it ever regresses).
 
-For a change to `template/.github/workflows/ci.yml.jinja`, check every
+For a change to `template/.gitea/workflows/ci.yml`, check every
 `uses:` tag exists — some actions publish no floating major tag (there is
 no `astral-sh/setup-uv@v10`, only `v10.x.y`; that shipped in v1.1.0–v1.2.5
 and broke CI in every generated repo):
 
 ```bash
-grep -oE 'uses: [^ ]+@[^ ]+' template/.github/workflows/ci.yml.jinja | sed 's/uses: //' |
+grep -oE 'uses: [^ ]+@[^ ]+' template/.gitea/workflows/ci.yml | sed 's/uses: //' |
   while IFS=@ read -r action tag; do repo=$(echo "$action" | cut -d/ -f1-2)
     gh api "repos/$repo/git/ref/tags/$tag" -q .ref >/dev/null 2>&1 && echo "ok $action@$tag" || echo "MISSING $action@$tag"; done
 ```
@@ -189,9 +190,9 @@ before (missing answers file, wrong `copier.yml` location).
   `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,
   `tests/test_db.py`, the database fixture in `tests/conftest.py` and the
   SQLAlchemy/Alembic/psycopg deps; its PostgreSQL test runs only under `scripts/pg_test.sh` in the
-  generated project — a throwaway container on a Docker-assigned port), `include_ci`,
-  `private_deps` (CI job env `GH_TOKEN` from the `GITHUB_READ_TOKEN`
-  secret + `gh auth setup-git`), `dist_name_legacy` (rename transition).
+  generated project — a throwaway container on a Docker-assigned port), `include_ci`
+  (`.gitea/workflows/ci.yml` for Gitea Actions; no `.github`),
+  `dist_name_legacy` (rename transition).
   Render each branch once when you touch the workflow or `copier.yml`.
 - Human output goes through rich, which silently drops anything in
   `[...]` it takes for markup (`[[tool.rb.external]]` vanished from help).
