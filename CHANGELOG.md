@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.23.1 — 2026-10-20
+
+### Outside epics
+
+- The gate takes --json given as a global option: a chained group's steps pass json and errors (CG-045)
+
 ## v1.23.0 — 2026-10-20
 
 ### E-005 — One Standard, checked by the gate; the gate lives in cli-generator and cli-core is retired
