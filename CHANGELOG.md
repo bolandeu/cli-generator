@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.25.0 — 2026-10-20
+
+### E-006 — Minimal template with optional parts, and the skill in two modes
+
+A new package from the template has only what the Standard makes mandatory and passes the gate; each optional part is one copier question, off by default, on when the package needs it. Existing packages lose nothing on copier update. The skill has two modes: new package (template, then gate) and existing package (gate, then fix every red step by the Standard section it names).
+Time: 1.1h since the epic was approved
+
+- Skill: SKILL.md picks the mode; the new-package mode is template, then gate (CG-048)
+- Skill: the existing-package mode is gate, then fix each red step by its Standard section (CG-049)
+- Template gate: the update round from the previous tag expects the parts that package had, not every part (CG-050)
+
 ## v1.24.0 — 2026-10-20
 
 ### E-006 — Minimal template with optional parts, and the skill in two modes
