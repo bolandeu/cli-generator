@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.20.10 — 2026-10-20
+
+### Outside epics
+
+- Packages can bundle extra agent skills; skill install, skill list and describe serve them (CG-041)
+
 ## v1.20.9 — 2026-10-20
 
 ### Outside epics
