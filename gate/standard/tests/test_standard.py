@@ -35,6 +35,7 @@ OUTPUT = {
 }
 BARE_EXIT = 0
 USAGE_EXIT = 2
+ROOT_OPTIONS = []
 
 
 def children(group: str) -> dict[str, str]:
@@ -50,7 +51,10 @@ def children(group: str) -> dict[str, str]:
 
 def group_help(group: str) -> str:
     rows = "\\n".join(f"  {name}  {about}" for name, about in children(group).items())
-    return f"Usage: demo {group} COMMAND\\n\\n{GROUPS[group]}\\n\\nCommands:\\n{rows}\\n"
+    options = "".join(f"\\n  {option}" for option in ROOT_OPTIONS if not group)
+    return f"Usage: demo {group} COMMAND\\n\\n{GROUPS[group]}\\n\\nCommands:\\n{rows}\\n" + (
+        f"\\nOptions:{options}\\n" if options else ""
+    )
 
 
 def error(message: str, as_json: bool) -> int:
@@ -134,6 +138,17 @@ def test_a_command_without_json_fails_at_json(in_package) -> None:
     module = _changed('"status": ("Show the status.", ["--json"])', '"status": ("Show the status.", [])')
 
     assert "`demo status`" in _failed_at(_check(in_package, module), "json", "Output")
+
+
+def test_a_command_takes_json_listed_only_in_the_root_help(in_package) -> None:
+    module = _changed('"status": ("Show the status.", ["--json"])', '"status": ("Show the status.", [])')
+    module = module.replace("ROOT_OPTIONS = []", 'ROOT_OPTIONS = ["--json"]')
+
+    result = _check(in_package, module)
+
+    assert "release: standard: json ... ok" in result.stdout
+    assert "release: standard: errors ... ok" in result.stdout, result.output
+    assert result.exit_code == 0, result.output
 
 
 def test_a_json_error_in_plain_text_fails_at_errors(in_package) -> None:
