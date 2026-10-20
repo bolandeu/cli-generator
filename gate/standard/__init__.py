@@ -151,14 +151,16 @@ def check_commands(package: Package) -> str:
 
 
 def check_json(package: Package) -> str:
+    if _JSON_OPTION.search(package.bare.stdout):
+        return f"{len(package.leaves)} commands accept --json (the root lists it)"
     missing = [package.command(path) for path in package.leaves if not _JSON_OPTION.search(package.helps[path].stdout)]
     if missing:
-        raise Broken(f"no --json in {', '.join(missing)}: every command accepts it (its --help lists it)")
+        raise Broken(f"no --json in {', '.join(missing)}: every command accepts it (its --help or the root's lists it)")
     return f"{len(package.leaves)} commands accept --json"
 
 
 def check_errors(package: Package) -> str:
-    for run in package.run_each((*path, "--json", UNKNOWN_OPTION) for path in package.leaves):
+    for run in package.run_each(("--json", *path, UNKNOWN_OPTION) for path in package.leaves):
         _in_table(run)
         if run.code != 2:
             raise Broken(f"{run} exits {run.code}: an unknown option is exit 2")

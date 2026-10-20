@@ -89,7 +89,8 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 
 ## Output
 
-- **Mandatory** (gate: `standard: json`). Every command that is not a group takes `--json`.
+- **Mandatory** (gate: `standard: json`). Every command that is not a group takes `--json`: its own `--help` or the
+  root's lists it (a global option before the command is enough).
 - **Recommended.** Under `--json`, stdout is one JSON object: `{"ok": true, ...}` with the command's fields on success,
   the error envelope (see Errors) on failure.
 - **Recommended.** stdout carries data only; stderr carries everything else: human `Error:` lines, `--verbose`
