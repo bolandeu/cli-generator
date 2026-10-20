@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.23.2 — 2026-10-20
+
+### Outside epics
+
+- Skill and README run the gate through uvx; no rb-cli-core or adopt_core left (CG-046)
+
 ## v1.23.1 — 2026-10-20
 
 ### Outside epics
