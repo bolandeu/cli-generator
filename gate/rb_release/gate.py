@@ -27,7 +27,10 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     `<cli> --version` must print the version being
     built, `<cli> --help` must work (a library without a console script:
     every top-level package imports and importlib.metadata reports that
-    version) · osv-scanner over uv.lock (skipped with a
+    version) · the Standard's mandatory rules (standard/: `standard: commands`,
+    `json`, `errors`, `health` probe that installed console script, skipped for
+    a library; `docs`, `ci` read the package's files — a failure names the
+    Standard's section) · osv-scanner over uv.lock (skipped with a
     notice when osv-scanner isn't installed)
 
 Settings in the package's pyproject.toml `[tool.cli-generator]`:
@@ -37,6 +40,7 @@ Settings in the package's pyproject.toml `[tool.cli-generator]`:
 from __future__ import annotations
 
 import ast
+import functools
 import os
 import re
 import shutil
@@ -46,6 +50,8 @@ import tomllib
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
+
+import standard
 
 CONTRACT_TESTS = "tests/test_contracts.py"
 COMMANDS = (
@@ -183,6 +189,9 @@ class Gate:
 
     def __init__(self, root: Path) -> None:
         self.root = root
+        # The built wheel and its venv, kept for the whole run: the Standard's steps run the installed script.
+        self._scratch = tempfile.TemporaryDirectory(prefix="rb-release-")
+        self.console_script: Path | None = None
 
     @classmethod
     def at(cls, root: Path) -> Gate:
@@ -416,29 +425,40 @@ class Gate:
         """Build the wheel, install it into a throwaway venv, run the CLI."""
         project = self._pyproject()["project"]
         script = next(iter(project.get("scripts", {})), None)
-        with tempfile.TemporaryDirectory() as tmp:
-            dist, venv = Path(tmp) / "dist", Path(tmp) / "venv"
-            self.step_output("uv", "build", "--wheel", "--out-dir", str(dist))
-            wheel = next(dist.glob("*.whl"))
-            built = _wheel_version(wheel)
-            if self.tags() and built.startswith("0.0.0"):
-                raise StepFailed(f"built version {built}: the build saw no v* tag (uv-dynamic-versioning fell back)")
-            self.step_output("uv", "venv", "--quiet", str(venv))
-            python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-            # The locked set, then the wheel without resolving anything, then
-            # check the wheel's requirements are met by what's installed.
-            self.install_locked(python)
-            self.step_output("uv", "pip", "install", "--quiet", "--no-deps", "--python", str(python), str(wheel))
-            self.step_output("uv", "pip", "check", "--python", str(python))
-            if script is None:
-                return self._check_library(python, wheel, project["name"], built)
-            exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
-            printed = self.step_output(str(exe), "--version").splitlines()
-            reported = printed[-1].strip() if printed else ""
-            if reported != built:
-                raise StepFailed(f"`{script} --version` printed {reported!r}, but the wheel is version {built}")
-            self.step_output(str(exe), "--help")
-            return f"{wheel.name}; `{script} --version` = {reported}; `{script} --help` ok"
+        dist, venv = Path(self._scratch.name) / "dist", Path(self._scratch.name) / "venv"
+        self.step_output("uv", "build", "--wheel", "--out-dir", str(dist))
+        wheel = next(dist.glob("*.whl"))
+        built = _wheel_version(wheel)
+        if self.tags() and built.startswith("0.0.0"):
+            raise StepFailed(f"built version {built}: the build saw no v* tag (uv-dynamic-versioning fell back)")
+        self.step_output("uv", "venv", "--quiet", str(venv))
+        python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        # The locked set, then the wheel without resolving anything, then
+        # check the wheel's requirements are met by what's installed.
+        self.install_locked(python)
+        self.step_output("uv", "pip", "install", "--quiet", "--no-deps", "--python", str(python), str(wheel))
+        self.step_output("uv", "pip", "check", "--python", str(python))
+        if script is None:
+            return self._check_library(python, wheel, project["name"], built)
+        exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
+        printed = self.step_output(str(exe), "--version").splitlines()
+        reported = printed[-1].strip() if printed else ""
+        if reported != built:
+            raise StepFailed(f"`{script} --version` printed {reported!r}, but the wheel is version {built}")
+        self.step_output(str(exe), "--help")
+        self.console_script = exe
+        return f"{wheel.name}; `{script} --version` = {reported}; `{script} --help` ok"
+
+    @functools.cached_property
+    def _standard_package(self) -> standard.Package:
+        return standard.Package(self.root, self.console_script)
+
+    def check_standard(self, rule: standard.Rule) -> str:
+        """One mandatory rule of the Standard, checked on the console script the wheel step installed."""
+        try:
+            return rule.verify(self._standard_package)
+        except standard.Broken as exc:
+            raise StepFailed(f"Standard, section {rule.section}: {exc}") from exc
 
     def steps(self) -> list[tuple[str, Callable[[], str]]]:
         return [
@@ -449,11 +469,16 @@ class Gate:
             ("install section", self.check_install_section),
             ("external dependencies", self.check_external_deps),
             ("build + install wheel", self.check_installed_wheel),
+            *((f"standard: {rule.step}", lambda rule=rule: self.check_standard(rule)) for rule in standard.RULES),
             (AUDIT_STEP, self.check_vulnerabilities),
         ]
 
     def run_steps(self, echo: Echo) -> int:
         """Run every step, one `release: <step> ...` line each; the exit code: 0 passed, 1 code failed, 3 audit failed."""
+        with self._scratch:
+            return self._run_steps(echo)
+
+    def _run_steps(self, echo: Echo) -> int:
         for name, step in self.steps():
             echo(f"release: {name} ... ", nl=False)
             try:

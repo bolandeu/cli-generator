@@ -296,6 +296,26 @@ def test_human_error_goes_to_stderr(tmp_path: Path) -> None:
     assert "Error:" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "args",
+    [("status", "--json", "--no-such-option"), ("--json", "--no-such-option"), ("--json", "config", "get")],
+)
+def test_usage_error_under_json_is_the_error_envelope(args: tuple[str, ...]) -> None:
+    """An unknown option or a missing argument (Click's usage errors) under --json: the envelope on stdout, exit 2."""
+    result = invoke(*args)
+    assert result.exit_code == 2
+    payload = json.loads(result.stdout)
+    assert (payload["ok"], payload["error"]["code"]) == (False, "INVALID_ARGUMENTS")
+    assert payload["error"]["message"]
+
+
+def test_usage_error_without_json_stays_on_stderr() -> None:
+    result = invoke("status", "--no-such-option")
+    assert result.exit_code == 2
+    assert result.stdout == ""
+    assert "--no-such-option" in result.stderr
+
+
 def test_require_confirmation_blocks_non_interactive_without_confirm() -> None:
     def destroy(ctx: typer.Context, confirm: bool = output.ConfirmOption) -> None:
         output.require_confirmation(ctx, "Delete everything", confirm=confirm)

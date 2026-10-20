@@ -129,6 +129,13 @@ under `--json` parses stdout and reads stderr only to debug. Under
 `--json`, the error envelope stays on stdout on purpose — one stream to
 parse, and `ok: false` + exit code say it's an error.
 
+A usage error — an unknown option or command, a missing argument, a bad
+value — is Click's, raised before any command runs. Under `--json`
+(anywhere before `--`) it is the same envelope: `INVALID_ARGUMENTS`, exit
+2 (the root group `output.RootGroup`); without `--json` it stays Click's
+usage message on stderr. The gate's `standard: errors` step probes every
+command with an unknown option for exactly this.
+
 ## No-args = help, not a usage error
 
 `<cli>` alone and `<cli> <group>` alone (`<cli> config`, `<cli> auth`)
