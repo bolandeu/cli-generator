@@ -87,7 +87,8 @@ check_variant() {
     cd "$ROOT"
 }
 
-# check_update_round <name> [copier update --data args...]: generate from the previous release tag,
+# check_update_round <name> [copier update --data args...]: with CLEAN_TREE=1 the staged change is
+# skipped and the script runs on a clean, committed tree. Generate from the previous release tag,
 # make a staged, uncommitted change, update to the working tree through the worker script
 # (stdin closed, no credential variables), check the change survived, then run the full checks
 # in the updated project.
@@ -105,14 +106,18 @@ check_update_round() {
     run git init -q
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
-    # The change a worker that may not commit holds: `_src_path` written another way (a trailing slash).
-    run sed -i.bak -E 's|^(_src_path: .*[^/])$|\1/|' .copier-answers.yml
-    run rm .copier-answers.yml.bak
-    grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: gate edit missing\n' "$VARIANT" >&2; exit 1; }
+    if [ -z "${CLEAN_TREE:-}" ]; then
+        # The change a worker that may not commit holds: `_src_path` written another way (a trailing slash).
+        run sed -i.bak -E 's|^(_src_path: .*[^/])$|\1/|' .copier-answers.yml
+        run rm .copier-answers.yml.bak
+        grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: gate edit missing\n' "$VARIANT" >&2; exit 1; }
+    fi
     run env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_READ_TOKEN -u GITEA_TOKEN -u DOPPLER_TOKEN \
         uvx --from copier python "$ROOT/skills/cli-builder/scripts/copier_update_staged.py" \
         --trust --defaults -q --vcs-ref HEAD "$@" </dev/null
-    grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
+    if [ -z "${CLEAN_TREE:-}" ]; then
+        grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
+    fi
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }
@@ -129,5 +134,6 @@ check_variant publish-only '([], False)' --data include_auth=true \
 check_variant core-true '(["rbtools"], True)' --data adopt_core=true
 check_update_round update-round
 check_update_round update-core-true --data adopt_core=true
+CLEAN_TREE=1 check_update_round update-clean-tree
 
 printf '\nOK: template gate passed (repo tests, include_auth=true, include_auth=false, publish-only, adopt_core=true, update rounds)\n'
