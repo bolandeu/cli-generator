@@ -242,6 +242,15 @@ template, `_commit` is the template release it was last synced to):
    `skills/cli-builder` of this plugin). It stages the tree, switches off
    only copier's dirty-tree check, and exits non-zero on a copier error.
    On a clean tree it stages nothing and is a plain `copier update`.
+   **Extra skills.** A package that keeps agent skills beyond the
+   conventions one (e.g. in `.agents/skills/`, or a patched `skill`
+   command) moves them into the package data as
+   `src/<package_name>/data/skills/<name>/SKILL.md` (frontmatter name
+   `<cli>-<name>`, architecture.md §9) and drops its patch of
+   `commands/skill.py`: the template's `skill install`, `skill list` and
+   `describe` serve them. The template changes the `skill` help and the
+   `describe` document: after the update refresh the snapshots
+   (`uv run pytest --snapshot-update`) and read the diff.
 2. `uvx copier update --trust` (add `--defaults` to keep every previous
    answer without prompting). A project from before template v1.2.1 has
    no `cli_name` answer: its default is `package_name` with `_` → `-`,

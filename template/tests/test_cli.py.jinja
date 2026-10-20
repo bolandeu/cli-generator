@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 from {{ package_name }} import output
 from {{ package_name }}._distribution import DIST_NAME
 from {{ package_name }}.cli import app
-from {{ package_name }}.core import services
+from {{ package_name }}.core import services, skills
 from {{ package_name }}.core.errors import InvalidArguments
 
 runner = CliRunner()
@@ -334,6 +334,85 @@ def test_skill_install_writes_to_project_dir(tmp_path: Path, monkeypatch: pytest
     assert installed.is_file()
     assert "name: {{ cli_name }}" in installed.read_text()
     assert payload["path"] == str(installed)
+
+
+def test_skill_install_without_extra_skills_writes_only_the_conventions_skill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    code, payload = invoke_json("skill", "install", "--tool", "claude-code", "--project")
+    assert code == 0
+    assert set(payload) == {"ok", "tool", "scope", "path"}
+    assert [p.parent.name for p in (tmp_path / ".claude" / "skills").glob("*/SKILL.md")] == ["{{ cli_name }}"]
+
+
+@pytest.fixture
+def extra_skills(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A package data dir holding the conventions skill and two extra skills."""
+    data = tmp_path / "pkgdata"
+    data.mkdir()
+    (data / "SKILL.md").write_text("---\nname: {{ cli_name }}\ndescription: Conventions.\n---\n")
+    for name, description in {"og-image": "Make og images.", "video": "Make videos."}.items():
+        (data / "skills" / name).mkdir(parents=True)
+        (data / "skills" / name / "SKILL.md").write_text(
+            f"---\nname: {{ cli_name }}-{name}\ndescription: {description}\n---\n"
+        )
+    monkeypatch.setattr(skills, "_data", lambda: data)
+    return data
+
+
+def test_skill_install_writes_every_bundled_skill_into_its_own_directory(
+    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    code, payload = invoke_json("skill", "install", "--tool", "claude-code", "--project")
+    assert code == 0
+    names = ("{{ cli_name }}", "{{ cli_name }}-og-image", "{{ cli_name }}-video")
+    expected = [work / ".claude" / "skills" / name / "SKILL.md" for name in names]
+    assert all(path.is_file() for path in expected)
+    assert payload["paths"] == [str(path) for path in expected]
+    assert payload["path"] == str(expected[0])
+
+
+def test_skill_install_one_skill_by_short_or_full_name(
+    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    for wanted in ("video", "{{ cli_name }}-video"):
+        code, payload = invoke_json("skill", "install", "--project", "--skill", wanted)
+        assert code == 0
+        assert "paths" not in payload
+    assert [p.parent.name for p in (work / ".claude" / "skills").glob("*/SKILL.md")] == ["{{ cli_name }}-video"]
+
+
+def test_skill_install_unknown_skill_names_the_bundled_ones(
+    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    code, payload = invoke_json("skill", "install", "--project", "--skill", "nope")
+    assert code == 2
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "{{ cli_name }}, {{ cli_name }}-og-image, {{ cli_name }}-video" in payload["error"]["message"]
+
+
+def test_skill_list_and_describe_show_the_same_skills(extra_skills: Path) -> None:
+    expected = [
+        {"name": "{{ cli_name }}", "description": "Conventions."},
+        {"name": "{{ cli_name }}-og-image", "description": "Make og images."},
+        {"name": "{{ cli_name }}-video", "description": "Make videos."},
+    ]
+    code, payload = invoke_json("skill", "list")
+    assert code == 0
+    assert payload["skills"] == expected
+    human = invoke("skill", "list").stdout
+    assert "{{ cli_name }}-video: Make videos." in human
+    described = json.loads(invoke("describe", "--json").stdout)
+    meta = {item["name"]: item["value"] for item in described["command"]["metadata"]}
+    assert meta["x-rb-skills"] == expected
 
 
 def test_run_dry_run_makes_no_changes(tmp_path: Path) -> None:
