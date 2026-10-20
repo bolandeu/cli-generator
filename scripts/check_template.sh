@@ -1,9 +1,10 @@
 #!/bin/sh
-# Template gate: run the repo tests and the tests of gate/, regenerate template/ for include_auth=true
-# and false (default [tool.rb.install]), a publish-only variant (no homeserver users, no Mac) and
-# include_db=true, prove copier update rounds from the previous release tag and from v1.20.10 (the
-# last template that copied the gate), check the rendered [tool.rb.install], run the generated project's checks and the
-# release gate from this working tree's gate/ through uvx. Non-zero exit on any failure.
+# Template gate: run the repo tests and the tests of gate/, regenerate template/ as the minimal package
+# (default answers), a package with every optional part, credentials alone in a publish-only variant (no
+# homeserver users, no Mac) and providers without credentials, prove copier update rounds from the
+# previous release tag and from v1.20.10 (the last template that copied the gate) keep every part, check
+# the rendered [tool.rb.install] and which parts each package has, run the generated project's checks and
+# the release gate from this working tree's gate/ through uvx. Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
 
@@ -43,10 +44,69 @@ check_gate_files() {
         grep -qF "$gate" "$file" || fail "$file does not call: $gate"
     done
     for file in AGENTS.md src/demotool/data/SKILL.md; do
+        [ "$file" = AGENTS.md ] || [ -e "$file" ] || continue  # the package skill is an optional part
         grep -qF "$STANDARD" "$file" || fail "$file does not link the Standard"
         grep -q '§' "$file" && fail "$file cites a § number"
     done
     return 0
+}
+
+# part_files <part>: the files of an optional part in a package named demotool; `docs` is the docs
+# command and its OpenCLI document, which left the template
+part_files() {
+    case $1 in
+    project) echo src/demotool/commands/project.py src/demotool/commands/init.py src/demotool/commands/config.py \
+        src/demotool/commands/status.py src/demotool/core/services.py src/demotool/core/models.py \
+        tests/test_project.py tests/test_services.py ;;
+    auth) echo src/demotool/commands/login.py src/demotool/credentials tests/test_auth.py ;;
+    providers) echo src/demotool/providers tests/test_providers.py ;;
+    http) echo src/demotool/providers/http.py tests/test_http_provider.py ;;
+    db) echo src/demotool/core/db.py src/demotool/core/tables.py src/demotool/core/normalize.py \
+        src/demotool/migrations src/demotool/commands/db.py tests/test_db.py tests/test_normalize.py scripts/pg_test.sh ;;
+    skill) echo src/demotool/commands/skill.py src/demotool/core/skills.py src/demotool/data/SKILL.md tests/test_skills.py ;;
+    describe) echo src/demotool/commands/describe.py src/demotool/core/opencli.py src/demotool/core/data_files.py \
+        tests/test_describe.py tests/data/opencli.schema.json ;;
+    contracts) echo tests/contracts tests/test_contracts.py tests/test_contract_runner.py scripts/detach.py \
+        scripts/run_detached.sh scripts/runs_status.sh tests/test_detach.py ;;
+    docs) echo src/demotool/commands/docs.py src/demotool/core/docs.py tests/test_docs.py ;;
+    *) fail "unknown part $1" ;;
+    esac
+}
+
+# expect_parts <present|absent> <part...>: every file of each part is in the project in the cwd, or none is
+expect_parts() {
+    want=$1
+    shift
+    for part in "$@"; do
+        for path in $(part_files "$part"); do
+            if [ -e "$path" ]; then
+                [ "$want" = present ] || fail "$path of the part $part is there"
+            else
+                [ "$want" = absent ] || fail "$path of the part $part is missing"
+            fi
+        done
+    done
+}
+
+# expect_commands <help page...>: the help snapshots the copy task wrote are exactly these pages
+expect_commands() {
+    found=$(ls tests/snapshots/help | sed 's/\.txt$//' | sort | tr '\n' ' ')
+    wanted=$(printf '%s\n' "$@" | sort | tr '\n' ' ')
+    [ "$found" = "$wanted" ] || fail "help pages: $found, expected: $wanted"
+}
+
+# expect_root_options <present|absent> <option...>: the root --help lists each option, or none of them
+expect_root_options() {
+    want=$1
+    shift
+    root_help=$(uv run demotool --help)
+    for option in "$@"; do
+        if printf '%s' "$root_help" | grep -qE -- "$option( |$)"; then
+            [ "$want" = present ] || fail "the root help lists $option"
+        else
+            [ "$want" = absent ] || fail "the root help does not list $option"
+        fi
+    done
 }
 
 # run_gate: the gate from this working tree's gate/ through uvx; it changes neither pyproject.toml
@@ -79,7 +139,8 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run antagor -C "$dest" layout check
 }
 
-# check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]
+# check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]: the
+# shell stays in the project, so the caller checks its parts, then goes back with `cd "$ROOT"`
 check_variant() {
     VARIANT=$1
     expected_install=$2
@@ -92,7 +153,8 @@ check_variant() {
     cd "$dest"
     run git init -q
     verify_project "$expected_install" README.md
-    cd "$ROOT"
+    run test -f .gitea/workflows/ci.yml
+    expect_parts absent docs
 }
 
 # generate_at <name> <template tag> [copier copy --data args...]: a committed project generated from
@@ -123,7 +185,8 @@ update_staged() {
 # check_update_round <name> <template tag> [copier copy --data args...]: with CLEAN_TREE=1 the staged
 # change is skipped and the script runs on a clean, committed tree. Generate from that tag, make a
 # staged, uncommitted change, update to the working tree through the worker script, check the
-# change survived, then run the full checks in the updated project.
+# change survived and no file of the package was removed but those in $REMOVABLE (the docs command,
+# its OpenCLI document and what left the template before), then run the full checks in the updated project.
 check_update_round() {
     generate_at "$@"
     if [ -z "${CLEAN_TREE:-}" ]; then
@@ -136,6 +199,19 @@ check_update_round() {
     if [ -z "${CLEAN_TREE:-}" ]; then
         grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
     fi
+    removed=$(git ls-tree -r --name-only HEAD | while IFS= read -r path; do
+        [ -e "$path" ] || printf '%s\n' "$path"
+    done)
+    for path in $removed; do
+        case " $REMOVABLE " in
+        *" $path "*) ;;
+        *) fail "copier update removed $path" ;;
+        esac
+    done
+    expect_parts present project auth providers http skill describe contracts
+    expect_parts absent docs
+    # The help page of the docs command is the project's own file: the update leaves it to the project.
+    run rm -f tests/snapshots/help/docs.txt
     # A template release that changes a help text or `describe` changes the snapshots: the project
     # refreshes them after an update (copier's task runs on copy only).
     run uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py
@@ -151,16 +227,35 @@ run uv run --directory "$ROOT/gate" ruff format --check .
 run uv run --directory "$ROOT/gate" ty check
 run uv run --directory "$ROOT/gate" pytest -q
 
-check_variant auth-true '(["rbtools"], True)' --data include_auth=true
-check_variant auth-false '(["rbtools"], True)' --data include_auth=false \
-    --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
-check_variant publish-only '([], False)' --data include_auth=true \
+VARIANT=template
+grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is still in the template"
+
+check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
+expect_parts absent project auth providers db skill describe contracts
+expect_commands auth auth-status doctor run
+expect_root_options absent --project --ai
+cd "$ROOT"
+check_variant all-parts '(["rbtools"], True)' --data include_project=true --data include_auth=true \
+    --data include_db=true --data include_skill=true --data include_describe=true --data include_contracts=true
+expect_parts present project auth providers http db skill describe contracts
+expect_root_options present --project --ai
+cd "$ROOT"
+check_variant auth-publish-only '([], False)' --data include_auth=true \
     --data install_homeserver_users= --data install_mac=false \
     --data repository_url=https://github.com/bolandeu/demo
-check_variant db '(["rbtools"], True)' --data include_db=true
+expect_parts present auth providers http
+expect_parts absent project db skill describe contracts
+cd "$ROOT"
+check_variant providers-without-auth '(["rbtools"], True)' --data include_providers=true --data include_http_provider=false
+expect_parts present providers
+expect_parts absent auth http
+cd "$ROOT"
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
+DOCS_FILES=$(part_files docs)
+REMOVABLE=$DOCS_FILES
 check_update_round update-round "$previous"
+REMOVABLE="$DOCS_FILES scripts/release.py tests/data/index/gitea/rb_x-0.1.0-py3-none-any.whl tests/data/index/pypi/rb_x-0.9.0-py3-none-any.whl"
 check_update_round update-from-copy "$GATE_COPY_TAG"
 
-printf '\nOK: template gate passed (repo tests, gate tests, include_auth=true, include_auth=false, publish-only, include_db=true, update rounds)\n'
+printf '\nOK: template gate passed (repo tests, gate tests, minimal, all parts, credentials publish-only, providers without credentials, update rounds)\n'

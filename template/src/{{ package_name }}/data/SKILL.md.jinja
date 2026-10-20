@@ -56,17 +56,21 @@ uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@v
 
 - **`--json` on every command.** Parse stdout; never scrape human output.
   stdout is data only, stderr is diagnostics.
+{%- if include_project %}
 - **Project-aware.** Commands find the project by walking up from the
   current directory, or take `--project PATH`. Not initialized →
   `{{ cli_name }} init --non-interactive`.
+{%- endif %}
 - **`--non-interactive`** on anything that could prompt. It fails with a
   structured error instead of hanging.
+{%- if include_auth %}
 - **Credentials** live in the OS keychain or env vars
   (`{{ cli_name | upper | replace('-', '_') }}_<PROVIDER>_<FIELD>`), never in arguments or
   config. `auth status --check --json` reports every provider (source,
   status, expiry, quota — never values; exit 3 if a required one isn't
   ok); log in with `auth login`; never ask the user to paste a secret into
   a command line.
+{%- endif %}
 - **Destructive commands** are the ones whose `--help` shows `--dry-run`
   and `--confirm`. Always: run with `--dry-run`, show the user, get
   explicit sign-off, then `--confirm --non-interactive`. Never chain
@@ -83,10 +87,13 @@ uv tool install "{{ dist_name }} @ git+ssh://git@github.com/<owner>/<repo>.git@v
   from SQL: only the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*` views.
 {%- endif %}
 - **`doctor --json`** first when something looks off — it reports
-  project, config, version compatibility and credential readiness.
+  what the CLI needs to run: its version{% if include_project %}, the project, its config{% endif %}{% if include_auth %},
+  credential readiness{% endif %}{% if include_db %}, the database{% endif %} and the external programs.
+{%- if include_describe %}
 - **`describe --json`** — the whole CLI as one machine-readable OpenCLI
   document (commands, options, exit codes, env vars, data): the bare
   document, no `{"ok": ...}` envelope.
+{%- endif %}
 
 ## Errors
 
@@ -96,8 +103,8 @@ Read exit code → `error.code` → `error.action` (the concrete next command).
     0  ok
     1  general (UNEXPECTED = a bug: re-run with --verbose, report; ABORTED = user said no)
     2  invalid arguments
-    3  auth required          → {{ cli_name }} auth login
-    4  project not initialized → {{ cli_name }} init
+    3  auth required{% if include_auth %}          → {{ cli_name }} auth login{% endif %}
+    4  project not initialized{% if include_project %} → {{ cli_name }} init{% endif %}
     5  provider error (network / external service; already retried) → retry later
     6  CLI too old for this project → uv tool upgrade {{ dist_name }}
 

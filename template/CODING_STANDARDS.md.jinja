@@ -7,39 +7,44 @@
 
 - **Гейт проходит перед каждым коммитом.** `{{ gate_command }}`: `uv lock --check`, ruff, ty,
   pytest (порог покрытия, контракт `--help` и снапшоты, форма `auth status`), контракты потребителей
-  (`tests/contracts/`), список изменённых существующих тестов, сборка wheel и `{{ cli_name }} --version` из неё.
-  Упавший шаг чинят, а не пропускают. CI, если он есть, гоняет ровно это.
+  (`tests/contracts/`), список изменённых существующих тестов, сборка wheel и `{{ cli_name }} --version` из неё,
+  обязательные правила Стандарта. Упавший шаг чинят, а не пропускают. CI (`.gitea/workflows/ci.yml`) гоняет
+  ровно это.
 - **TDD, красный коммит первым** (`~/Work/dev/docs/testing.md`). Тест коммитится раньше кода, который его
   чинит: порядок виден в git. Вывод красного прогона идёт в отчёт.
 - **Тест не подгоняют под код.** Существующий тест меняется, только когда изменилось требование. Шаг гейта
   `existing tests` перечисляет тесты прошлого релиза, которые изменены или удалены; каждый идёт в отчёт с причиной.
 - **Планку ставят другие.** Приёмку пишет dev с пользователем, контракты (`--json`, exit-коды, представления `v1`) —
-  потребитель: `tests/contracts/<consumer>/<tool>.yaml` (Стандарт cli-generator, раздел «Consumer contracts»). Свои — unit-тесты и
-  офлайн-данные для `run`-кейсов потребителей (`tests/contracts/fixtures.yaml`). Контракт потребителя не правят,
-  чтобы пройти.
+  потребитель: `tests/contracts/<consumer>/<tool>.yaml` (Стандарт cli-generator, раздел «Consumer contracts»). Свои — unit-тесты
+  {%- if include_contracts %} и офлайн-данные для `run`-кейсов потребителей (`tests/contracts/fixtures.yaml`){% endif %}.
+  Контракт потребителя не правят, чтобы пройти.
 - **Мутационное тестирование — время от времени и перед крупным релизом** (не в гейте):
   `uv run --group mutation mutmut run`, затем `mutmut results`. Выживший мутант — строка, которую ни один тест
   по-настоящему не проверяет.
-- **Долгая команда — только отвязанной.** Гейт, `scripts/pg_test.sh`, долгий запуск `{{ cli_name }}`:
+{%- if include_contracts %}
+- **Долгая команда — только отвязанной.** Гейт{% if include_db %}, `scripts/pg_test.sh`{% endif %}, долгий запуск `{{ cli_name }}`:
   `scripts/run_detached.sh <label> <command...>`, затем `scripts/runs_status.sh <label>`. В своей оболочке агента
   она умирает вместе с ходом (прерывание — например, входящее сообщение herdr), и работу делают заново.
+{%- endif %}
 
 ## Устройство (не нарушать)
 
 - **Команда тонкая.** `commands/` — только разбор аргументов; вся логика — в `core/`.
-- **Внешние API — в `providers/`.** HTTP-сервис наследует `providers.HttpProvider` (повторы, таймауты,
-  401/429/5xx → `AuthRequired`/`ProviderError`); `httpx` вне `providers/` ruff не пропускает (TID251).
+{%- if include_providers %}
+- **Внешние API — в `providers/`.**{% if include_http_provider %} HTTP-сервис наследует `providers.HttpProvider` (повторы, таймауты,
+  401/429/5xx → `AuthRequired`/`ProviderError`);{% endif %} `httpx` вне `providers/` ruff не пропускает (TID251).
   У провайдера есть `name`, `credential_fields`, `required` и `health_check()` — один дешёвый бесплатный вызов
   на чтение. JSON `auth status --check --json` — контракт между инструментами: изменить его — ломающее изменение.
-- **Секреты — только keychain и переменные окружения** (`credentials/`), никогда в `.{{ package_name }}/config.toml`
-  или другом файле проекта.
+{%- endif %}
+- **Секреты — только {% if include_auth %}keychain и {% endif %}переменные окружения**{% if include_auth %} (`credentials/`){% endif %}, никогда в аргументах,
+  в репозитории или в файле проекта.
 - **Вывод — через `output/`.** Каждая команда умеет human и `--json` (`output.emit_success` / `output.guard`),
   `print()` ruff не пропускает (T20). stdout — только данные; ошибки, `--verbose` и `logging` — в stderr. Группа команд —
   `output.group("...")`, не `typer.Typer(...)`: так `{{ cli_name }} <group>` без подкоманды печатает help.
 - **Ошибки — `CliError` со стабильным `code`** и фиксированной таблицей exit-кодов (`core/errors.py`), не голые
   исключения.
 - **Необратимое действие снаружи — с `--dry-run`** (`output.is_dry_run`) и за `output.require_confirmation`.
-  Команды только над локальными файлами проекта (`init`, `config set`) этого не требуют.
+  Команды только над локальными файлами проекта{% if include_project %} (`init`, `config set`){% endif %} этого не требуют.
 {%- if include_db %}
 - **Данные — через `core/db.py`** (Стандарт cli-generator, раздел «Database»).
   `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → общий PostgreSQL, иначе локальный SQLite в `platformdirs.user_data_dir("<tool>")`, никогда в репозитории
@@ -48,8 +53,8 @@
   `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_*`, объявлены в `core/tables.py`, создаются миграцией, написанной
   руками, в `migrations/versions/`. Другие инструменты читают только представления
   `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_*`; новая форма — представление `_v2_` и запись в Service map.
-  Каждое представление объявлено в `views` в `tables.py` (типизированные колонки с `comment=`) —
-  `{{ cli_name }} describe --json` публикует его как контракт данных. У каждой таблицы
+  Каждое представление объявлено в `views` в `tables.py` (типизированные колонки с `comment=`)
+  {%- if include_describe %} — `{{ cli_name }} describe --json` публикует его как контракт данных{% endif %}. У каждой таблицы
   `info={"kind": "data" | "cache"}`; таблица `cache` живёт в схеме PostgreSQL `cache` (`schema=CACHE_SCHEMA`).
   Ключи между инструментами — `core/normalize.py`, рядом с исходным текстом. У каждой таблицы одна колонка
   PRIMARY KEY (суррогатный `id`; Directus другого не умеет) и естественный ключ как UNIQUE.
@@ -67,10 +72,12 @@
   `Example: {cli} <command> ...` (`output.guard` подставляет `{{ cli_name }}`); у каждого `typer.Option`/`Argument`
   есть `help=`.
 - **Дифф снапшотов — видимое изменение.** После правки: `uv run pytest --snapshot-update` и прочитать дифф
-  `tests/snapshots/help/` и `tests/snapshots/describe.json` (`describe --json` — машинный контракт для каталога
-  инструментов и платформы).
+  `tests/snapshots/help/`{% if include_describe %} и `tests/snapshots/describe.json` (`describe --json` — машинный контракт для каталога
+  инструментов и платформы){% endif %}.
+{%- if include_skill %}
 - **`src/{{ package_name }}/data/SKILL.md` не перечисляет команды**, только соглашения. Его меняют, только когда
   меняется соглашение (новый exit-код, новое правило про ключи).
+{%- endif %}
 
 ## Версии и релизы
 
@@ -80,8 +87,8 @@
   `scripts/deploy.sh` пушит `main` с тегами в `origin`. Руками не
   пушат, не ставят теги и не правят `CHANGELOG.md`; force-push и `commit --amend` — никогда.
 - **Заметное изменение выходит релизом.** Серверы, другие инструменты и Mac ставят только по тегам, не с `main`.
-  Не оставлять влитое без релиза, не назвав причину. Проект может требовать версию через `[cli] min_version`
-  в своём конфиге — нужное ему изменение сначала выходит релизом.
+  Не оставлять влитое без релиза, не назвав причину.{% if include_project %} Проект может требовать версию через `[cli] min_version`
+  в своём конфиге — нужное ему изменение сначала выходит релизом.{% endif %}
 - **SemVer — обещание о поверхности CLI.** Убрать/переименовать/изменить команду, флаг, форму `--json`, exit-код
   или код ошибки — ломающее изменение: major, а на `0.x` — minor. Новая возможность при прежнем поведении —
   minor (на `0.x` — patch); исправление — patch. Сначала deprecate (предупреждение), убирать — в следующем

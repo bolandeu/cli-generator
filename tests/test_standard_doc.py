@@ -109,6 +109,26 @@ def test_every_optional_part_says_when_and_how_to_turn_it_on():
         assert re.search(r"^- \*\*(Mandatory|Recommended)", body, flags=re.M), name
 
 
+def test_every_optional_part_names_the_copier_question_that_turns_it_on():
+    questions = {
+        "Project": "include_project",
+        "Credentials and providers": "include_auth",
+        "HTTP": "include_http_provider",
+        "Database": "include_db",
+        "Package skill": "include_skill",
+        "Describe": "include_describe",
+        "Consumer contracts": "include_contracts",
+        "Detach": "include_contracts",
+    }
+    asked = set(re.findall(r"^(include_\w+):$", (ROOT / "copier.yml").read_text(), flags=re.M))
+    bodies = re.split(r"^### ", STANDARD.read_text().split("\n## Optional parts\n", 1)[1], flags=re.M)[1:]
+    turn_on = {body.splitlines()[0]: body.split("\n**Turn on.** ", 1)[1].split("\n\n", 1)[0] for body in bodies}
+    assert set(questions.values()) <= asked
+    assert {name: f"`{question}`" in turn_on[name] for name, question in questions.items()} == dict.fromkeys(
+        questions, True
+    )
+
+
 def test_no_section_numbers():
     assert re.findall(r"§\s*\d", STANDARD.read_text()) == []
 

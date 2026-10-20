@@ -1,9 +1,8 @@
 name: ci
 
-# Optional (the Standard, CI): the authoritative gate is the local gate
-# (`rb-release check` through uvx, at the template tag), which every release runs anyway.
-# Gitea Actions runs this one job on the runner labelled `docker`, on the lowest
-# supported Python, repeating the gate on a clean machine. include_ci=false drops it.
+# Mandatory (the Standard, CI): the gate (`rb-release check` through uvx, at the template tag),
+# which every release runs locally too. Gitea Actions runs this one job on the runner labelled
+# `docker`, on the lowest supported Python, repeating the gate on a clean machine.
 on:
   push:
     branches: [main]

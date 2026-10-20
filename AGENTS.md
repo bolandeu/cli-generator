@@ -60,8 +60,8 @@ gate of a generated package is `rb-release check` from this repo's `gate/`,
 run through `uvx --from "git+…/cli-generator.git@<template tag>#subdirectory=gate"`:
 the template and the gate are one version (ADR 0013,
 `docs/adr/0013-gate-in-this-repo-package-standalone.md`).
-The gate for a template ticket is `scripts/check_template.sh` (see below), for both
-`include_auth` variants and the publish-only variant (and `include_db` when touched).
+The gate for a template ticket is `scripts/check_template.sh` (see below): the minimal
+package, a package with every optional part, the variants it lists and the update rounds.
 
 ## Testing a change to `template/`
 
@@ -69,11 +69,14 @@ Never trust a template edit without regenerating and running it — a
 Jinja/copier mistake fails silently as literal `{{ package_name }}` text
 in generated files, not as an error.
 
-The gate is one command (both `include_auth` variants with the default
-`[tool.rb.install]`, and a publish-only variant — no homeserver users, no
-Mac: copier copy into a temp dir, `uv sync`, a literal check of the rendered
-`[tool.rb.install]`, ruff, ty, pytest, then `git init` + tag `v0.1.0` +
-`scripts/release.py --check`; temp dirs removed, non-zero exit on any failure):
+The gate is one command (the minimal package from default answers, a package
+with every optional part, credentials alone in a publish-only variant — no
+homeserver users, no Mac — and providers without credentials: copier copy into
+a temp dir, `uv sync`, a literal check of the rendered `[tool.rb.install]`,
+ruff, ty, pytest, then `git init` + tag `v0.1.0` + `rb-release check` from
+`gate/`, and a check of which part files are there; then `copier update`
+rounds from the previous release tag and from v1.20.10, which must remove no
+file but the docs command's; temp dirs removed, non-zero exit on any failure):
 
 ```bash
 sh scripts/check_template.sh
@@ -86,10 +89,10 @@ tag**, not your working tree, and the loop tests the old template. Dirty
 --snapshot-update` renders `tests/snapshots/help/` in the new project,
 which is why `--trust` is required.
 
-The script covers `include_auth=false` too — this branch drops
-`commands/auth.py`, `credentials/` and `tests/test_auth.py` via `copier.yml`'s templated `_exclude`, and it's easy
-to change `cli.py.jinja`/`commands/`/tests in a way that only the
-`include_auth=true` branch was ever exercised with.
+The minimal variant turns every part off — each part drops its modules and
+tests via `copier.yml`'s templated `_exclude`, and it's easy to change
+`cli.py`/`commands/`/tests in a way that only the all-parts branch was ever
+exercised with.
 
 `ruff format --check` runs on generated projects with the template's
 `line-length = 120`. To format template sources in place, run it with that
@@ -172,7 +175,7 @@ before (missing answers file, wrong `copier.yml` location).
   drops `commands/login.py`/`credentials/`/`tests/test_auth.py`;
   `commands/auth.py` (group + `status`) always ships and, like
   `doctor.py`, detects `credentials.manager`/`commands.login` at runtime
-  (`importlib.util.find_spec`) instead of being templated. Probe the
+  (`core.version.module_exists`/`optional_module`) instead of being templated. Probe the
   **module**, never the package: after `include_auth` true→false a
   `credentials/` dir holding only `__pycache__` imports as a namespace
   package and `find_spec("<pkg>.credentials")` wrongly succeeds.
@@ -187,17 +190,31 @@ before (missing answers file, wrong `copier.yml` location).
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
 - Optional generated parts are copier questions, not deletions:
-  `include_auth`, `include_providers` (only without auth), the install
-  questions `install_homeserver_users` and `install_mac` (`[tool.rb.install]`),
-  `include_http_provider` (drops `providers/http.py`,
-  `tests/test_http_provider.py` and `httpx`), `include_db` (keeps
-  `core/db.py`, `core/tables.py`, `migrations/`, `commands/db.py`,
-  `tests/test_db.py`, the database fixture in `tests/conftest.py` and the
-  SQLAlchemy/Alembic/psycopg deps; its PostgreSQL test runs only under `scripts/pg_test.sh` in the
-  generated project — a throwaway container on a Docker-assigned port), `include_ci`
-  (`.gitea/workflows/ci.yml` for Gitea Actions; no `.github`),
-  `dist_name_legacy` (rename transition).
+  `include_project` (`commands/project.py`, `init`, `config`, `status`,
+  `core/services.py`, `core/models.py`, `--project`), `include_auth`,
+  `include_providers` (only without auth), `include_http_provider` (drops
+  `providers/http.py`, `tests/test_http_provider.py` and `httpx`),
+  `include_db` (keeps `core/db.py`, `core/tables.py`, `core/normalize.py`,
+  `migrations/`, `commands/db.py`, `tests/test_db.py`, the database fixture in
+  `tests/conftest.py` and the SQLAlchemy/Alembic/psycopg deps; its PostgreSQL
+  test runs only under `scripts/pg_test.sh` in the generated project — a
+  throwaway container on a Docker-assigned port), `include_skill` (`data/`,
+  `commands/skill.py`, `core/skills.py`, `--ai`), `include_describe`
+  (`commands/describe.py`, `core/opencli.py`, `core/data_files.py`),
+  `include_contracts` (only with describe: `tests/contracts/`, the detach
+  scripts); the install questions `install_homeserver_users` and
+  `install_mac` (`[tool.rb.install]`), `dist_name_legacy` (rename
+  transition). The Gitea workflow is always generated. A part is off in a new
+  package and on for a package made before its question (`updating`, ADR
+  0014). Shared code never imports a part: `cli.py` calls `register(app)` of
+  each part module it finds (`PARTS`), a part's global option goes to
+  `output.RootGroup.part_options`, `doctor` and `describe` probe the module.
   Render each branch once when you touch the workflow or `copier.yml`.
+- The `_exclude` pattern of a part added after the first release tests
+  `is false`, never `not`: on `copier update` copier renders the previous
+  version with the new patterns (to keep what they exclude), where that
+  answer is undefined — `not` would drop the part's files there, and copier
+  then merges them back as the project's own additions, with conflicts.
 - Human output goes through rich, which silently drops anything in
   `[...]` it takes for markup (`[[tool.rb.external]]` vanished from help).
   `output.guard`/`output.group` escape help text; `human.echo()` escapes
@@ -224,7 +241,7 @@ before (missing answers file, wrong `copier.yml` location).
 - Typer ≥ 0.27 no longer depends on `click` (it ships its own parser and
   `typer.Exit`/`typer.Abort` in `typer.exceptions`). Don't `import click`
   in template code — it isn't installed in generated projects. Related:
-  `no_args_is_help=True` exits 2, which is why `cli.py.jinja` and
+  `no_args_is_help=True` exits 2, which is why `cli.py` and
   `output.group()` implement help-on-no-args by hand.
 - `output.guard` must re-raise `typer.Exit`/`typer.Abort` before its
   catch-all `except Exception` — both subclass `RuntimeError`, so a plain
