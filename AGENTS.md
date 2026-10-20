@@ -9,8 +9,8 @@ Code plugin itself (not a package it generated; that has its own
 A plugin bundling one skill, `cli-builder`, that scaffolds new CLI tools or
 refactors existing ones onto a shared Python/Typer/uv architecture. See
 `README.md` for layout, `skills/cli-builder/SKILL.md` for the skill's
-workflow, and `skills/cli-builder/reference/architecture.md` for the
-contract every generated package must satisfy.
+workflow, and `skills/cli-builder/reference/standard.md` (the Standard)
+for what every package must and should be.
 
 ## Role
 
@@ -33,18 +33,18 @@ the global rule (`antagor publish`, or the Human's confirmation).
 
 ## Where the spec lives (don't duplicate it)
 
-- `skills/cli-builder/reference/architecture.md` — the shape contract
-  (layers, storage locations, credential model, safety/dry-run rules,
-  distribution).
-- `skills/cli-builder/reference/conventions.md` — exact JSON envelope,
-  error codes, exit codes, global options. Verbatim, not per-project.
-- `skills/cli-builder/reference/refactor-checklist.md` — migration order
-  for Refactor mode.
+- `skills/cli-builder/reference/standard.md` — the Standard: every rule
+  is **Mandatory** (it names the gate step that checks it) or
+  **Recommended**, in named sections (Technology … Release, then the
+  optional parts). Cite a section by its name, never by a number. Long
+  reasoning goes into `docs/adr/`, not into the Standard.
+- The refactor checklist (migration order for Refactor mode) is a section
+  of `SKILL.md`.
 - The short coding-quality rules (think first, simplicity, surgical
   changes, goal-driven execution) live inline in `SKILL.md` itself, not in
   a separate file — don't re-split them out.
 
-If you're changing what generated CLIs look like, change `architecture.md`
+If you're changing what generated CLIs look like, change `standard.md`
 and `template/` together, in the same commit — a template change that
 contradicts the documented contract is a bug.
 
@@ -110,8 +110,8 @@ version by hand (`git tag -a v0.1.1 -m v0.1.1`; `antagor publish` would run
 `deploy.sh` against the real remote), `git push --follow-tags` (to that
 local bare remote only — never GitHub), then
 `uv tool install "git+file:///tmp/remote.git@v0.1.1"` and `<cli> --version`.
-The release process itself is specified in `architecture.md`
-§8 — this repo owns it.
+The release process itself is specified in the Standard, Release — this
+repo owns it.
 
 For a change to the gate's "build + install wheel" step, re-run the
 dependency-confusion check: a local flat index holding a wheel named like an
@@ -167,7 +167,7 @@ before (missing answers file, wrong `copier.yml` location).
   commands should also accept locally (`<cli> <command> --flag`, not just
   `<cli> --flag <command>`).
 - `include_auth=false` must remove the credential surface, not just the
-  `keyring` dependency — but keep `auth status` (standard §8: every CLI
+  `keyring` dependency — but keep `auth status` (the Standard, Health: every CLI
   has it, reporting empty `credentials`, exit 0). `copier.yml`'s `_exclude`
   drops `commands/login.py`/`credentials/`/`tests/test_auth.py`;
   `commands/auth.py` (group + `status`) always ships and, like
@@ -205,7 +205,7 @@ before (missing answers file, wrong `copier.yml` location).
   data you put inside it.
 - Three names: `package_name` (import, keychain, env prefix, project dir),
   `cli_name` (command) and `dist_name` (`[project] name`, default
-  `rb-<slug>`, standard §10). The distribution name is rendered into
+  `rb-<slug>`, the Standard, Technology). The distribution name is rendered into
   `src/<pkg>/_distribution.py` (`DIST_NAME`) because an editable install
   can't be mapped from package to distribution at runtime
   (`packages_distributions()` returns nothing for it); every

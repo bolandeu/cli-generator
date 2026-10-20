@@ -2,7 +2,7 @@
 
 Статус: accepted (2026-10-18, E-002)
 
-Пакет объявляет в `pyproject.toml` секцию `[tool.rb.install]` (`homeserver`, `mac`, `extras`). Наличие секции значит «репо — инструмент или библиотека»: tool-updater sysadmin собирает каждый тег и ставит пакет, Mac-агент ставит `mac = true`. Контракт — в `architecture.md` §1. Установка — зона sysadmin, шаблон лишь объявляет.
+Пакет объявляет в `pyproject.toml` секцию `[tool.rb.install]` (`homeserver`, `mac`, `extras`). Наличие секции значит «репо — инструмент или библиотека»: tool-updater sysadmin собирает каждый тег и ставит пакет, Mac-агент ставит `mac = true`. Контракт — в Стандарте, раздел Install. Установка — зона sysadmin, шаблон лишь объявляет.
 
 ## Рассмотренные варианты
 

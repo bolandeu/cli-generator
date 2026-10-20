@@ -5,7 +5,7 @@
 Согласовано между `cli-generator` и `sysadmin`, принято Человеком 19.10.2026. Оба агента ставят
 ссылку на этот файл в свои `AGENTS.md`. Пункты «Перехода» и «Пробелов» приняты как задачи; выполненное отмечаем здесь.
 
-Связано: `skills/cli-builder/reference/architecture.md` (контракт пакета), `~/Work/sysadmin/docs/tool-updater.md`,
+Связано: `skills/cli-builder/reference/standard.md` (Стандарт пакета), `~/Work/sysadmin/docs/tool-updater.md`,
 `repo-sync.md`, `tools-env.md`. Контракты `~/Work/marketer/docs/contracts/{tools,sysadmin}.md` описывают агента
 `tools`, которого больше нет (с 18.10.2026 стандарт ведёт `cli-generator`, sysadmin пишет ему напрямую).
 
@@ -38,7 +38,7 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 - ✅ секция `[tool.rb.install]` есть и корректна (`homeserver`, `mac`, `extras`);
 - ✅ первая запись `[project.scripts]` — команда, которую проверяют `<cmd> --version` (= версия wheel) и `--help`;
 - ✅ ключи читаются из env `<CLI>_<PROVIDER>_<FIELD>` (не только из keychain) — на homeserver другого пути нет;
-- ✅ `auth status --json` и `doctor --json` — фиксированная форма, коды выхода по `conventions.md`.
+- ✅ `auth status --json` и `doctor --json` — фиксированная форма, коды выхода по Стандарту (раздел Errors).
 
 Инфраструктура гарантирует:
 - ✅ каждый новый тег собирается и ставится на homeserver за секунды–минуты (первый тег нового репо — до 5 мин +
@@ -77,7 +77,7 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
    dev-конфиг — только если провайдер даёт отдельные тестовые ключи. Исключение: antagor читает ещё `projects/prd`.
 2. **Имя в Doppler = env-имя CLI** `<CLI>_<PROVIDER>_<FIELD>`, `doppler run` без переименований. Общий ключ
    нескольких CLI (Google service account, S3, Telegram, GitHub) — одна запись без префикса CLI; CLI читает её сам
-   как запасное имя (провайдер объявляет его, стандарт §4). Обёртки не переименовывают.
+   как запасное имя (провайдер объявляет его, Стандарт, раздел Credentials and providers). Обёртки не переименовывают.
 3. **Как CLI получает ключ.** Порядок в CLI не меняется: аргумент → env → keychain.
    homeserver — обёртки `rbtools` (`doppler run`, токен `tools/prd`). Mac — `doppler run -p tools -c prd -- <cli>`
    (обёртка для пакетов с `mac = true`, делает sysadmin). Keychain (`auth login`) — только локальная подмена при
