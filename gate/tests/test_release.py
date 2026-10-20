@@ -1,8 +1,4 @@
-"""`rb-release check`: the release gate, run against the package in the cwd.
-
-Fixture packages live in tmp_path: git, a pyproject.toml, uv.lock, a module and a test. Their ruff, ty and
-pytest are this repo's own, found on PATH (`uv run` in a package without them falls back to PATH).
-"""
+"""`rb-release check`: the release gate, run against the package in the cwd (fixture packages: conftest.py)."""
 
 from __future__ import annotations
 
@@ -16,6 +12,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from conftest import PYPROJECT, git
 from rb_release.cli import app
 from rb_release.gate import Gate, StepFailed, changed_existing_tests, contract_summary, external_programs
 
@@ -32,57 +29,14 @@ STEPS = [
     "install section",
     "external dependencies",
     "build + install wheel",
+    "standard: commands",
+    "standard: json",
+    "standard: errors",
+    "standard: health",
+    "standard: docs",
+    "standard: ci",
     "vulnerability audit",
 ]
-PYPROJECT = """[project]
-name = "demo"
-version = "0.1.0"
-requires-python = ">=3.11"
-dependencies = []
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.rb.install]
-homeserver = []
-mac = false
-"""
-
-
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(  # noqa: S603
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
-        cwd=root,
-        capture_output=True,
-        check=True,
-    )
-
-
-def _package(root: Path, module: str, pyproject: str) -> Path:
-    (root / "src" / "demo").mkdir(parents=True)
-    (root / "tests").mkdir()
-    (root / "pyproject.toml").write_text(pyproject)
-    (root / ".gitignore").write_text(".venv/\n__pycache__/\n")
-    (root / "src" / "demo" / "__init__.py").write_text(module)
-    (root / "tests" / "test_demo.py").write_text("def test_demo() -> None:\n    assert True\n")
-    subprocess.run(["uv", "lock", "--offline", "--quiet"], cwd=root, check=True)  # noqa: S607
-    _git(root, "init", "-q", "-b", "main")
-    _git(root, "add", "-A")
-    _git(root, "commit", "-qm", "init")
-    return root
-
-
-@pytest.fixture
-def in_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    def make(module: str, pyproject: str = PYPROJECT) -> Path:
-        root = _package(tmp_path / "demo", module, pyproject)
-        monkeypatch.chdir(root)
-        return root
-
-    tools = str(Path(sys.executable).parent)  # this repo's ruff, ty, pytest
-    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
-    return make
 
 
 def _check():
@@ -319,10 +273,10 @@ def test_existing_tests_step_reports_against_the_last_tag(tmp_path: Path) -> Non
     (tmp_path / "tests" / "test_x.py").write_text(OLD_TESTS)
     (tmp_path / "tests" / "snapshots" / "help.txt").write_text("old\n")
     (tmp_path / "README.md").write_text("old\n")
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-qm", "i")
-    _git(tmp_path, "tag", "-a", "v0.1.0", "-m", "v0.1.0")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-qm", "i")
+    git(tmp_path, "tag", "-a", "v0.1.0", "-m", "v0.1.0")
     assert gate.check_existing_tests() == "none changed since v0.1.0"
 
     (tmp_path / "tests" / "test_x.py").write_text(NEW_TESTS)
@@ -420,8 +374,8 @@ def test_install_section_valid_passes(tmp_path: Path, body: str, ok: str) -> Non
 def test_gate_stops_at_a_committed_secret(in_package) -> None:
     root = in_package('"""A demo package."""\n')
     (root / "settings.py").write_text(f'AWS_ACCESS_KEY_ID = "{FAKE_AWS_KEY}"\n')
-    _git(root, "add", "-A")
-    _git(root, "commit", "-qm", "settings")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "settings")
 
     result = _check()
 
