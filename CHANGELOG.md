@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.20.8 — 2026-10-20
+
+### Outside epics
+
+- Update mode works for a worker that may not commit; step 14 names .agents/antagor/antagor.toml (CG-036)
+
 ## v1.20.7 — 2026-10-19
 
 ### E-004 — Packages can take the release gate from rb-cli-core (adopt_core), first step of the core library
