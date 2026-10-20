@@ -29,10 +29,15 @@ _exclude:
   - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
   - "{% if not include_db %}tests/test_db.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
-  - "{% if adopt_core %}scripts/release.py{% endif %}"
   # Migrations are the project's own history once generated: on `copier update` the
   # template's example revisions must never land in a tool's chain (a second 0002...).
   - "{% if _copier_operation == 'update' %}src/{{ package_name }}/migrations/versions{% endif %}"
+
+# Up to v1.20.10 the gate was copied into scripts/release.py; the update deletes that copy, and a copy the
+# package edited comes back as a conflict instead of being lost.
+_migrations:
+  - command: ["{{ _copier_python }}", "{{ _copier_conf.src_path }}/scripts/keep_edited_gate_copy.py", "{{ _copier_conf.src_path }}", "{{ _version_from }}"]
+    when: "{{ _stage == 'after' }}"
 
 # The --help and describe snapshots (tests/snapshots/) contain the CLI's name and
 # wrap around it, so they're rendered in the generated project, not shipped.
@@ -126,13 +131,15 @@ include_db:
 
 include_ci:
   type: bool
-  help: "Generate the Gitea Actions workflow (.gitea/workflows/ci.yml)? CI is optional (standard §6) — the local gate release.py --check is the check"
+  help: "Generate the Gitea Actions workflow (.gitea/workflows/ci.yml)? CI is optional (Standard, CI) — the local gate rb-release check is the check"
   default: true
 
-adopt_core:
-  type: bool
-  help: "Take the release gate from rb-cli-core (`uv run rb-release check`, Gitea registry) instead of a copy in scripts/release.py?"
-  default: false
+# Not a question: the release gate, pinned to the template tag of the project (`_commit`). A package runs it
+# through uvx — never a copy in the project, never a dependency. CI, antagor.toml and the docs render it.
+gate_command:
+  type: str
+  default: 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@{{ _copier_answers._commit }}#subdirectory=gate" rb-release check'
+  when: false
 
 repository_url:
   type: str
