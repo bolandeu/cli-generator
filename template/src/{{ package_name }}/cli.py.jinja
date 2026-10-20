@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from importlib import resources
-
 import typer
 
 from . import output
 from .commands import auth{% if include_db %}, db{% endif %}, describe, docs, doctor, init, run, skill, status
 from .commands import config as config_cmd
+from .core import skills
 from .core.version import DEV_VERSION, cli_name, installed_version, package_summary
-
-_PACKAGE_NAME = __name__.split(".")[0]
 
 # A bare `<cli>` is the discovery entry point for humans and agents alike:
 # name + version + description, then every command with the first line of
@@ -50,7 +47,7 @@ def _ai_callback(value: bool) -> None:
     """
     if not value:
         return
-    content = resources.files(f"{_PACKAGE_NAME}.data").joinpath("SKILL.md").read_text()
+    content = skills.conventions().text
     typer.echo(content)
     raise typer.Exit()
 

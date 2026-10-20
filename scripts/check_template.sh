@@ -118,6 +118,9 @@ check_update_round() {
     if [ -z "${CLEAN_TREE:-}" ]; then
         grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
     fi
+    # A template release that changes a help text or `describe` changes the snapshots: the project
+    # refreshes them after an update (copier's task runs on copy only).
+    run uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }

@@ -516,6 +516,20 @@ command is added; the docstrings can't go stale because they *are* the
 help. Consequence: adding a command means writing a good docstring, not
 editing SKILL.md.
 
+**Extra skills.** A package may bundle more skills besides the conventions
+skill: process skills per kind of work (e.g. `og-image`, `video`) that call
+the CLI and hold no logic of their own. They live in the package data as
+`src/{{package_name}}/data/skills/<name>/SKILL.md` (Agent Skills format) —
+never only in the repo's `.agents/skills/`, which is not in the wheel. The
+frontmatter `name` is `<cli>-<name>` (the conventions skill keeps `<cli>`) and
+`description` is required. The same rule holds for every skill: no list of the
+CLI's commands. `<cli> skill install` installs the conventions skill and every
+extra one, each into a directory named after its frontmatter `name`
+(`--skill <name>` installs one); `<cli> skill list` and `describe --json`
+(`x-rb-skills`) list them; `--ai` still prints the conventions skill only. The
+generated `tests/test_skills.py` checks every bundled skill. A package with no
+extra skills sees no change.
+
 ## 10. Safe vs. dangerous operations — confirm gate and dry-run
 
 An agent that can run any command indiscriminately will eventually run a
