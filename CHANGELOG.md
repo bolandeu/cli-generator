@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.20.9 — 2026-10-20
+
+### Outside epics
+
+- copier_update_staged.py runs on a clean tree too, so a worker always uses it (CG-037)
+
 ## v1.20.8 — 2026-10-20
 
 ### Outside epics
