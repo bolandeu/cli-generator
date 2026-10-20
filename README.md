@@ -15,7 +15,7 @@ that also proves the built wheel installs and reports the right version,
 ```
 .claude-plugin/plugin.json    # plugin manifest
 skills/cli-builder/           # the skill: SKILL.md + reference docs
-                              #   (help-standard.md: docstrings and `<cli> docs`)
+                              #   (reference/standard.md: the Standard)
 copier.yml                    # copier config; _subdirectory points at template/
 template/                     # the actual copier template
 ```
@@ -47,9 +47,8 @@ If it doesn't trigger automatically, invoke it explicitly:
 `/cli-generator:cli-builder`.
 
 See `skills/cli-builder/SKILL.md` for the exact workflow, and
-`skills/cli-builder/reference/architecture.md` /
-`skills/cli-builder/reference/conventions.md` for the contract every
-generated package must satisfy.
+`skills/cli-builder/reference/standard.md` (the Standard) for what every
+package must and should be.
 
 ## Using the template directly
 

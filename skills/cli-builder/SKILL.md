@@ -18,12 +18,13 @@ re-deriving conventions. It has two modes. Pick one before doing anything else.
   Check for that file first: a project that has it is never refactored
   by hand, it's updated.
 
-Read `reference/architecture.md` once per session before generating or
-judging any code — it is the contract every generated package must satisfy.
-`reference/conventions.md` has the exact JSON envelope, error codes and exit
-codes to reuse verbatim (do not invent new ones per project).
+Read `reference/standard.md` (the Standard) once per session before
+generating or judging any code — it is what every package must
+(**Mandatory**, checked by the gate) and should (**Recommended**) be. Its
+Errors section has the exact JSON envelope, error codes and exit codes to
+reuse verbatim (do not invent new ones per project).
 
-Architecture governs the package's *shape*. The code you actually write
+The Standard governs the package's *shape*. The code you actually write
 inside it (`core/services.py`, a `providers/` integration, a migrated
 function) is governed by these four rules instead
 (adapted from the MIT-licensed [karpathy-guidelines](https://github.com/multica-ai/andrej-karpathy-skills)):
@@ -52,7 +53,7 @@ function) is governed by these four rules instead
 ## Mode: Scaffold
 
 1. Clarify with the user (or infer from the task) before generating:
-   Three names, deliberately separate (standard §10):
+   Three names, deliberately separate (Standard, Technology):
    - `package_name` — the Python import package; for a new tool
      `rb_<slug>` (`rb_serp`). Also the keychain service, env var prefix and
      `.<package>/` project dir.
@@ -77,7 +78,7 @@ function) is governed by these four rules instead
      it to copier is what puts the real `uv tool install "git+…"` command
      into README.md, the bundled SKILL.md and `.copier-answers.yml` from
      the start instead of an `<owner>/<repo>` placeholder to chase later.
-   - The install answers (`[tool.rb.install]`, `reference/architecture.md` §1):
+   - The install answers (`[tool.rb.install]`, Standard, Install):
      `install_homeserver_users` (comma-separated homeserver users, blank =
      build and publish only) and `install_mac` (bool). Default: homeserver
      user `rbtools` + Mac. A library: publish only
@@ -121,7 +122,7 @@ function) is governed by these four rules instead
      Each provider declares `credential_fields` and `required`, and
      implements `health_check()` — one cheap read-only call (the test
      suite fails without it); that is what `auth status --check`
-     reports in the cross-tool shape (`architecture.md` §4). One
+     reports in the cross-tool shape (Standard, Credentials and providers). One
      credential per site/host/account → `per_target = True`, read it
      under `self.credential_name`.
    - Running any program `uv` can't install (`ffmpeg`, `git`, `npx`,
@@ -132,7 +133,7 @@ function) is governed by these four rules instead
      `--data include_db=true`: shared PostgreSQL from `<TOOL>_DATABASE_URL`,
      else local SQLite; tables in `core/tables.py` + a hand-written Alembic
      migration; other tools read only `<tool>_v1_*` views; cross-tool keys
-     from `core/normalize.py` (`architecture.md` §12). Dev SQLite → prod
+     from `core/normalize.py` (Standard, Database). Dev SQLite → prod
      PostgreSQL for append-only tables: mark them `info={"push": ...}` and
      use `db push`.
    - An integration that doesn't speak HTTP: `--data include_http_provider=false`
@@ -148,17 +149,17 @@ function) is governed by these four rules instead
    - Do not edit `CHANGELOG.md` and do not add changelog fragments:
      `antagor publish` writes the changelog from the titles of the
      tickets it publishes. Put the user-visible meaning of a change into
-     the ticket title (`reference/architecture.md` §8).
+     the ticket title (Standard, Release).
    - Depending on another of our tools? A version range in `dependencies`
      (`"rb-serp>=0.3"`) and `rb-serp = { index = "gitea" }` in
      `[tool.uv.sources]` — never a git `tag =`, `branch = "main"` or a
-     committed `path =`; `architecture.md` §8, "Depending on another tool".
+     committed `path =`; Standard, Install.
    - A key one CLI shares with others (Google service account, S3, Telegram,
      GitHub)? The provider reads the shared name through `legacy_env`
-     (`architecture.md` §4). A new key goes to sysadmin as a ticket
+     (Standard, Credentials and providers). A new key goes to sysadmin as a ticket
      (`docs/contracts/sysadmin.md`, "Ключи").
 4. Verify before calling it done — the whole gate is one command, the
-   same one every release and CI run (`architecture.md` §8):
+   same one every release and CI run (Standard, Release):
    ```bash
    cd <dest-dir> && uv sync && uv run scripts/release.py --check && uv run <package_name> doctor
    ```
@@ -176,7 +177,7 @@ function) is governed by these four rules instead
 
 ## Mode: Refactor
 
-Never rewrite blind. Work through `reference/refactor-checklist.md` in the
+Never rewrite blind. Work through the Refactor checklist below in the
 order it's written — later items assume earlier ones are already true (e.g.
 you can't add `--json` output cleanly before commands are split from
 business logic).
@@ -228,6 +229,150 @@ business logic).
    anywhere; leaving it that way means the "works on any machine" half of
    the architecture is still missing after all the other items pass.
 
+## Refactor checklist
+
+Work top to bottom. Each item assumes the ones above it are already done —
+don't jump ahead (e.g. splitting out `--json` output is much harder before
+commands are separated from business logic).
+
+For each item: check the current repo, note pass/fail, fix failures in
+order before moving to the next item.
+
+1. **`src/` layout + `pyproject.toml` with `[project.scripts]`.**
+   Fail if it's a loose script, a flat module, or installed via
+   `python foo.py` instead of an installed console command.
+
+2. **Commands contain no business logic.**
+   Fail if a command function does real work inline instead of calling into
+   a `core`/service layer. Extract into `core/services.py` before touching
+   anything else — every later step assumes this split exists.
+
+3. **Config/state/secrets are three separate things.**
+   Fail if secrets are hardcoded, in a committed `.env`, or mixed into the
+   same file as project config. Move secrets to `credentials/manager.py`
+   (keyring + env var fallback, see the template's copy). This is a
+   security fix — call it out explicitly to the user even if they didn't
+   ask for one.
+
+4. **Dual output (human + `--json`).**
+   Fail if the only output is `print()`/decorated terminal text with no
+   machine-readable mode. Add the `output/` module (human.py + json.py) and
+   route every command through `emit_success`/`emit_error`.
+
+5. **Structured errors + fixed exit codes.**
+   Fail if failures are bare `sys.exit(1)`, uncaught exceptions as the
+   user-facing failure, or ad-hoc messages. Introduce `CliError` subclasses
+   and the exit-code table (Standard, Errors), wrap every command in
+   `@output.guard` (unmapped exceptions → `UNEXPECTED` envelope), send
+   human errors to stderr, and make a bare `<cli>` / `<cli> <group>` print
+   help with exit 0 (`output.group`), not a "Missing command" error.
+   External calls go through a `providers.HttpProvider` subclass so
+   network/HTTP failures come out as `PROVIDER_ERROR` / `AUTH_REQUIRED`
+   instead of a `requests` traceback. Every provider (a `providers.Provider`
+   subclass) implements `health_check()`, and a CLI with credentials has
+   `auth status [--check] --json` in the exact shape of
+   the Standard (Health; Credentials and providers) — copy `credentials/health.py`, the command and
+   the shape test from the template; fail on any other status command
+   format, on a status that prints values, or on placeholder credentials
+   stored just to make it green.
+
+6. **`doctor` command exists.**
+   Fail if there's no single command that checks environment/config/auth
+   readiness and reports it structurally.
+
+7. **`--non-interactive` on every prompting command.**
+   Fail if `init`/`auth login`/etc. always prompt with no flag to disable
+   it — this blocks any agent/CI use.
+
+8. **Destructive commands are gated.**
+   Fail if any command that deletes, overwrites a remote resource, or
+   otherwise changes external state irreversibly can run without a
+   `--dry-run` preview available and without `--confirm` required under
+   `--non-interactive`. An agent must never be able to trigger this by
+   accident just by always passing `--non-interactive`. Use
+   `output.is_dry_run`/`output.require_confirmation`; list the affected
+   commands explicitly in the bundled SKILL.md's Safety section.
+
+9. **Cross-platform correctness.**
+   Fail on `os.system`, `shell=True`, hardcoded `/`-style paths, or reliance
+   on a specific shell's builtins. Replace with `pathlib`/`shutil`; use
+   `platformdirs` for user-level config location.
+
+10. **Version compatibility declared — and enforced; releases per the
+    standard.**
+    Fail if a project consuming this CLI has no way to declare
+    `min_version`, or declares it but nothing checks it — add `[cli]
+    min_version` to the project config model and `services.check_cli_compat`
+    to `load_config`. Also fail on any of these (Standard, Release):
+    a `version =` line in `pyproject.toml` or a hard-coded version string
+    (→ tag the current version first if untagged, `git tag -a vX.Y.Z -m
+    vX.Y.Z <sha>`, then `dynamic = ["version"]` + uv-dynamic-versioning +
+    `[tool.uv] cache-keys`, runtime via `importlib.metadata`); a
+    hand-edited `CHANGELOG.md` / `## [Unreleased]` section, or towncrier
+    (config, `changelog.d/`) — the changelog is written by `antagor
+    publish` from ticket titles; except for a package that has **never
+    been released** (no `v*` tag): when it gets its first tag `vX.Y.Z`,
+    rename `## [Unreleased]` to `## [X.Y.Z] - <date>` instead, since those
+    changes ship in that tag; `.githooks/`, `scripts/install_hooks.sh`,
+    `core.hooksPath` or `herdr_name` files (→ delete, `antagor hooks
+    install`; SKILL.md Update mode); no `.agents/antagor/antagor.toml`
+    (→ `antagor init --prefix <PREFIX> --name <cli_name>`, `checks`,
+    `[publish]` as in the template, `scripts/deploy.sh`); a `scripts/release.py` that
+    isn't the template's verbatim copy; `ruff check --fix` run without
+    re-checking imports afterwards (F401's autofix deletes "unused"
+    imports that are really re-exports a lazy `from … import` inside a
+    function relies on — after any autofix, import every module or run the
+    full test suite); `ty` failing on warnings (the template
+    sets `[tool.ty.terminal] error-on-warning = false`; downgrade what
+    legacy code can't fix yet per rule, `[tool.ty.rules] <rule> = "warn"`,
+    instead of blanket ignores); a dependency on another of our
+    tools by `branch =`, bare git URL or committed `path =` (→ `tag =` pin
+    + compatible range); a subprocess call to another of our CLIs without
+    a `core.deps.require_cli(...)` minimum-version check; a program the
+    code runs (`shutil.which`, `subprocess` with a literal program, `npx`,
+    another CLI) missing from `[[tool.rb.external]]` in `pyproject.toml`
+    (Standard, Technology — the gate names each one); a distribution
+    name (`[project] name`) without the `rb-` prefix (Standard, Technology → rename
+    to `rb-<slug>` per SKILL.md "Renaming the distribution": breaking bump,
+    consumers follow, old tool uninstalled; command and import names stay).
+
+11. **Bundled agent skill + quality gates.**
+    Fail if there's no `src/<package_name>/data/SKILL.md` (bundled as
+    package data, not just sitting in the source repo) with the
+    conventions an agent needs — install, `--json`, exit codes,
+    credentials, dry-run/confirm — and *no* command list (commands come
+    from docstrings via a bare `<cli>`; fail if any docstring is missing
+    or stale). Fail too if the --help contract isn't enforced
+    (Standard, Commands): no `tests/test_help.py` + `tests/snapshots/help/`
+    (copy the test, then `uv run pytest --snapshot-update` and read every
+    generated page — it's usually the first time anyone has), no
+    `scripts/check_command_docstrings.py` in the `checks` of
+    `antagor.toml`. Commands missing an `Example:`
+    line or a parameter `help=` are fixed here, not waived. Also fail if `pyproject.toml` has no coverage
+    `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
+    step — copy all three from the template, along with
+    `scripts/release.py` (whose `--check` is the whole gate) and, if the
+    repo keeps CI, its workflow (one `ubuntu-24.04` job running only
+    `release.py --check`, lowest supported Python, current action
+    majors) and `dependabot.yml` (monthly, one
+    group per ecosystem).
+
+12. **Installable from GitHub.**
+    Fail if `uv tool install "git+<repo-url>"` doesn't produce a working
+    command on a clean machine — no GitHub repo at all, no `[build-system]`
+    in `pyproject.toml`, package data (the bundled SKILL.md) not shipped in
+    the wheel, or README.md / `data/SKILL.md` still carrying an
+    `<owner>/<repo>` placeholder instead of the real URL. Fix via
+    SKILL.md's "Publish" section (Gitea primary, private GitHub mirror; ask
+    before creating anything). This is the item that makes the previous
+    eleven usable from anywhere but the dev checkout.
+
+### Reporting the audit
+
+Before changing code, summarize findings as a short pass/fail list against
+these twelve items — this tells the user (and you) exactly how much work
+the refactor is and in what order, before any file gets touched.
+
 ## Mode: Update
 
 For a project with `.copier-answers.yml` (`_src_path` points at this
@@ -246,7 +391,7 @@ template, `_commit` is the template release it was last synced to):
    conventions one (e.g. in `.agents/skills/`, or a patched `skill`
    command) moves them into the package data as
    `src/<package_name>/data/skills/<name>/SKILL.md` (frontmatter name
-   `<cli>-<name>`, architecture.md §9) and drops its patch of
+   `<cli>-<name>`, Standard, Package skill) and drops its patch of
    `commands/skill.py`: the template's `skill install`, `skill list` and
    `describe` serve them. The template changes the `skill` help and the
    `describe` document: after the update refresh the snapshots
@@ -273,7 +418,7 @@ template, `_commit` is the template release it was last synced to):
    check `git diff` reads as intended before the gate. The update brings
    `[tool.rb.install]` into `pyproject.toml`; the gate now refuses a
    project without it. Check the answers: a library gets `homeserver = []`
-   and `mac = false` (`reference/architecture.md` §1).
+   and `mac = false` (Standard, Install).
 3. Run the full verify loop (Scaffold step 4). Read the diff: a template
    release can add a gate (coverage floor, a lint rule) that the
    project's existing code now fails — fix the code, don't lower the
@@ -295,7 +440,7 @@ template, `_commit` is the template release it was last synced to):
    `test_help.py` contract flags (missing `Example:` line or `help=`),
    implement `health_check()` on every existing provider (plus
    `credential_fields`/`required`) — `test_providers.py` names the ones
-   missing it. `auth status` now emits the §8 report instead of
+   missing it. `auth status` now emits the report of the Standard (Health) instead of
    `{"provider", "authenticated"}`: a breaking change for the CLI's own
    callers, so release it as a breaking bump (minor at `0.x`) in a
    ticket titled as a breaking change. Then the
@@ -382,8 +527,8 @@ template, `_commit` is the template release it was last synced to):
    gets CLI_TOO_OLD, push lands in `cache.<t>`, missing schema or rights
    is a clear error) must pass. Schema `cache` and the role's USAGE +
    CREATE on it in production are the infrastructure's — ask the user (sysadmin sets it up) before the release that moves anything.
-10. **Crossing template v1.7.0** (consumer contracts, `architecture.md`
-   §13). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
+10. **Crossing template v1.7.0** (consumer contracts, Standard,
+   Consumer contracts). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
    and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
    and `tests/contracts/fixtures.yaml` come with the update; consumers'
    contracts arrive through dev — never write or edit them yourself. Their
@@ -406,8 +551,8 @@ template, `_commit` is the template release it was last synced to):
 11. If `_commit` is a bare commit hash rather than a tag, the project was
    generated before the template had releases; `copier update` still
    works from that commit and moves `_commit` to the latest tag.
-12. **Crossing the template release with `docs`** (`<cli> docs`, help
-   standard: `reference/help-standard.md`). After the update run the help
+12. **Crossing the template release with `docs`** (`<cli> docs`, the docstring
+   shape: Standard, Commands). After the update run the help
    test (`uv run pytest tests/test_help.py`): it prints the command paths
    whose docstring does not meet the standard. Paste them into
    `tests/help_allowlist.txt` (the file is the project's; `copier update`
@@ -458,7 +603,7 @@ template, `_commit` is the template release it was last synced to):
       CLI prefix (`GOOGLE_OAUTH_SERVICE_ACCOUNT_JSON`). In the provider
       declare it as the fallback:
       `legacy_env: ClassVar[dict[str, str]] = {"api_key": "<SHARED_NAME>"}`
-      (`architecture.md` §4). Remove any jq-style renaming from wrappers.
+      (Standard, Credentials and providers). Remove any jq-style renaming from wrappers.
    8. New keys. For every env name `<CLI>_<PROVIDER>_<FIELD>` the package
       reads that is not yet in Doppler `tools/prd`, write a ticket for
       sysadmin: env name, where to get the value, who needs it. Give it to
@@ -505,7 +650,7 @@ template, `_commit` is the template release it was last synced to):
       change into `rb-cli-core` through a ticket to `cli-generator`
       (it owns the library), wait for its release, then do steps 1-5.
 
-### Renaming the distribution (standard §10: `rb-<slug>`)
+### Renaming the distribution (Standard, Technology: `rb-<slug>`)
 
 The command (`cli_name`) and the import package don't change; only
 `[project] name` does. For an existing package:
@@ -516,7 +661,7 @@ The command (`cli_name`) and the import package don't change; only
    must carry the same name — `tests/test_cli.py` fails otherwise.
    `DIST_NAME_LEGACY` makes an install still registered under the old name
    report its real version instead of `0.0.0`/none until it is
-   reinstalled (standard §10); clear it (`--data dist_name_legacy=`) in a
+   reinstalled; clear it (`--data dist_name_legacy=`) in a
    later release once every machine has the new name.
 2. It is a **breaking change** for consumers: breaking bump (minor at
    `0.x`) in a ticket whose title names the old and new names.
@@ -533,7 +678,7 @@ The primary store is Gitea:
 `https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>`. Nobody pushes
 to GitHub — never run `gh repo create` or a push to a GitHub remote.
 `[tool.rb.install]` in `pyproject.toml` decides who installs the package
-(`reference/architecture.md` §1): sysadmin's tool-updater builds every tag
+(Standard, Install): sysadmin's tool-updater builds every tag
 and a Mac agent keeps the Mac current. This skill sends no message to
 sysadmin. Installability is proven by `release.py --check` (the built wheel
 in a throwaway venv), which is part of the verify loop.
@@ -585,7 +730,7 @@ package sitting unreleased without asking.
    reads, so without this the next update would render the placeholder
    back. Commit these edits before the push.
 5. **CI.** CI is Gitea Actions: `.gitea/workflows/ci.yml` from the
-   template (`architecture.md` §8). It only repeats `release.py --check`;
+   template (Standard, CI). It only repeats `release.py --check`;
    the local gate is authoritative. To go without it, generate (or update)
    with `--data include_ci=false`. It needs no secret: our packages come
    from the Gitea registry, keys are never in the repo. No `.github/`.
@@ -595,20 +740,20 @@ package sitting unreleased without asking.
    and runs `scripts/deploy.sh`, which pushes `main` with the tags to
    `origin` (Gitea). The gate (`release.py --check`) is a ticket check, so
    it has already passed. You never push by hand. Pick the part by SemVer
-   (`architecture.md` §8: at `0.x` fixes and compatible features are
+   (Standard, Release: at `0.x` fixes and compatible features are
    patch, a breaking change is minor). There is no `version =` to edit,
    no `[Unreleased]` section and no fragment — one ticket per change.
    Other machines follow by `[tool.rb.install]`; you do not upgrade them.
 
 ## Non-negotiables (apply in both modes)
 
-These are the parts of `reference/architecture.md` most likely to get
+These are the parts of the Standard most likely to get
 skipped under time pressure — check them explicitly:
 
 - Every command has a human mode and a `--json` mode; agents must never be
   forced to parse decorated human output.
 - Errors are raised as `CliError` subclasses with a stable `code`, and follow
-  the exit-code table in `reference/conventions.md` — never a bare
+  the exit-code table (Standard, Errors) — never a bare
   `sys.exit(1)` or an unstructured stack trace as the user-facing failure.
   Every command is wrapped in `@output.guard` (which is also what turns an
   unmapped exception into an `UNEXPECTED` JSON envelope); human errors go
@@ -620,7 +765,7 @@ skipped under time pressure — check them explicitly:
   subclass (or a `providers/` module raising the same `ProviderError` /
   `AuthRequired`) — never `httpx`/`requests` calls sprinkled through
   `core/` or `commands/`. Each implements `health_check()`, and
-  `auth status [--check] --json` keeps the exact §8 shape (a shape change
+  `auth status [--check] --json` keeps the exact shape (Standard, Health) (a shape change
   is a breaking change); it never prints a credential value.
 - No secret ever gets written to project-local config (`.{{package}}/config.toml`
   is safe to commit). Secrets only live in the OS keychain or env vars.
@@ -636,12 +781,12 @@ skipped under time pressure — check them explicitly:
 - The package declares `[tool.rb.install]` and is installable (the wheel
   passes `release.py --check`) — see "Publish". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
-  project" premise in `reference/architecture.md`.
+  project" premise of the Standard (Project).
 - **Changed a command's behaviour → update its docstring in the same
   commit**, then `uv run pytest --snapshot-update` and check the
   `tests/snapshots/help/` diff reads right. The docstring and `help=`
   strings are the `--help` text agents read. This is enforced, not
-  advisory (`architecture.md` §5): the ticket check
+  advisory (Standard, Commands): the ticket check
   `scripts/check_command_docstrings.py` (Antagor runs it; the git hooks
   come from `antagor hooks install`), and blocking tests — each docstring has an
   `Example: {cli} <command> ...` line, each parameter a `help=`, each
@@ -653,7 +798,7 @@ skipped under time pressure — check them explicitly:
 - Versions come only from git tags cut by `antagor publish`, the
   changelog only from ticket titles, dependencies on our other
   tools only by tag pin. SemVer is a promise about the CLI surface
-  (flags, `--json` shape, exit/error codes) — `architecture.md` §8.
+  (flags, `--json` shape, exit/error codes) — Standard, Release.
 - Prefer `pathlib`/`shutil`/`platformdirs` over shelling out or hardcoded
   POSIX paths — the whole point is that it runs unmodified on macOS, Linux
   and Windows.
