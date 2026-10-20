@@ -4,6 +4,13 @@ prefix = "CG"
 name = "cli-generator"
 worker = "claude-code"
 checks = ["sh scripts/check_template.sh", "claude plugin validate . --strict"]
+# The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
+stall_minutes = 25
+
+[limits]
+# Mode fast: template tasks move or drop whole parts (E-006 CG-047).
+max_files = 150
+max_lines = 4000
 
 [review]
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
