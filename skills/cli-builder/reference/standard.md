@@ -262,14 +262,14 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 
 ## Optional parts
 
-A package turns on only the parts it needs. In a package made from the template, the skill names the template option
-for each part.
+A package turns on only the parts it needs. In the template each part is a copier question, off in a new package; a
+package made before a question existed keeps that part on `copier update`.
 
 ### Project
 
 **When.** The tool works on a project directory that keeps its own settings.
 
-**Turn on.** The template ships it; a package not from the template adds the project folder and the commands below.
+**Turn on.** `include_project`; a package not from the template adds the project folder and the commands below.
 
 - **Recommended.** The CLI is installed once and serves any number of projects; a project holds only config and data,
   never the CLI's code or venv.
@@ -286,8 +286,8 @@ for each part.
 
 **When.** The tool calls an external service, or needs a key.
 
-**Turn on.** The template's credentials option (the providers come with it), or by hand: a provider per service and
-`auth login|logout`.
+**Turn on.** `include_auth` (the providers come with it; `include_providers` alone gives providers without credentials),
+or by hand: a provider per service and `auth login|logout`.
 
 - **Recommended.** One env name per key: `<CLI>_<PROVIDER>_<FIELD>` (`SERP_XMLRIVER_API_KEY`). It is also the key's name
   in Doppler `tools/prd`, the source of every production key (`docs/contracts/sysadmin.md` of `cli-generator`,
@@ -328,7 +328,8 @@ for each part.
 
 **When.** A provider speaks HTTP.
 
-**Turn on.** The template's HTTP provider option (it brings `httpx`), or one shared HTTP base class of your own.
+**Turn on.** `include_http_provider` (asked when providers are on; it brings `httpx`), or one shared HTTP base class of
+your own.
 
 - **Recommended.** One base for every HTTP provider: 401/403 → `AUTH_REQUIRED` (the `action` names the login command);
   429, 502, 503, 504, timeouts and connection errors are retried with exponential backoff (honouring `Retry-After`),
@@ -341,8 +342,8 @@ for each part.
 
 **When.** The tool keeps data: journals, results, history, a cache of paid responses.
 
-**Turn on.** The template's database option, or by hand: SQLAlchemy Core, Alembic and psycopg 3 (no ORM, no hand-rolled
-migrations), and the `db` commands below. The reasons: `docs/adr/0006-db-table-conventions.md` and
+**Turn on.** `include_db`, or by hand: SQLAlchemy Core, Alembic and psycopg 3 (no ORM, no hand-rolled migrations), and
+the `db` commands below. The reasons: `docs/adr/0006-db-table-conventions.md` and
 `docs/adr/0012-shared-database-rules.md` of `cli-generator`.
 
 - **Recommended.** All the tool's data goes through this layer, caches included; data kept elsewhere is the tool's
@@ -378,8 +379,8 @@ migrations), and the `db` commands below. The reasons: `docs/adr/0006-db-table-c
 
 **When.** Agents call the tool from other projects.
 
-**Turn on.** The template ships it; a package not from the template adds a `SKILL.md` to its package data and the
-commands below.
+**Turn on.** `include_skill`; a package not from the template adds a `SKILL.md` to its package data and the commands
+below.
 
 - **Recommended.** The skill ships in the wheel, so the installed tool serves it anywhere: `<cli> --ai` prints it,
   `<cli> skill install --tool claude-code|agents [--project]` installs it into an AI tool's skill directory.
@@ -393,7 +394,7 @@ commands below.
 
 **When.** The tool is in the tools catalog, or `clidocs` shows it.
 
-**Turn on.** The template ships it; otherwise a `describe` command built on the CLI framework's own command tree.
+**Turn on.** `include_describe`; otherwise a `describe` command built on the CLI framework's own command tree.
 
 - **Recommended.** `<cli> describe --json` prints an [OpenCLI](https://opencli.org) 0.1 document on one line, bare: the
   one `--json` output without the `{"ok": ...}` envelope.
@@ -406,7 +407,8 @@ commands below.
 
 **When.** Another tool, a Windmill flow, the Astro build or the platform relies on the CLI.
 
-**Turn on.** Put the consumer's contract file in the package; the gate runs every one it finds.
+**Turn on.** `include_contracts` (asked when `include_describe` is on: a contract reads `describe --json`), then put the
+consumer's contract file in the package; the gate runs every one it finds.
 
 - **Mandatory** (gate: `contracts`). Every contract `tests/contracts/<consumer>/<provider>.yaml` (format
   `contract: 1`) passes; the gate names each failing case `<consumer>:<section>:<name>`.
@@ -420,8 +422,8 @@ commands below.
 
 **When.** Agents start a command that runs longer than a couple of minutes (the gate, PostgreSQL tests, a big import).
 
-**Turn on.** The template's detach runner, or any runner that starts the command in a new session and records its
-result.
+**Turn on.** `include_contracts` (the detach runner comes with the contracts), or any runner that starts the command in a
+new session and records its result.
 
 - **Recommended.** Start it detached (`scripts/run_detached.sh <label> <command...>`) and follow it with
   `scripts/runs_status.sh`: pid, stdout and stderr logs and the exit code per label, in the user state dir. Why: a

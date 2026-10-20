@@ -11,6 +11,11 @@ from ..core import db
 app = output.group("Manage the tool's database (shared PostgreSQL or local SQLite).")
 
 
+def register(root: typer.Typer) -> None:
+    """Add the `db` group to the CLI's root (the database part, copier's include_db)."""
+    root.add_typer(app, name="db")
+
+
 def _state(engine) -> dict:
     state = db.schema_state(engine)
     return {

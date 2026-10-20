@@ -15,6 +15,7 @@ from rich.markup import escape
 
 from .. import output, providers
 from ..core.errors import AuthRequired, CliError, CredentialsUnhealthy, InvalidArguments, ProviderError
+from ..core.version import cli_name
 from ..providers import Health, Provider
 from . import manager
 
@@ -187,3 +188,22 @@ def render(payload: dict) -> None:
         expires = f", expires {entry['expires_at']}" if entry["expires_at"] else ""
         line = f"{entry['provider']}{optional}: {entry['status']} ({entry['source']}: {entry['source_ref']}){expires}{detail}"
         output.human.echo_markup(f"{mark} {escape(line)}")
+
+
+def doctor_checks(provider: str) -> list[dict]:
+    """The `credential_store` and `credential` checks of `doctor`: a usable keychain and a credential for `provider`."""
+    backend = manager.store_backend()
+    available = manager.get_credential(provider) is not None
+    return [
+        {
+            "name": "credential_store",
+            "ok": backend is not None,
+            "detail": backend or "no usable OS keychain backend; credentials must come from environment variables",
+        },
+        {
+            "name": "credential",
+            "ok": available,
+            "detail": f"provider '{provider}'"
+            + ("" if available else f" — run '{cli_name()} auth login --provider {provider}'"),
+        },
+    ]

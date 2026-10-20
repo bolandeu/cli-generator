@@ -15,8 +15,8 @@ uv run pytest --snapshot-update  # after changing a command's help; review tests
 the security (`S`) rules; the gate also scans the git history for committed
 secrets when `gitleaks` is installed (`brew install gitleaks`) and `uv.lock`
 for known vulnerabilities when `osv-scanner` is installed (`brew install
-osv-scanner`), and says it skipped a scan otherwise. CI is optional and only repeats
-`rb-release check`.
+osv-scanner`), and says it skipped a scan otherwise. CI (`.gitea/workflows/ci.yml`)
+runs the same `rb-release check`.
 
 ## Release
 
@@ -64,7 +64,7 @@ uv tool install "{{ dist_name }} @ git+https://github.com/<owner>/<repo>.git@vX.
 Replace `vX.Y.Z` with the latest release tag (a tag cut by
 `antagor publish`; never install a branch). This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
-yet — see `src/{{ package_name }}/data/SKILL.md`.
+yet{% if include_skill %} — see `src/{{ package_name }}/data/SKILL.md`{% endif %}.
 {% if github %}
 **Private repo?** The command above is unchanged — `uv` runs git under the
 hood, so it authenticates the same way `git clone` does. On a machine
@@ -104,23 +104,32 @@ template to both be git repos; see the `cli-generator` plugin's README).
 This project follows a fixed CLI architecture:
 
 - `src/{{ package_name }}/commands/` — argument parsing only, no business logic.
-- `src/{{ package_name }}/core/` — services, models, errors: the real logic.
+- `src/{{ package_name }}/core/` — the real logic and the errors.
+{%- if include_providers %}
 - `src/{{ package_name }}/providers/` — external APIs/integrations.
+{%- endif %}
+{%- if include_auth %}
 - `src/{{ package_name }}/credentials/` — secrets via the OS keychain (`keyring`)
-  and environment variables. Secrets never live in `.{{ package_name }}/config.toml`.
+  and environment variables. Secrets never live in a project file.
+{%- endif %}
 - `src/{{ package_name }}/output/` — human (`rich`) and `--json` rendering.
 
-Run `{{ cli_name }} doctor` to check environment/config/auth readiness, and
+Run `{{ cli_name }} doctor` to check what the CLI needs to run, and
 `{{ cli_name }} --help` for the full command surface. Every command supports
 `--json` for machine/agent consumption; errors are structured (`error.code`,
 fixed exit codes, `error.action` telling you what to do next) and go to
 stderr in human mode, so stdout is always safe to pipe.
 
+{%- if include_project %}
+
 A project can require a minimum CLI version in its `.{{ package_name }}/config.toml`
 (`[cli] min_version = "..."`); an older install refuses with exit 6 and
 `uv tool upgrade {{ dist_name }}` fixes it.
+{%- endif %}
+{%- if include_skill %}
 
 See `src/{{ package_name }}/data/SKILL.md` for the agent-facing usage guide
 bundled with this package — install it into an AI tool with
 `{{ cli_name }} skill install`, or get it as plain text with
 `{{ cli_name }} --ai` (works even without file access).
+{%- endif %}

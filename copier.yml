@@ -15,6 +15,16 @@ _exclude:
   - ".git"
   - ".DS_Store"
   - ".svn"
+  # A part added after the first release drops its files only when its answer is false: copier renders the
+  # previous version with these patterns too (to keep what they exclude), and there that answer is undefined.
+  - "{% if include_project is false %}src/{{ package_name }}/commands/project.py{% endif %}"
+  - "{% if include_project is false %}src/{{ package_name }}/commands/init.py{% endif %}"
+  - "{% if include_project is false %}src/{{ package_name }}/commands/config.py{% endif %}"
+  - "{% if include_project is false %}src/{{ package_name }}/commands/status.py{% endif %}"
+  - "{% if include_project is false %}src/{{ package_name }}/core/services.py{% endif %}"
+  - "{% if include_project is false %}src/{{ package_name }}/core/models.py{% endif %}"
+  - "{% if include_project is false %}tests/test_project.py{% endif %}"
+  - "{% if include_project is false %}tests/test_services.py{% endif %}"
   - "{% if not include_auth %}src/{{ package_name }}/commands/login.py{% endif %}"
   - "{% if not include_auth %}src/{{ package_name }}/credentials{% endif %}"
   - "{% if not include_auth %}tests/test_auth.py{% endif %}"
@@ -22,13 +32,32 @@ _exclude:
   - "{% if not include_providers %}tests/test_providers.py{% endif %}"
   - "{% if not (include_providers and include_http_provider) %}src/{{ package_name }}/providers/http.py{% endif %}"
   - "{% if not (include_providers and include_http_provider) %}tests/test_http_provider.py{% endif %}"
-  - "{% if not include_ci %}.gitea{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/core/db.py{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/core/tables.py{% endif %}"
+  - "{% if not include_db %}src/{{ package_name }}/core/normalize.py{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/migrations{% endif %}"
   - "{% if not include_db %}src/{{ package_name }}/commands/db.py{% endif %}"
   - "{% if not include_db %}tests/test_db.py{% endif %}"
+  - "{% if not include_db %}tests/test_normalize.py{% endif %}"
   - "{% if not include_db %}scripts/pg_test.sh{% endif %}"
+  - "{% if include_skill is false %}src/{{ package_name }}/commands/skill.py{% endif %}"
+  - "{% if include_skill is false %}src/{{ package_name }}/core/skills.py{% endif %}"
+  - "{% if include_skill is false %}src/{{ package_name }}/data{% endif %}"
+  - "{% if include_skill is false %}tests/test_skills.py{% endif %}"
+  - "{% if include_describe is false %}src/{{ package_name }}/commands/describe.py{% endif %}"
+  - "{% if include_describe is false %}src/{{ package_name }}/core/opencli.py{% endif %}"
+  - "{% if include_describe is false %}src/{{ package_name }}/core/data_files.py{% endif %}"
+  - "{% if include_describe is false %}tests/test_describe.py{% endif %}"
+  - "{% if include_describe is false %}tests/data/opencli.schema.json{% endif %}"
+  - "{% if include_contracts is false %}tests/contracts{% endif %}"
+  - "{% if include_contracts is false %}tests/data/contracts{% endif %}"
+  - "{% if include_contracts is false %}tests/test_contracts.py{% endif %}"
+  - "{% if include_contracts is false %}tests/test_contract_runner.py{% endif %}"
+  - "{% if include_contracts is false %}tests/test_detach.py{% endif %}"
+  - "{% if include_contracts is false %}scripts/detach.py{% endif %}"
+  - "{% if include_contracts is false %}scripts/run_detached.sh{% endif %}"
+  - "{% if include_contracts is false %}scripts/runs_status.sh{% endif %}"
+  - "{% if include_describe is false and not include_contracts %}tests/data{% endif %}"
   # Migrations are the project's own history once generated: on `copier update` the
   # template's example revisions must never land in a tool's chain (a second 0002...).
   - "{% if _copier_operation == 'update' %}src/{{ package_name }}/migrations/versions{% endif %}"
@@ -36,8 +65,14 @@ _exclude:
 # The --help and describe snapshots (tests/snapshots/) contain the CLI's name and
 # wrap around it, so they're rendered in the generated project, not shipped.
 _tasks:
-  - command: "uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py"
+  - command: "uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py{% if include_describe %} tests/test_describe.py{% endif %}"
     when: "{{ _copier_operation == 'copy' }}"
+
+# The project's answers before this run: the file is there on `copier update` only (see `updating`;
+# on `copier copy` copier warns MissingFileWarning). Copier 9.19 gives `_copier_operation` to _exclude and
+# _tasks, not to a question's default.
+_external_data:
+  previous_answers: "{{ _copier_conf.answers_file }}"
 
 package_name:
   type: str
@@ -97,15 +132,27 @@ author_name:
   help: "Author name for pyproject.toml"
   default: "Unknown"
 
+# Not a question: true on `copier update`, false on `copier copy` (ADR 0014). An optional part added after
+# the first release defaults to it: off in a new package, on in a package made before the part was a question.
+updating:
+  type: bool
+  default: "{{ _external_data.previous_answers._commit is defined }}"
+  when: false
+
+include_project:
+  type: bool
+  help: "Work on a project directory with its own settings (.<package>/config.toml; `init`, `config`, `status`, --project)?"
+  default: "{{ updating }}"
+
 include_auth:
   type: bool
-  help: "Include the credentials/auth module (keyring-backed)?"
-  default: true
+  help: "Keep credentials (keychain and env; `auth login`/`logout`, providers in `auth status`)?"
+  default: false
 
 include_providers:
   type: bool
-  help: "Include providers/ (HttpProvider base for external APIs)? Only a CLI without credentials can do without it"
-  default: true
+  help: "Include providers/ (a provider per external service, its health check in `auth status`)? Only a CLI without credentials can do without it"
+  default: "{{ include_auth or updating }}"
   when: "{{ not include_auth }}"
   validator: >-
     {% if include_auth and not include_providers %}
@@ -123,10 +170,21 @@ include_db:
   help: "Keep data in a database (core/db.py: shared PostgreSQL from <TOOL>_DATABASE_URL, else local SQLite; Alembic migrations; `db` commands)?"
   default: false
 
-include_ci:
+include_skill:
   type: bool
-  help: "Generate the Gitea Actions workflow (.gitea/workflows/ci.yml)? CI is optional (Standard, CI) — the local gate rb-release check is the check"
-  default: true
+  help: "Ship an agent skill for agents in other projects (data/SKILL.md; `skill install`, `skill list`, --ai)?"
+  default: "{{ updating }}"
+
+include_describe:
+  type: bool
+  help: "Print the CLI as an OpenCLI document (`describe --json`) for the tools catalog or clidocs?"
+  default: "{{ updating }}"
+
+include_contracts:
+  type: bool
+  help: "Run consumers' contracts (tests/contracts/) and long commands detached (scripts/run_detached.sh)? Contracts read `describe --json`"
+  default: "{{ include_describe and updating }}"
+  when: "{{ include_describe }}"
 
 # Not a question: the release gate, pinned to the template tag of the project (`_commit`). A package runs it
 # through uvx — never a copy in the project, never a dependency. CI, antagor.toml and the docs render it.

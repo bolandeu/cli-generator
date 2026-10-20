@@ -2,9 +2,9 @@
 
 Claude Code plugin: a `cli-builder` skill that scaffolds new CLI tools or
 refactors existing ones onto one shared architecture (Python + uv + Typer,
-project-aware config, OS-keychain credentials, dual human/JSON output,
-AI-readable errors, an `HttpProvider` base for external APIs, enforced
-`min_version`, versions from git tags and the changelog written by
+dual human/JSON output, AI-readable errors, optional parts — project config,
+OS-keychain credentials, an `HttpProvider` base for external APIs, a database —
+each behind a copier question, versions from git tags and the changelog written by
 `antagor publish` from ticket titles (semver; no towncrier, no hand-made hooks), one local gate — `uvx --from "git+…/cli-generator.git@<template tag>#subdirectory=gate" rb-release check` —
 that also proves the built wheel installs and reports the right version,
 `auth status --check --json` in a cross-tool shape, and an enforced
@@ -65,6 +65,26 @@ uv sync
 uv run mycli --help
 uv run pytest
 ```
+
+With default answers the package is minimal: what the Standard makes mandatory
+(the bare command lists the commands, `--version`, global `--json` and the error
+envelope, `doctor`, `auth status` with empty credentials, one example command, its
+tests, `README.md`, `AGENTS.md`, the Gitea CI workflow, `[tool.rb.install]`).
+Each optional part is a copier question, off in a new package; a package made
+before a question existed keeps that part on `copier update`:
+
+| Question | Part | A package needs it when |
+|---|---|---|
+| `include_project` | project config, `init`, `config`, `status`, `--project` | the tool works on a project directory that keeps its own settings |
+| `include_auth` | credentials, `auth login`/`logout`, providers in `auth status` | the tool calls an external service, or needs a key |
+| `include_providers` | providers without credentials (asked when `include_auth` is off) | the tool calls an external service that needs no key |
+| `include_http_provider` | `HttpProvider` and `httpx` (asked when providers are on) | a provider speaks HTTP |
+| `include_db` | PostgreSQL/SQLite, Alembic migrations, `db` | the tool keeps data: journals, results, history, a cache of paid responses |
+| `include_skill` | the package's agent skill, `skill install`, `--ai` | agents call the tool from other projects |
+| `include_describe` | `describe --json` | the tool is in the tools catalog, or `clidocs` shows it |
+| `include_contracts` | consumer contracts, the detach runner (asked when `include_describe` is on) | another tool, a Windmill flow or the platform relies on the CLI |
+
+Each part's rules are in the Standard, Optional parts.
 
 Once a project has been generated this way, pulling in later architecture
 changes is `cd <dest-dir> && copier update` (requires the destination to be

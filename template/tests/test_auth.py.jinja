@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import ClassVar
 
 import pytest
@@ -392,8 +391,8 @@ def test_unavailable_keychain_warns_once_and_only_without_env(
     assert [r.levelname for r in caplog.records].count("WARNING") == 1
 
 
-def test_doctor_reports_credential_checks(tmp_path: Path, fake_keyring) -> None:
-    _, payload = invoke_json("--project", str(tmp_path), "doctor")
+def test_doctor_reports_credential_checks(fake_keyring) -> None:
+    _, payload = invoke_json("doctor")
     names = [check["name"] for check in payload["checks"]]
     assert "credential_store" in names
     assert "credential" in names
