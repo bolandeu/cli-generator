@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.24.0 — 2026-10-20
+
+### E-006 — Minimal template with optional parts, and the skill in two modes
+
+A new package from the template has only what the Standard makes mandatory and passes the gate; each optional part is one copier question, off by default, on when the package needs it. Existing packages lose nothing on copier update. The skill has two modes: new package (template, then gate) and existing package (gate, then fix every red step by the Standard section it names).
+Time: 0.8h since the epic was approved
+
+- Template: a minimal package by default, each optional part a copier question; no docs/OpenCLI, CI always (CG-047)
+
 ## v1.23.2 — 2026-10-20
 
 ### Outside epics
