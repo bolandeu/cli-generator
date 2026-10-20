@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 from {{ package_name }} import output
 from {{ package_name }}._distribution import DIST_NAME
 from {{ package_name }}.cli import app
-from {{ package_name }}.core import services, skills
+from {{ package_name }}.core import errors
 from {{ package_name }}.core.errors import InvalidArguments
 
 runner = CliRunner()
@@ -28,10 +28,6 @@ def invoke_json(*args: str, **kwargs) -> tuple[int, dict]:
     result = invoke(*args, "--json", **kwargs)
     assert result.stdout.strip(), f"no stdout for {args!r}; stderr: {result.stderr}"
     return result.exit_code, json.loads(result.stdout)
-
-
-def init(tmp_path: Path, name: str = "demo") -> None:
-    assert invoke("--project", str(tmp_path), "init", "--name", name).exit_code == 0
 
 
 # --- names ----------------------------------------------------------------------
@@ -89,133 +85,28 @@ def test_bare_invocation_shows_help_and_exits_zero() -> None:
     assert "Usage:" in result.output
 
 
-@pytest.mark.parametrize("group", ["config", "skill", "auth"])
-def test_bare_group_shows_help_and_exits_zero(group: str) -> None:
-    result = invoke(group)
+def test_bare_group_shows_help_and_exits_zero() -> None:
+    result = invoke("auth")
     assert result.exit_code == 0
     assert "Usage:" in result.output
     assert "Missing command" not in result.output
 
 
-# --- init / status / config ------------------------------------------------
-
-
-def test_init_and_status(tmp_path: Path) -> None:
-    init(tmp_path)
-    code, payload = invoke_json("--project", str(tmp_path), "status")
-    assert code == 0
-    assert payload["ok"] is True
-    assert payload["project"] == "demo"
-
-
-def test_init_is_idempotent_without_force(tmp_path: Path) -> None:
-    init(tmp_path)
-    invoke("--project", str(tmp_path), "config", "set", "provider.name", "custom")
-
-    code, payload = invoke_json("--project", str(tmp_path), "init", "--name", "ignored")
-    assert code == 0
-    assert payload["already_initialized"] is True
-
-    _, payload = invoke_json("--project", str(tmp_path), "config", "get", "provider.name")
-    assert payload["value"] == "custom"
-
-
-def test_init_force_resets_config(tmp_path: Path) -> None:
-    init(tmp_path)
-    invoke("--project", str(tmp_path), "config", "set", "provider.name", "custom")
-
-    code, payload = invoke_json("--project", str(tmp_path), "init", "--name", "demo", "--force")
-    assert code == 0
-    assert payload["already_initialized"] is False
-
-    _, payload = invoke_json("--project", str(tmp_path), "config", "get", "provider.name")
-    assert payload["value"] == "default"
-
-
-def test_status_without_init_fails(tmp_path: Path) -> None:
-    code, payload = invoke_json("--project", str(tmp_path), "status")
-    assert code == 4
-    assert payload["ok"] is False
-    assert payload["error"]["code"] == "PROJECT_NOT_INITIALIZED"
-    assert "init" in payload["error"]["action"]
-
-
-def test_config_get_set_round_trip(tmp_path: Path) -> None:
-    init(tmp_path)
-    assert invoke("--project", str(tmp_path), "config", "set", "provider.name", "custom").exit_code == 0
-    code, payload = invoke_json("--project", str(tmp_path), "config", "get", "provider.name")
-    assert code == 0
-    assert payload["value"] == "custom"
-
-
-def test_config_get_unknown_key_fails(tmp_path: Path) -> None:
-    init(tmp_path)
-    code, payload = invoke_json("--project", str(tmp_path), "config", "get", "does.not.exist")
-    assert code == 2
-    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
-
-
-def test_config_set_unknown_key_fails_without_persisting(tmp_path: Path) -> None:
-    init(tmp_path)
-    code, payload = invoke_json("--project", str(tmp_path), "config", "set", "does.not.exist", "x")
-    assert code == 2
-    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
-
-    _, payload = invoke_json("--project", str(tmp_path), "config", "list")
-    assert "does" not in payload
-
-
-# --- version compatibility -------------------------------------------------
-
-
-def test_min_version_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Pin the installed version: an untagged checkout builds as 0.0.0, which the gate skips.
-    monkeypatch.setattr(services, "installed_version", lambda: "1.0.0")
-    init(tmp_path)
-    assert invoke("--project", str(tmp_path), "config", "set", "cli.min_version", "99.0.0").exit_code == 0
-
-    code, payload = invoke_json("--project", str(tmp_path), "status")
-    assert code == 6
-    assert payload["error"]["code"] == "CLI_TOO_OLD"
-    assert "uv tool upgrade" in payload["error"]["action"]
-
-    monkeypatch.setattr(services, "installed_version", lambda: "99.0.0")
-    code, _ = invoke_json("--project", str(tmp_path), "status")
-    assert code == 0
-
-
 # --- doctor ------------------------------------------------------------------
 
 
-def test_doctor_json(tmp_path: Path) -> None:
-    code, payload = invoke_json("--project", str(tmp_path), "doctor")
+def test_doctor_json() -> None:
+    code, payload = invoke_json("doctor")
     assert code == 0
     names = [check["name"] for check in payload["checks"]]
-    assert names[:3] == ["python", "cli_version", "project"]
-    assert payload["healthy"] is False  # no project here
+    assert names[:2] == ["python", "cli_version"]
+    assert payload["healthy"] is all(check["ok"] for check in payload["checks"])
 
 
-def test_doctor_reports_config_parse_error(tmp_path: Path) -> None:
-    init(tmp_path)
-    (tmp_path / ".{{ package_name }}" / "config.toml").write_text("this is not valid toml [[[")
-
-    code, payload = invoke_json("--project", str(tmp_path), "doctor")
-    assert code == 0
-    config_check = next(check for check in payload["checks"] if check["name"] == "config")
-    assert config_check["ok"] is False
-    assert config_check["detail"]
-
-
-def test_doctor_reports_incompatible_cli_instead_of_failing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(services, "installed_version", lambda: "1.0.0")
-    init(tmp_path)
-    invoke("--project", str(tmp_path), "config", "set", "cli.min_version", "99.0.0")
-
-    code, payload = invoke_json("--project", str(tmp_path), "doctor")
-    assert code == 0
-    compat = next(check for check in payload["checks"] if check["name"] == "cli_compat")
-    assert compat["ok"] is False
-    assert "99.0.0" in compat["detail"]
+def test_doctor_prints_one_line_per_check_for_a_human() -> None:
+    result = invoke("doctor")
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[0] == "✓ python"
 
 
 # --- error handling contract ---------------------------------------------------
@@ -239,6 +130,33 @@ def _app_with(command):
 
     test_app.command("cmd")(output.guard(command))
     return test_app
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "exit_code"),
+    [
+        (errors.InvalidArguments("bad"), "INVALID_ARGUMENTS", 2),
+        (errors.AuthRequired("demo"), "AUTH_REQUIRED", 3),
+        (errors.CredentialsUnhealthy({"demo": "invalid"}), "CREDENTIALS_UNHEALTHY", 3),
+        (errors.ProjectNotInitialized("/work"), "PROJECT_NOT_INITIALIZED", 4),
+        (errors.ProviderError("demo", "down", status=503), "PROVIDER_ERROR", 5),
+        (errors.DatabaseUnavailable("down"), "DATABASE_UNAVAILABLE", 5),
+        (errors.CliTooOld("1.0.0", "2.0.0"), "CLI_TOO_OLD", 6),
+        (errors.DatabaseTooNew("0009"), "CLI_TOO_OLD", 6),
+        (errors.DatabaseNotMigrated(None, "0002"), "DATABASE_NOT_MIGRATED", 1),
+        (errors.DependencyTooOld("serp", None, "0.3"), "DEPENDENCY_TOO_OLD", 1),
+        (errors.CredentialStoreUnavailable("demo", "locked"), "CREDENTIAL_STORE_UNAVAILABLE", 1),
+        (errors.Aborted("Delete everything"), "ABORTED", 1),
+    ],
+    ids=lambda value: type(value).__name__ if isinstance(value, errors.CliError) else None,
+)
+def test_each_error_has_the_code_and_exit_code_of_the_standard(
+    error: errors.CliError, code: str, exit_code: int
+) -> None:
+    """The error codes table of the Standard (Errors): the code in the envelope and the exit code."""
+    payload = error.to_dict()
+    assert (payload["code"], error.exit_code) == (code, exit_code)
+    assert payload["message"]
 
 
 def test_report_with_a_problem_keeps_the_payload() -> None:
@@ -289,19 +207,16 @@ def test_unexpected_exception_prints_traceback_only_with_verbose() -> None:
     assert "Traceback" in loud.stderr or "RuntimeError" in loud.stderr
 
 
-def test_human_error_goes_to_stderr(tmp_path: Path) -> None:
-    result = invoke("--project", str(tmp_path), "status")
-    assert result.exit_code == 4
-    assert result.stdout == ""
-    assert "Error:" in result.stderr
-
-
 @pytest.mark.parametrize(
     "args",
-    [("status", "--json", "--no-such-option"), ("--json", "--no-such-option"), ("--json", "config", "get")],
+    [
+        ("doctor", "--json", "--no-such-option"),
+        ("--json", "--no-such-option"),
+        ("--json", "auth", "status", "--provider"),
+    ],
 )
 def test_usage_error_under_json_is_the_error_envelope(args: tuple[str, ...]) -> None:
-    """An unknown option or a missing argument (Click's usage errors) under --json: the envelope on stdout, exit 2."""
+    """An unknown option or a missing value (Click's usage errors) under --json: the envelope on stdout, exit 2."""
     result = invoke(*args)
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
@@ -310,7 +225,7 @@ def test_usage_error_under_json_is_the_error_envelope(args: tuple[str, ...]) -> 
 
 
 def test_usage_error_without_json_stays_on_stderr() -> None:
-    result = invoke("status", "--no-such-option")
+    result = invoke("doctor", "--no-such-option")
     assert result.exit_code == 2
     assert result.stdout == ""
     assert "--no-such-option" in result.stderr
@@ -343,106 +258,17 @@ def test_declined_confirmation_is_a_structured_abort() -> None:
     assert payload["error"]["code"] == "ABORTED"
 
 
-# --- skill / run ---------------------------------------------------------------
+# --- run -----------------------------------------------------------------------
 
 
-def test_skill_install_writes_to_project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    code, payload = invoke_json("skill", "install", "--tool", "claude-code", "--project")
-    assert code == 0
-    installed = tmp_path / ".claude" / "skills" / "{{ cli_name }}" / "SKILL.md"
-    assert installed.is_file()
-    assert "name: {{ cli_name }}" in installed.read_text()
-    assert payload["path"] == str(installed)
-
-
-def test_skill_install_without_extra_skills_writes_only_the_conventions_skill(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    code, payload = invoke_json("skill", "install", "--tool", "claude-code", "--project")
-    assert code == 0
-    assert set(payload) == {"ok", "tool", "scope", "path"}
-    assert [p.parent.name for p in (tmp_path / ".claude" / "skills").glob("*/SKILL.md")] == ["{{ cli_name }}"]
-
-
-@pytest.fixture
-def extra_skills(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A package data dir holding the conventions skill and two extra skills."""
-    data = tmp_path / "pkgdata"
-    data.mkdir()
-    (data / "SKILL.md").write_text("---\nname: {{ cli_name }}\ndescription: Conventions.\n---\n")
-    for name, description in {"og-image": "Make og images.", "video": "Make videos."}.items():
-        (data / "skills" / name).mkdir(parents=True)
-        (data / "skills" / name / "SKILL.md").write_text(
-            f"---\nname: {{ cli_name }}-{name}\ndescription: {description}\n---\n"
-        )
-    monkeypatch.setattr(skills, "_data", lambda: data)
-    return data
-
-
-def test_skill_install_writes_every_bundled_skill_into_its_own_directory(
-    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    work = tmp_path / "work"
-    work.mkdir()
-    monkeypatch.chdir(work)
-    code, payload = invoke_json("skill", "install", "--tool", "claude-code", "--project")
-    assert code == 0
-    names = ("{{ cli_name }}", "{{ cli_name }}-og-image", "{{ cli_name }}-video")
-    expected = [work / ".claude" / "skills" / name / "SKILL.md" for name in names]
-    assert all(path.is_file() for path in expected)
-    assert payload["paths"] == [str(path) for path in expected]
-    assert payload["path"] == str(expected[0])
-
-
-def test_skill_install_one_skill_by_short_or_full_name(
-    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    work = tmp_path / "work"
-    work.mkdir()
-    monkeypatch.chdir(work)
-    for wanted in ("video", "{{ cli_name }}-video"):
-        code, payload = invoke_json("skill", "install", "--project", "--skill", wanted)
-        assert code == 0
-        assert "paths" not in payload
-    assert [p.parent.name for p in (work / ".claude" / "skills").glob("*/SKILL.md")] == ["{{ cli_name }}-video"]
-
-
-def test_skill_install_unknown_skill_names_the_bundled_ones(
-    extra_skills: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    code, payload = invoke_json("skill", "install", "--project", "--skill", "nope")
-    assert code == 2
-    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
-    assert "{{ cli_name }}, {{ cli_name }}-og-image, {{ cli_name }}-video" in payload["error"]["message"]
-
-
-def test_skill_list_and_describe_show_the_same_skills(extra_skills: Path) -> None:
-    expected = [
-        {"name": "{{ cli_name }}", "description": "Conventions."},
-        {"name": "{{ cli_name }}-og-image", "description": "Make og images."},
-        {"name": "{{ cli_name }}-video", "description": "Make videos."},
-    ]
-    code, payload = invoke_json("skill", "list")
-    assert code == 0
-    assert payload["skills"] == expected
-    human = invoke("skill", "list").stdout
-    assert "{{ cli_name }}-video: Make videos." in human
-    described = json.loads(invoke("describe", "--json").stdout)
-    meta = {item["name"]: item["value"] for item in described["command"]["metadata"]}
-    assert meta["x-rb-skills"] == expected
-
-
-def test_run_dry_run_makes_no_changes(tmp_path: Path) -> None:
-    code, payload = invoke_json("--project", str(tmp_path), "run", "--dry-run")
+def test_run_dry_run_makes_no_changes() -> None:
+    code, payload = invoke_json("run", "--dry-run")
     assert code == 0
     assert payload["result"] == "dry-run"
 {%- if not include_auth %}
 
 
-# --- auth status without credentials (standard §8: every CLI has it) ----------
+# --- auth status without credentials (the Standard, Health: every CLI has it) --
 
 
 def test_auth_status_without_credentials_is_empty_and_healthy() -> None:
