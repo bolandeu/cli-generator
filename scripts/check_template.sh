@@ -88,8 +88,9 @@ check_variant() {
 }
 
 # check_update_round <name> [copier update --data args...]: generate from the previous release tag,
-# update to the working tree with stdin closed and no credential variables, then run the full
-# checks in the updated project.
+# make a staged, uncommitted change, update to the working tree through the worker script
+# (stdin closed, no credential variables), check the change survived, then run the full checks
+# in the updated project.
 check_update_round() {
     VARIANT=$1
     shift
@@ -104,8 +105,14 @@ check_update_round() {
     run git init -q
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
+    # The change a worker that may not commit holds: `_src_path` written another way (a trailing slash).
+    run sed -i.bak -E 's|^(_src_path: .*[^/])$|\1/|' .copier-answers.yml
+    run rm .copier-answers.yml.bak
+    grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: gate edit missing\n' "$VARIANT" >&2; exit 1; }
     run env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_READ_TOKEN -u GITEA_TOKEN -u DOPPLER_TOKEN \
-        uvx copier update --trust --defaults -q --vcs-ref HEAD "$@" </dev/null
+        uvx --from copier python "$ROOT/skills/cli-builder/scripts/copier_update_staged.py" \
+        --trust --defaults -q --vcs-ref HEAD "$@" </dev/null
+    grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }
