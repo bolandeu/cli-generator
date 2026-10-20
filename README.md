@@ -5,7 +5,7 @@ refactors existing ones onto one shared architecture (Python + uv + Typer,
 project-aware config, OS-keychain credentials, dual human/JSON output,
 AI-readable errors, an `HttpProvider` base for external APIs, enforced
 `min_version`, versions from git tags and the changelog written by
-`antagor publish` from ticket titles (semver; no towncrier, no hand-made hooks), one local gate — `uv run rb-release check` from `rb-cli-core` (or the copied `scripts/release.py --check` while `adopt_core` is false) —
+`antagor publish` from ticket titles (semver; no towncrier, no hand-made hooks), one local gate — `uvx --from "git+…/cli-generator.git@<template tag>#subdirectory=gate" rb-release check` —
 that also proves the built wheel installs and reports the right version,
 `auth status --check --json` in a cross-tool shape, and an enforced
 `--help` contract).

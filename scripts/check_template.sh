@@ -2,7 +2,7 @@
 # Template gate: run the repo tests and the tests of gate/, regenerate template/ for include_auth=true
 # and false (default [tool.rb.install]), a publish-only variant (no homeserver users, no Mac) and
 # include_db=true, prove copier update rounds from the previous release tag and from v1.20.10 (the
-# last template that copied the gate, with adopt_core false and true), check the rendered [tool.rb.install], run the generated project's checks and the
+# last template that copied the gate), check the rendered [tool.rb.install], run the generated project's checks and the
 # release gate from this working tree's gate/ through uvx. Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
@@ -23,8 +23,7 @@ command -v antagor >/dev/null 2>&1 || {
     exit 1
 }
 
-# The last template version that copied the gate into scripts/release.py (adopt_core false) or took
-# it from rb-cli-core (adopt_core true).
+# The last template version that copied the gate into scripts/release.py.
 GATE_COPY_TAG=v1.20.10
 STANDARD=https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md
 
@@ -163,6 +162,5 @@ previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
 check_update_round update-round "$previous"
 check_update_round update-from-copy "$GATE_COPY_TAG"
-CLEAN_TREE=1 check_update_round update-from-core "$GATE_COPY_TAG" --data adopt_core=true
 
 printf '\nOK: template gate passed (repo tests, gate tests, include_auth=true, include_auth=false, publish-only, include_db=true, update rounds)\n'
