@@ -56,10 +56,10 @@ semver tag `vX.Y.Z` (PEP 440), changelog from ticket titles. Nobody
 pushes by hand. Docs: `CONTEXT.md` (terms), `docs/adr/` (decisions),
 `CODING_STANDARDS.md` (review rules). TDD applies: a new behaviour of the
 template's code (`scripts/`, `core/`) gets its test first, failing. The
-gate of a generated package has two forms: `uv run rb-release check` from
-`rb-cli-core` (`adopt_core=true`, the default for new packages) and the copied
-`scripts/release.py --check` (`adopt_core=false`); see ADR 0010
-(`docs/adr/0010-shared-code-in-core-library.md`) and `docs/plans/cli-core.md`.
+gate of a generated package is `rb-release check` from this repo's `gate/`,
+run through `uvx --from "git+…/cli-generator.git@<template tag>#subdirectory=gate"`:
+the template and the gate are one version (ADR 0013,
+`docs/adr/0013-gate-in-this-repo-package-standalone.md`).
 The gate for a template ticket is `scripts/check_template.sh` (see below), for both
 `include_auth` variants and the publish-only variant (and `include_db` when touched).
 
