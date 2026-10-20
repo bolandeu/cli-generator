@@ -43,7 +43,7 @@ function) is governed by these four rules instead
    below ends in `uv sync && pytest && doctor`. TDD is required and
    checked (`~/Work/dev/docs/testing.md`): the failing test is committed
    before the code, and its red run goes into the readiness report; an
-   existing test is never edited to fit the code — `release.py --check`
+   existing test is never edited to fit the code — the gate
    lists every test changed or gone since the last tag (`existing tests`),
    and each goes into the report with its reason; acceptance scenarios
    come from dev with the user, contract tests from the consumer — you
@@ -97,7 +97,7 @@ function) is governed by these four rules instead
    uvx copier copy https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git <dest-dir> --trust \
      --data package_name=<name> --data project_name="<Name>" \
      --data description="<one line>" --data author_name="<name>" \
-     --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true --data adopt_core=true \
+     --data cli_name=<command> --data dist_name=rb-<slug> --data include_auth=true \
      --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>
    ```
 
@@ -161,13 +161,13 @@ function) is governed by these four rules instead
 4. Verify before calling it done — the whole gate is one command, the
    same one every release and CI run (Standard, Release):
    ```bash
-   cd <dest-dir> && uv sync && uv run scripts/release.py --check && uv run <package_name> doctor
+   cd <dest-dir> && uv sync && uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@<template tag>#subdirectory=gate" rb-release check && uv run <package_name> doctor
    ```
-   It runs `uv lock --check`, ruff check + format, ty, pytest (coverage
+   `<template tag>` is `_commit` in `.copier-answers.yml`. It runs `uv lock --check`, ruff check + format, ty, pytest (coverage
    floor, help contract + snapshots, `auth status` shape, `docs` document), and builds + installs the wheel into a throwaway venv
    to run `<cli> --version`/`--help`; the first failing step is named with
    its output. `uv sync` writes `uv.lock` — it's committed. **Run
-   `release.py --check` before every commit**, not only at the end.
+   the gate before every commit**, not only at the end.
    Under Antagor the same gate runs as the ticket's `checks`
    (`.agents/antagor/antagor.toml`, with
    `scripts/check_command_docstrings.py`).
@@ -317,8 +317,8 @@ order before moving to the next item.
     `core.hooksPath` or `herdr_name` files (→ delete, `antagor hooks
     install`; SKILL.md Update mode); no `.agents/antagor/antagor.toml`
     (→ `antagor init --prefix <PREFIX> --name <cli_name>`, `checks`,
-    `[publish]` as in the template, `scripts/deploy.sh`); a `scripts/release.py` that
-    isn't the template's verbatim copy; `ruff check --fix` run without
+    `[publish]` as in the template, `scripts/deploy.sh`); a copied `scripts/release.py`
+    (→ step 14); `ruff check --fix` run without
     re-checking imports afterwards (F401's autofix deletes "unused"
     imports that are really re-exports a lazy `from … import` inside a
     function relies on — after any autofix, import every module or run the
@@ -351,9 +351,9 @@ order before moving to the next item.
     line or a parameter `help=` are fixed here, not waived. Also fail if `pyproject.toml` has no coverage
     `fail_under`, ruff doesn't select `S`, or CI has no dependency audit
     step — copy all three from the template, along with
-    `scripts/release.py` (whose `--check` is the whole gate) and, if the
+    the gate command (Scaffold step 4) and, if the
     repo keeps CI, its workflow (one `ubuntu-24.04` job running only
-    `release.py --check`, lowest supported Python, current action
+    the gate, lowest supported Python, current action
     majors) and `dependabot.yml` (monthly, one
     group per ecosystem).
 
@@ -432,7 +432,7 @@ template, `_commit` is the template release it was last synced to):
    `main` commit with it (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`) — otherwise
    the next build reports `0.0.0`. During the merge: `pyproject.toml`
    drops `version =` for `dynamic = ["version"]`; a hand-edited
-   `scripts/release.py` is replaced by the template's verbatim. The
+   `scripts/release.py` is replaced by the template's verbatim (it goes away in step 14). The
    changelog and the hooks move in step 5. After:
    `uv lock`, `uv run pytest --snapshot-update` once
    (help snapshots are only rendered on `copier copy`) and read the
@@ -464,7 +464,7 @@ template, `_commit` is the template release it was last synced to):
       released** (no `v*` tag), rename it to `## [X.Y.Z] - <date>`
       instead, because its first tag already contains those changes. Remove
       the `patch|minor|major` modes from `scripts/release.py`; keep only
-      `--check` (the template's `release.py` is verbatim: take it).
+      `--check` (step 14 then removes the file).
    3. Deploy. Take `scripts/deploy.sh` from the template. It does the same
       as the old pre-push hook: push `main` with tags. Do not keep that
       logic in a hook.
@@ -476,8 +476,8 @@ template, `_commit` is the template release it was last synced to):
       `versioning = "semver"`, `changelog = "CHANGELOG.md"` and
       `deploy_command = "sh scripts/deploy.sh"`.
    5. Checks. Set `checks = ["python3 scripts/check_command_docstrings.py",
-      "uv run scripts/release.py --check"]`: the command docstring check
-      and `release.py --check`. Then run `uv lock` and the gate.
+      "<the gate command>"]` (step 14): the command docstring check
+      and the gate. Then run `uv lock` and the gate.
    6. From now on every change is a ticket and a release is
       `antagor publish --bump patch|minor|major` (Publish step 6).
 6. **Crossing template v1.2.6** (credential namespace = command name).
@@ -528,8 +528,7 @@ template, `_commit` is the template release it was last synced to):
    is a clear error) must pass. Schema `cache` and the role's USAGE +
    CREATE on it in production are the infrastructure's — ask the user (sysadmin sets it up) before the release that moves anything.
 10. **Crossing template v1.7.0** (consumer contracts, Standard,
-   Consumer contracts). `uv lock` (pyyaml joins the dev group); `release.py` is verbatim
-   and gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
+   Consumer contracts). `uv lock` (pyyaml joins the dev group); the gate gains the `contracts` step. `tests/contracts/tools-catalog/<cli>.yaml`
    and `tests/contracts/fixtures.yaml` come with the update; consumers'
    contracts arrive through dev — never write or edit them yourself. Their
    `run` cases need this tool's offline data: fill `fixtures.yaml`
@@ -610,45 +609,38 @@ template, `_commit` is the template release it was last synced to):
       the Human to send. The value never goes into the repo, a file or the
       ticket.
    9. Gate and release. Run `uv lock`, `uv run pytest --snapshot-update`
-      (read the diff), then `uv run scripts/release.py --check`. Ticket
+      (read the diff), then the gate. Ticket
       title: `Template vX.Y.Z: Gitea CI, secret scan, registry dependencies`.
 
-14. **Switching the gate to `rb-cli-core`** (`adopt_core`, ADR 0010,
-   `docs/plans/cli-core.md`). The gate becomes `uv run rb-release check`
-   from the library `rb-cli-core` (Gitea registry, `>=0.1.2,<0.2`); the
-   package's copy of `scripts/release.py` goes away. Output and exit codes
-   of the gate stay the same. A package that stays on `adopt_core=false`
-   is not touched.
+14. **Switching to the gate through uvx** (ADR 0013). Use it for a
+   package on an older template: a copied `scripts/release.py`, or
+   the core library of the gate (package name `cli-core`) in its dev group. The gate becomes
+   `uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@<template tag>#subdirectory=gate" rb-release check`
+   (`<template tag>`: `_commit` in `.copier-answers.yml` after the update).
+   Output and exit codes stay the same.
    1. Clean tree: `git status` shows nothing. A worker that may not
       commit has nothing to commit: it stages (`git add -A`).
-   2. `uvx copier update --trust --defaults --data adopt_core=true`. A
-      worker that may not commit runs `uvx --from copier python
-      <skill dir>/scripts/copier_update_staged.py --trust --defaults
-      --data adopt_core=true` (general step 1).
-      Resolve conflicts hunk by hunk (step 2 above).
-   3. Check the copy is gone: `test ! -e scripts/release.py`. CI
-      and the project docs now call `uv run rb-release check`;
-      `grep -rn 'release\.py' .` must find nothing live.
-      The file `.agents/antagor/antagor.toml` (not a root `antagor.toml`)
-      carries the gate in `checks`. The update does not always change an
-      existing line there, so check it after the merge:
-      `grep -n checks .agents/antagor/antagor.toml` must show
-      `uv run rb-release check`, not `uv run scripts/release.py --check`.
-      Fix the line by hand. A task for a worker: the Architect puts
+   2. `uvx copier update --trust --defaults`. A worker that may not commit
+      runs `uvx --from copier python <skill dir>/scripts/copier_update_staged.py
+      --trust --defaults` (general step 1). Resolve conflicts hunk by hunk
+      (step 2 above).
+   3. Check the old gate is gone from tracked files:
+      `git ls-files | grep -E 'scripts/release\.py'` finds nothing, and
+      `grep -n 'cli-core' pyproject.toml uv.lock` finds nothing. Remove
+      what is left by hand. Then check the gate line. The file
+      `.agents/antagor/antagor.toml` (not a root `antagor.toml`) carries it
+      in `checks`; the update may keep an old line there. `grep -n checks
+      .agents/antagor/antagor.toml` must show the uvx command. Fix the line
+      by hand. A task for a worker: the Architect puts
       `.agents/antagor/antagor.toml` in `owns_paths` of the task, or edits
       it before the run. Without that the worker leaves the old gate and
-      the package's own tests fail (`test_ci.py`, `test_scripts.py`).
-      Copier does not update the project readme (`_skip_if_exists`): edit
-      the gate command in it by hand.
-   4. `uv lock` (pulls `rb-cli-core` from the `gitea` index), then
-      `uv run rb-release check`. It must be green.
-   5. Release as in "Publish" step 6 (ticket title:
-      `Template vX.Y.Z: gate from rb-cli-core`).
-   6. The package edited its copy of `release.py` (see
-      `git log --follow scripts/release.py`): do not keep a local copy and
-      do not take the switch until the change is in the library. Port the
-      change into `rb-cli-core` through a ticket to `cli-generator`
-      (it owns the library), wait for its release, then do steps 1-5.
+      the package's own tests fail. Copier does not update the project
+      readme (`_skip_if_exists`): edit the gate command in it by hand.
+   4. `uv lock`, then `uv run pytest --snapshot-update` (refresh the help
+      snapshots; read the diff).
+   5. Run the gate until it ends with `release: gate passed`.
+   6. Release as in "Publish" step 6 (ticket title:
+      `Template vX.Y.Z: gate through uvx`).
 
 ### Renaming the distribution (Standard, Technology: `rb-<slug>`)
 
@@ -680,7 +672,7 @@ to GitHub — never run `gh repo create` or a push to a GitHub remote.
 `[tool.rb.install]` in `pyproject.toml` decides who installs the package
 (Standard, Install): sysadmin's tool-updater builds every tag
 and a Mac agent keeps the Mac current. This skill sends no message to
-sysadmin. Installability is proven by `release.py --check` (the built wheel
+sysadmin. Installability is proven by the gate (the built wheel
 in a throwaway venv), which is part of the verify loop.
 
 Do this after the verify step. Always *offer* publishing; don't leave the
@@ -730,7 +722,7 @@ package sitting unreleased without asking.
    reads, so without this the next update would render the placeholder
    back. Commit these edits before the push.
 5. **CI.** CI is Gitea Actions: `.gitea/workflows/ci.yml` from the
-   template (Standard, CI). It only repeats `release.py --check`;
+   template (Standard, CI). It only repeats the gate;
    the local gate is authoritative. To go without it, generate (or update)
    with `--data include_ci=false`. It needs no secret: our packages come
    from the Gitea registry, keys are never in the repo. No `.github/`.
@@ -738,7 +730,7 @@ package sitting unreleased without asking.
    (Human only, or the project's Architect) merges the accepted tickets,
    writes `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440)
    and runs `scripts/deploy.sh`, which pushes `main` with the tags to
-   `origin` (Gitea). The gate (`release.py --check`) is a ticket check, so
+   `origin` (Gitea). The gate is a ticket check, so
    it has already passed. You never push by hand. Pick the part by SemVer
    (Standard, Release: at `0.x` fixes and compatible features are
    patch, a breaking change is minor). There is no `version =` to edit,
@@ -776,10 +768,10 @@ skipped under time pressure — check them explicitly:
 - The quality gates are part of the package, not of CI alone:
   `fail_under` coverage in `pyproject.toml` (raise it, never lower it),
   ruff's `S` (security) rules, and the osv-scanner audit of `uv.lock`
-  (a gate step when osv-scanner is installed; CI installs it). `uv run scripts/release.py --check` runs every gate locally
+  (a gate step when osv-scanner is installed; CI installs it). The gate command (Scaffold step 4) runs every gate locally
   and is what an agent runs before each commit. A refactored project gets all three.
 - The package declares `[tool.rb.install]` and is installable (the wheel
-  passes `release.py --check`) — see "Publish". A CLI that only runs
+  passes the gate) — see "Publish". A CLI that only runs
   from its own checkout hasn't met the "installed once, used from any
   project" premise of the Standard (Project).
 - **Changed a command's behaviour → update its docstring in the same
