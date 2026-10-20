@@ -115,7 +115,7 @@ def test_no_section_numbers():
 
 def test_old_reference_files_are_gone_and_nothing_names_them():
     reference = STANDARD.parent
-    assert sorted(path.name for path in reference.iterdir()) == ["standard.md"]
+    assert sorted(path.name for path in reference.iterdir()) == ["existing-package.md", "standard.md"]
     tracked = subprocess.run(
         ["git", "ls-files"],
         cwd=ROOT,
