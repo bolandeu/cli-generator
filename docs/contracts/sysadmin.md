@@ -58,7 +58,7 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 | repo-sync mirror (приватная копия нового репо на GitHub) | homeserver | каждые 5 мин | sysadmin | repo-sync check |
 | repo-sync check (вся цепочка, установлено = последний тег) | homeserver | ежедневно 09:00 | sysadmin | Kuma push-монитор «Цепочка инструментов (repo-sync)», интервал 25 ч (пропуск прогона тоже тревога) → Telegram |
 | rb-tools-update (+ обёртки `doppler run` в `~/.local/rb-bin`) | Mac | launchd, 15 мин и при входе | sysadmin | Kuma «Mac: инструменты (rb-tools-update)» (отставание > 1 ч) → Telegram; уведомление macOS, лог `~/Library/Logs/rb-tools-update.log` |
-| Renovate (подъём `rb-*` в зависимостях; `copier update` — готов, ждёт `_src_path` на Gitea) | homeserver | ночью 02:30 | sysadmin | PR в репо; все `bolandeu/*`, кроме PRODUCTS |
+| Renovate (подъём `rb-*` в зависимостях; `copier update` — работает с 20.10.2026, у пакетов с `_src_path` на Gitea) | homeserver | ночью 02:30 | sysadmin | PR в репо; все `bolandeu/*`, кроме PRODUCTS |
 | Gitea Actions (раннер `docker`, кэш `ci-cache`) | homeserver | push/PR, только `.gitea/workflows/` | sysadmin (раннер), cli-generator (workflow) | статус в Gitea |
 | ci-cache-prune.timer (`uv cache prune` тома CI) | homeserver | вс 05:00 | sysadmin | journalctl |
 | `release.py --check` | Mac, CI | перед коммитом, в тикете antagor | cli-generator | красный гейт |
@@ -110,7 +110,7 @@ Push-зеркало Gitea → приватный архив на GitHub (в GitH
 - ✅ Renovate (менеджер `copier`) открывает PR с `copier update` в репо пакетов после нового тега шаблона.
   sysadmin: `copier` и `uv` в PATH пользователя Renovate, `ignoreScripts: false` для этих репо. cli-generator:
   `_src_path` — Gitea-URL `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator`; задачи шаблона
-  (`_tasks`) проходят без вопросов и без ключей. Сделано 19.10.2026 (v1.20.3): источник — `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` (copier требует `.git`), гейт шаблона проверяет раунд `copier update` без вопросов и ключей. Риск (задачи шаблона выполняют код на хосте Renovate) принят Человеком 19.10.2026.
+  (`_tasks`) проходят без вопросов и без ключей. Сделано 19.10.2026 (v1.20.3): источник — `https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` (copier требует `.git`), гейт шаблона проверяет раунд `copier update` без вопросов и ключей. Риск (задачи шаблона выполняют код на хосте Renovate) принят Человеком 19.10.2026. Проверено вживую 20.10.2026: semkit, PR v1.20.7 → v1.20.8 (`bolandeu/semkit` #1), задачи copier без ошибок, CI зелёный; в диффе `_commit` и `TEMPLATE_VERSION` в `_distribution.py` (так и задумано).
 
 ## Пробелы (ещё не прописано или не сделано)
 
