@@ -234,7 +234,14 @@ For a project with `.copier-answers.yml` (`_src_path` points at this
 template, `_commit` is the template release it was last synced to):
 
 1. `git status` must be clean — `copier update` refuses otherwise. Commit
-   or stash, never delete.
+   or stash, never delete. A worker that may not commit (an Antagor
+   worker) stages instead (`git add -A`) and runs the script in place of
+   `uvx copier update` in every step below, with the same arguments:
+   `uvx --from copier python <skill dir>/scripts/copier_update_staged.py
+   --trust --defaults [--vcs-ref … --data k=v …]` (`<skill dir>` is
+   `skills/cli-builder` of this plugin). It stages the tree, switches off
+   only copier's dirty-tree check, and exits non-zero on a copier error.
+   It refuses a clean tree: use plain `copier update` there.
 2. `uvx copier update --trust` (add `--defaults` to keep every previous
    answer without prompting). A project from before template v1.2.1 has
    no `cli_name` answer: its default is `package_name` with `_` → `-`,
@@ -403,12 +410,14 @@ template, `_commit` is the template release it was last synced to):
    source, Gitea Actions CI, secret scan, registry dependencies). Use it
    for a package on template v1.20.0 or older. The update runs without
    questions and without keys.
-   1. Clean tree: `git status` shows nothing. Then switch the template
+   1. Clean tree: `git status` shows nothing (a worker that may not
+      commit: stage, and use the script of general step 1 for the update
+      in 2). Then switch the template
       source: in `.copier-answers.yml` set `_src_path:
       https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git` and
       `repository_url:` to the package's Gitea URL
       (`https://homeserver.tailee01ab.ts.net:3000/bolandeu/<repo>`). Commit
-      `chore(copier): template source Gitea`.
+      `chore(copier): template source Gitea` (a worker: leave it staged).
    2. Check the source: `uvx copier update --trust --defaults --pretend`
       must say "Updating to template version …". Then run
       `uvx copier update --trust --defaults` and resolve conflicts hunk by
@@ -456,12 +465,25 @@ template, `_commit` is the template release it was last synced to):
    package's copy of `scripts/release.py` goes away. Output and exit codes
    of the gate stay the same. A package that stays on `adopt_core=false`
    is not touched.
-   1. Clean tree: `git status` shows nothing.
-   2. `uvx copier update --trust --defaults --data adopt_core=true`.
+   1. Clean tree: `git status` shows nothing. A worker that may not
+      commit has nothing to commit: it stages (`git add -A`).
+   2. `uvx copier update --trust --defaults --data adopt_core=true`. A
+      worker that may not commit runs `uvx --from copier python
+      <skill dir>/scripts/copier_update_staged.py --trust --defaults
+      --data adopt_core=true` (general step 1).
       Resolve conflicts hunk by hunk (step 2 above).
-   3. Check the copy is gone: `test ! -e scripts/release.py`. CI,
-      `antagor.toml` and the project docs now call `uv run rb-release check`;
+   3. Check the copy is gone: `test ! -e scripts/release.py`. CI
+      and the project docs now call `uv run rb-release check`;
       `grep -rn 'release\.py' .` must find nothing live.
+      The file `.agents/antagor/antagor.toml` (not a root `antagor.toml`)
+      carries the gate in `checks`. The update does not always change an
+      existing line there, so check it after the merge:
+      `grep -n checks .agents/antagor/antagor.toml` must show
+      `uv run rb-release check`, not `uv run scripts/release.py --check`.
+      Fix the line by hand. A task for a worker: the Architect puts
+      `.agents/antagor/antagor.toml` in `owns_paths` of the task, or edits
+      it before the run. Without that the worker leaves the old gate and
+      the package's own tests fail (`test_ci.py`, `test_scripts.py`).
       Copier does not update the project readme (`_skip_if_exists`): edit
       the gate command in it by hand.
    4. `uv lock` (pulls `rb-cli-core` from the `gitea` index), then
