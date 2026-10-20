@@ -33,12 +33,6 @@ _exclude:
   # template's example revisions must never land in a tool's chain (a second 0002...).
   - "{% if _copier_operation == 'update' %}src/{{ package_name }}/migrations/versions{% endif %}"
 
-# Up to v1.20.10 the gate was copied into scripts/release.py; the update deletes that copy, and a copy the
-# package edited comes back as a conflict instead of being lost.
-_migrations:
-  - command: ["{{ _copier_python }}", "{{ _copier_conf.src_path }}/scripts/keep_edited_gate_copy.py", "{{ _copier_conf.src_path }}", "{{ _version_from }}"]
-    when: "{{ _stage == 'after' }}"
-
 # The --help and describe snapshots (tests/snapshots/) contain the CLI's name and
 # wrap around it, so they're rendered in the generated project, not shipped.
 _tasks:

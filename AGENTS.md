@@ -55,14 +55,13 @@ change goes through a ticket; release is `antagor publish --bump` —
 semver tag `vX.Y.Z` (PEP 440), changelog from ticket titles. Nobody
 pushes by hand. Docs: `CONTEXT.md` (terms), `docs/adr/` (decisions),
 `CODING_STANDARDS.md` (review rules). TDD applies: a new behaviour of the
-template's code (`scripts/`, `core/`) and of the gate (`gate/`) gets its
-test first, failing. The gate of a generated package is `rb-release check`
-from this repo's `gate/` (its own Python package and tests), run through
-uvx pinned to the package's template tag (copier.yml's `gate_command`):
-never copied into a package, never its dependency. The gate for a template
-ticket is `scripts/check_template.sh` (see below): gate/'s checks and tests,
-both `include_auth` variants, the publish-only and `include_db` variants, and
-the update rounds.
+template's code (`scripts/`, `core/`) gets its test first, failing. The
+gate of a generated package has two forms: `uv run rb-release check` from
+`rb-cli-core` (`adopt_core=true`, the default for new packages) and the copied
+`scripts/release.py --check` (`adopt_core=false`); see ADR 0010
+(`docs/adr/0010-shared-code-in-core-library.md`) and `docs/plans/cli-core.md`.
+The gate for a template ticket is `scripts/check_template.sh` (see below), for both
+`include_auth` variants and the publish-only variant (and `include_db` when touched).
 
 ## Testing a change to `template/`
 
@@ -74,8 +73,7 @@ The gate is one command (both `include_auth` variants with the default
 `[tool.rb.install]`, and a publish-only variant — no homeserver users, no
 Mac: copier copy into a temp dir, `uv sync`, a literal check of the rendered
 `[tool.rb.install]`, ruff, ty, pytest, then `git init` + tag `v0.1.0` +
-`uvx --from gate/ rb-release check` from the working tree; temp dirs removed,
-non-zero exit on any failure):
+`scripts/release.py --check`; temp dirs removed, non-zero exit on any failure):
 
 ```bash
 sh scripts/check_template.sh
@@ -103,7 +101,7 @@ config explicitly — `template/pyproject.toml.jinja` isn't a real
 uvx ruff format --line-length 120 template/src template/scripts
 ```
 
-For the distribution + release path (`gate/`, tag pinning),
+For the distribution + release path (`scripts/release.py`, tag pinning),
 verify against a local bare remote rather than assuming: `git init --bare
 /tmp/remote.git`, add it as `origin` in the generated project, commit,
 `git tag -a v0.1.0 -m v0.1.0` (`uv run <cli> --version` must now print
@@ -120,18 +118,18 @@ dependency-confusion check: a local flat index holding a wheel named like an
 existing PyPI package (`yandex-oauth` 0.2.1), added to a generated project as
 `"yandex-oauth>=0.2"` + `[[tool.uv.index]] name = "local", url = "<dir>",
 format = "flat", explicit = true` + `[tool.uv.sources] yandex-oauth = { index
-= "local" }`. `rb-release check` must pass and install the local copy; a
+= "local" }`. `release.py --check` must pass and install the local copy; a
 plain `uv pip install <wheel>` gets PyPI's 1.x (that is the bug the step
 prevents — the step fails with "installed from a package index other than
 their explicit index" if it ever regresses).
 
-For a change to `template/.gitea/workflows/ci.yml.jinja`, check every
+For a change to `template/.gitea/workflows/ci.yml`, check every
 `uses:` tag exists — some actions publish no floating major tag (there is
 no `astral-sh/setup-uv@v10`, only `v10.x.y`; that shipped in v1.1.0–v1.2.5
 and broke CI in every generated repo):
 
 ```bash
-grep -oE 'uses: [^ ]+@[^ ]+' template/.gitea/workflows/ci.yml.jinja | sed 's/uses: //' |
+grep -oE 'uses: [^ ]+@[^ ]+' template/.gitea/workflows/ci.yml | sed 's/uses: //' |
   while IFS=@ read -r action tag; do repo=$(echo "$action" | cut -d/ -f1-2)
     gh api "repos/$repo/git/ref/tags/$tag" -q .ref >/dev/null 2>&1 && echo "ok $action@$tag" || echo "MISSING $action@$tag"; done
 ```
@@ -163,8 +161,7 @@ before (missing answers file, wrong `copier.yml` location).
   `__name__.split(".")[0]` — instead of becoming a `.jinja` file; keep
   `.jinja` files to the minimum that genuinely need answer substitution
   (`pyproject.toml`, `README.md`, `AGENTS.md`, `data/SKILL.md`, the answers
-  file, and the files that name the gate: `.gitea/workflows/ci.yml`,
-  `antagor.toml`, `CODING_STANDARDS.md`).
+  file).
 - Keep `output.guard`'s local-flag merge dict and `output.JsonOption` /
   `output.DryRunOption` etc. in sync if you add a new global option that
   commands should also accept locally (`<cli> <command> --flag`, not just

@@ -32,7 +32,6 @@ STEPS = [
     "install section",
     "external dependencies",
     "build + install wheel",
-    "standard",
     "vulnerability audit",
 ]
 PYPROJECT = """[project]

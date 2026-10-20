@@ -15,11 +15,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rb_release", "standard"]
-
-[tool.uv]
-# `uvx --from <this dir>` (the template gate) rebuilds when the code changes, not only pyproject.toml.
-cache-keys = [{ file = "pyproject.toml" }, { file = "rb_release/**/*.py" }, { file = "standard/**/*.py" }]
+packages = ["rb_release"]
 
 [dependency-groups]
 dev = [
@@ -30,7 +26,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "standard"]
+testpaths = ["tests"]
 addopts = "--ignore=tests/data"  # data/: fixture projects with their own tests
 markers = ["network: needs the network (osv-scanner queries osv.dev)"]
 

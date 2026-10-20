@@ -1,9 +1,8 @@
 """`rb-release check` is the same gate as the template's scripts/release.py (its last copy: template v1.20.10).
 
 Both run in tmp_path copies of the fixture projects in tests/data/parity, with the same git state. Compared: the lines
-that start with `release:` (stdout, then stderr) and the exit code; the Standard's steps (`release: standard…`) are
-new in rb-release and left out. The ruff-error and secret cases are the passing fixture plus one file written here,
-so the fake token is never committed.
+that start with `release:` (stdout, then stderr) and the exit code. The ruff-error and secret cases are the passing
+fixture plus one file written here, so the fake token is never committed.
 """
 
 from __future__ import annotations
@@ -52,8 +51,7 @@ def _run(command: tuple[str, ...], root: Path) -> tuple[list[str], int]:
     tools = str(Path(sys.executable).parent)  # this repo's ruff, ty, pytest
     env = {**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"}
     result = subprocess.run(command, cwd=root, env=env, text=True, capture_output=True, check=False)  # noqa: S603
-    output = (result.stdout + result.stderr).splitlines()
-    lines = [line for line in output if line.startswith("release:") and not line.startswith("release: standard")]
+    lines = [line for line in (result.stdout + result.stderr).splitlines() if line.startswith("release:")]
     return lines, result.returncode
 
 

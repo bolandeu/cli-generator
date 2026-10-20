@@ -2,8 +2,7 @@
 # Template gate: run the repo tests and the tests of gate/, regenerate template/ for include_auth=true
 # and false (default [tool.rb.install]), a publish-only variant (no homeserver users, no Mac) and
 # include_db=true, prove copier update rounds from the previous release tag and from v1.20.10 (the
-# last template that copied the gate, with adopt_core false and true; an edited copy is kept as a
-# conflict), check the rendered [tool.rb.install], run the generated project's checks and the
+# last template that copied the gate, with adopt_core false and true), check the rendered [tool.rb.install], run the generated project's checks and the
 # release gate from this working tree's gate/ through uvx. Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
@@ -52,10 +51,11 @@ check_gate_files() {
 }
 
 # run_gate: the gate from this working tree's gate/ through uvx; it changes neither pyproject.toml
-# nor uv.lock
+# nor uv.lock. --no-cache: uvx reuses its cached build of a local directory even when the code changed
+# (--refresh and --reinstall do not help, uv 0.10).
 run_gate() {
     before=$(cat pyproject.toml uv.lock | shasum)
-    run uvx --from "$ROOT/gate" rb-release check
+    run uvx --no-cache --from "$ROOT/gate" rb-release check
     [ "$(cat pyproject.toml uv.lock | shasum)" = "$before" ] || fail "the gate changed pyproject.toml or uv.lock"
 }
 
@@ -144,19 +144,6 @@ check_update_round() {
     cd "$ROOT"
 }
 
-# check_edited_copy_round: a project of v1.20.10 that edited its copy of the gate keeps the edit after
-# the update, as a conflict (stages 1 and 2: deleted by the template), not silently lost
-check_edited_copy_round() {
-    generate_at update-edited-copy "$GATE_COPY_TAG"
-    run sh -c 'echo "# a local edit" >> scripts/release.py'
-    run git -c user.name=gate -c user.email=gate@example.invalid commit -q -am edit
-    update_staged
-    [ "$(git ls-files -u -- scripts/release.py | cut -f1 | cut -d' ' -f3 | tr -d '\n')" = 12 ] ||
-        fail "scripts/release.py is not a conflict: $(git status --short)"
-    run grep -qx '# a local edit' scripts/release.py
-    cd "$ROOT"
-}
-
 VARIANT=repo-tests
 run uv run --with pytest pytest -q "$ROOT/tests"
 VARIANT=gate-tests
@@ -177,6 +164,5 @@ previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 check_update_round update-round "$previous"
 check_update_round update-from-copy "$GATE_COPY_TAG"
 CLEAN_TREE=1 check_update_round update-from-core "$GATE_COPY_TAG" --data adopt_core=true
-check_edited_copy_round
 
 printf '\nOK: template gate passed (repo tests, gate tests, include_auth=true, include_auth=false, publish-only, include_db=true, update rounds)\n'

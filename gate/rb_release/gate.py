@@ -27,9 +27,8 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
     `<cli> --version` must print the version being
     built, `<cli> --help` must work (a library without a console script:
     every top-level package imports and importlib.metadata reports that
-    version) · standard (the Standard's checks, in standard/) ·
-    osv-scanner over uv.lock (skipped with a notice when osv-scanner isn't
-    installed)
+    version) · osv-scanner over uv.lock (skipped with a
+    notice when osv-scanner isn't installed)
 
 Settings in the package's pyproject.toml `[tool.cli-generator]`:
 `gate_extras = ["x"]` runs ruff/ty/pytest with those extras installed.
@@ -47,8 +46,6 @@ import tomllib
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-
-import standard
 
 CONTRACT_TESTS = "tests/test_contracts.py"
 COMMANDS = (
@@ -452,7 +449,6 @@ class Gate:
             ("install section", self.check_install_section),
             ("external dependencies", self.check_external_deps),
             ("build + install wheel", self.check_installed_wheel),
-            ("standard", lambda: standard.check(self.root)),
             (AUDIT_STEP, self.check_vulnerabilities),
         ]
 
