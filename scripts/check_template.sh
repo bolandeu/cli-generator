@@ -186,7 +186,8 @@ update_staged() {
 # change is skipped and the script runs on a clean, committed tree. Generate from that tag, make a
 # staged, uncommitted change, update to the working tree through the worker script, check the
 # change survived and no file of the package was removed but those in $REMOVABLE (the docs command,
-# its OpenCLI document and what left the template before), then run the full checks in the updated project.
+# its OpenCLI document and what left the template before) and every part of $PARTS is still there, then
+# run the full checks in the updated project.
 check_update_round() {
     generate_at "$@"
     if [ -z "${CLEAN_TREE:-}" ]; then
@@ -208,7 +209,7 @@ check_update_round() {
         *) fail "copier update removed $path" ;;
         esac
     done
-    expect_parts present project auth providers http skill describe contracts
+    expect_parts present $PARTS
     expect_parts absent docs
     # The help page of the docs command is the project's own file: the update leaves it to the project.
     run rm -f tests/snapshots/help/docs.txt
@@ -254,7 +255,17 @@ previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
 DOCS_FILES=$(part_files docs)
 REMOVABLE=$DOCS_FILES
-check_update_round update-round "$previous"
+# A tag with the part questions generates a package with every part on (its default is none); an older tag
+# had the parts without questions (ADR 0014).
+if git -C "$ROOT" show "$previous:copier.yml" | grep -q '^include_project:'; then
+    PARTS="project auth providers http db skill describe contracts"
+    check_update_round update-round "$previous" --data include_project=true --data include_auth=true \
+        --data include_db=true --data include_skill=true --data include_describe=true --data include_contracts=true
+else
+    PARTS="project auth providers http skill describe contracts"
+    check_update_round update-round "$previous"
+fi
+PARTS="project auth providers http skill describe contracts"
 REMOVABLE="$DOCS_FILES scripts/release.py tests/data/index/gitea/rb_x-0.1.0-py3-none-any.whl tests/data/index/pypi/rb_x-0.9.0-py3-none-any.whl"
 check_update_round update-from-copy "$GATE_COPY_TAG"
 
