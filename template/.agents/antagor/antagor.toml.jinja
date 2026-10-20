@@ -2,7 +2,7 @@ schema = 1
 prefix = "{{ antagor_prefix }}"
 name = "{{ cli_name }}"
 worker = "claude-code"
-checks = ["python3 scripts/check_command_docstrings.py", "{% if adopt_core %}uv run rb-release check{% else %}uv run scripts/release.py --check{% endif %}"]
+checks = ["python3 scripts/check_command_docstrings.py", '{{ gate_command }}']
 
 [review]
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review

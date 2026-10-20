@@ -5,7 +5,7 @@
 
 ## Гейт и тесты
 
-- **Гейт проходит перед каждым коммитом.** `{% if adopt_core %}uv run rb-release check{% else %}uv run scripts/release.py --check{% endif %}`: `uv lock --check`, ruff, ty,
+- **Гейт проходит перед каждым коммитом.** `{{ gate_command }}`: `uv lock --check`, ruff, ty,
   pytest (порог покрытия, контракт `--help` и снапшоты, форма `auth status`), контракты потребителей
   (`tests/contracts/`), список изменённых существующих тестов, сборка wheel и `{{ cli_name }} --version` из неё.
   Упавший шаг чинят, а не пропускают. CI, если он есть, гоняет ровно это.
@@ -14,7 +14,7 @@
 - **Тест не подгоняют под код.** Существующий тест меняется, только когда изменилось требование. Шаг гейта
   `existing tests` перечисляет тесты прошлого релиза, которые изменены или удалены; каждый идёт в отчёт с причиной.
 - **Планку ставят другие.** Приёмку пишет dev с пользователем, контракты (`--json`, exit-коды, представления `v1`) —
-  потребитель: `tests/contracts/<consumer>/<tool>.yaml` (cli-generator `architecture.md` §13). Свои — unit-тесты и
+  потребитель: `tests/contracts/<consumer>/<tool>.yaml` (Стандарт cli-generator, раздел «Consumer contracts»). Свои — unit-тесты и
   офлайн-данные для `run`-кейсов потребителей (`tests/contracts/fixtures.yaml`). Контракт потребителя не правят,
   чтобы пройти.
 - **Мутационное тестирование — время от времени и перед крупным релизом** (не в гейте):
@@ -41,7 +41,7 @@
 - **Необратимое действие снаружи — с `--dry-run`** (`output.is_dry_run`) и за `output.require_confirmation`.
   Команды только над локальными файлами проекта (`init`, `config set`) этого не требуют.
 {%- if include_db %}
-- **Данные — через `core/db.py`** (cli-generator `architecture.md` §12).
+- **Данные — через `core/db.py`** (Стандарт cli-generator, раздел «Database»).
   `{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DATABASE_URL` → общий PostgreSQL, иначе локальный SQLite в `platformdirs.user_data_dir("<tool>")`, никогда в репозитории
   (`{{ cli_name | upper | regex_replace('[^A-Z0-9]', '_') }}_DB_PATH` переносит файл). Кэш — туда же; что хранится
   локально иначе — перечислить здесь с причиной. Таблицы, представления, индексы — только
