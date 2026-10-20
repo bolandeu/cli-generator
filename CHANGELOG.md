@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.23.0 — 2026-10-20
+
+### E-005 — One Standard, checked by the gate; the gate lives in cli-generator and cli-core is retired
+
+One short English Standard (skills/cli-builder/reference/standard.md) with every rule marked mandatory or recommended. rb-release check verifies every mandatory rule from outside, on any package, and names the rule it fails. The gate's code lives in this repo (gate/); a package runs it with one uvx command pinned to the template tag, as a development tool only. cli-core is gone: repo, project, folder and registry package.
+Time: 1.6h since the epic was approved
+
+- standard.md: one English Standard with every rule marked Mandatory or Recommended, replacing the three reference files (CG-044)
+
 ## v1.22.0 — 2026-10-20
 
 ### E-005 — One Standard, checked by the gate; the gate lives in cli-generator and cli-core is retired
