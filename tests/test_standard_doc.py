@@ -53,6 +53,8 @@ GATE_STEPS = {
 MANDATORY = re.compile(r"^- \*\*Mandatory\*\* \(gate: (?P<steps>`[^`]+`(?:, `[^`]+`)*)\)\. \S")
 RECOMMENDED = re.compile(r"^- \*\*Recommended\.\*\* \S")
 OLD_FILES = ["architecture.md", "conventions.md", "help-standard.md"]
+# A whole file name, not the tail of another one (docs/adr/0006-db-table-conventions.md is not conventions.md).
+OLD_NAMES = re.compile(r"(?<![\w-])(?:" + "|".join(map(re.escape, OLD_FILES)) + ")")
 # Records of the past, like git history: the released changelog and Antagor's task and epic files.
 HISTORY = ("docs/adr/", "template/", ".agents/", "CHANGELOG.md", "tests/test_standard_doc.py")
 
@@ -125,7 +127,6 @@ def test_old_reference_files_are_gone_and_nothing_names_them():
         f"{path}: {name}"
         for path in tracked
         if not path.startswith(HISTORY) and (ROOT / path).is_file()
-        for name in OLD_FILES
-        if name in (ROOT / path).read_text(errors="replace")
+        for name in OLD_NAMES.findall((ROOT / path).read_text(errors="replace"))
     ]
     assert naming == []

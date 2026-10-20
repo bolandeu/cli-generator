@@ -115,7 +115,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
   ```
 
   `code` and `message` are always there; `action` is there when a concrete next command can unblock the caller.
-- **Mandatory** (gate: `standard: errors`). An unknown option or a bad argument exits 2.
+- **Mandatory** (gate: `standard: errors`). A usage error (an unknown option or command, a missing argument, a bad
+  value) exits 2. Under `--json` anywhere before `--` it is the error envelope `INVALID_ARGUMENTS`; without `--json`
+  it stays the usage message on stderr.
 - **Mandatory** (gate: `standard: errors`). Every exit code is one of this table:
 
   | Exit | Meaning |
