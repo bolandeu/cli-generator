@@ -15,7 +15,8 @@ SCRIPT = """
 demo = "demo:main"
 """
 # A stdlib-only CLI: groups list their commands under `Commands:` (Click's plain help), leaf commands list
-# their options, an unknown option is exit 2 and, with --json, the error envelope on stdout.
+# their options, an unknown option is exit 2 and, with --json, the error envelope on stdout. Options before the
+# command are the root's (ROOT_OPTIONS), options after it are the command's.
 COMPLIANT = '''"""A demo CLI that meets the Standard's mandatory rules."""
 
 import importlib.metadata
@@ -35,7 +36,7 @@ OUTPUT = {
 }
 BARE_EXIT = 0
 USAGE_EXIT = 2
-ROOT_OPTIONS = []
+ROOT_OPTIONS = ["--json"]
 
 
 def children(group: str) -> dict[str, str]:
@@ -69,6 +70,12 @@ def error(message: str, as_json: bool) -> int:
 def run(argv: list[str]) -> int:
     path = " ".join(arg for arg in argv if not arg.startswith("-"))
     options = [arg for arg in argv if arg.startswith("-")]
+    start = argv.index(path.split()[0]) if path else len(argv)
+    root, local = argv[:start], [arg for arg in argv[start:] if arg.startswith("-")]
+    own = [*ROOT_OPTIONS, "--help", "--version"]
+    rejected = [option for option in root if option not in own]
+    if rejected:
+        return error(f"No such option: {rejected[0]}", False)
     if "--version" in options:
         print(importlib.metadata.version("demo"))
         return 0
@@ -78,9 +85,10 @@ def run(argv: list[str]) -> int:
     if path not in COMMANDS:
         return error(f"No such command '{path}'.", "--json" in options)
     about, accepted = COMMANDS[path]
-    unknown = [option for option in options if option not in [*accepted, "--help"]]
+    unknown = [option for option in local if option not in [*accepted, "--help"]]
     if unknown:
-        return error(f"No such option: {unknown[0]}", "--json" in options)
+        as_json = "--json" in root or "--json" in set(local) & set(accepted)
+        return error(f"No such option: {unknown[0]}", as_json)
     if "--help" in options:
         rows = "\\n".join(f"  {option}" for option in [*accepted, "--help"])
         print(f"Usage: demo {path} [OPTIONS]\\n\\n{about}\\n\\nOptions:\\n{rows}")
@@ -136,13 +144,13 @@ def test_a_bare_command_that_exits_2_fails_at_commands(in_package) -> None:
 
 def test_a_command_without_json_fails_at_json(in_package) -> None:
     module = _changed('"status": ("Show the status.", ["--json"])', '"status": ("Show the status.", [])')
+    module = module.replace('ROOT_OPTIONS = ["--json"]', "ROOT_OPTIONS = []")
 
     assert "`demo status`" in _failed_at(_check(in_package, module), "json", "Output")
 
 
 def test_a_command_takes_json_listed_only_in_the_root_help(in_package) -> None:
     module = _changed('"status": ("Show the status.", ["--json"])', '"status": ("Show the status.", [])')
-    module = module.replace("ROOT_OPTIONS = []", 'ROOT_OPTIONS = ["--json"]')
 
     result = _check(in_package, module)
 
