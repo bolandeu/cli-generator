@@ -7,8 +7,8 @@ passes every argument to `copier update`.
 
     uvx --from copier python <skill dir>/scripts/copier_update_staged.py [copier update args]
 
-Exit code is copier's; non-zero on any copier error. A clean tree is refused: run plain
-`copier update` there.
+Exit code is copier's; non-zero on any copier error. On a clean tree nothing is staged and the
+run is a plain `copier update`.
 """
 
 import subprocess
@@ -20,9 +20,6 @@ from copier._subproject import Subproject
 
 def main(argv: list[str]) -> int:
     subprocess.run(["git", "add", "-A"], check=True)
-    if not subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True).stdout.strip():
-        print("tree is clean: run plain `copier update`", file=sys.stderr)
-        return 2
     # The one touch of copier internals, checked against copier 9.19.1 (Subproject.is_dirty,
     # called in Worker.run_update).
     Subproject.is_dirty = lambda self: False

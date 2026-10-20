@@ -241,7 +241,7 @@ template, `_commit` is the template release it was last synced to):
    --trust --defaults [--vcs-ref … --data k=v …]` (`<skill dir>` is
    `skills/cli-builder` of this plugin). It stages the tree, switches off
    only copier's dirty-tree check, and exits non-zero on a copier error.
-   It refuses a clean tree: use plain `copier update` there.
+   On a clean tree it stages nothing and is a plain `copier update`.
 2. `uvx copier update --trust` (add `--defaults` to keep every previous
    answer without prompting). A project from before template v1.2.1 has
    no `cli_name` answer: its default is `package_name` with `_` → `-`,
