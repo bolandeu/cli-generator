@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.6 — 2026-10-21
+
+### Outside epics
+
+- One Python everywhere: packages and the gate require Python 3.14, and CI runs on 3.14 (CG-056)
+
 ## v1.25.5 — 2026-10-21
 
 ### Outside epics
