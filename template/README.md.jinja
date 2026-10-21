@@ -21,15 +21,7 @@ runs the same `rb-release check`.
 ## Release
 
 The version is the git tag (`vX.Y.Z`) — `pyproject.toml` has no `version =`.
-Work goes through Antagor tickets (`.agents/antagor/`); a release (run by the Human) is
-
-```bash
-antagor publish --bump   # SemVer; at 0.x: patch = fix/feature, minor = breaking
-```
-
-It tags the release, builds `CHANGELOG.md` from the ticket titles and runs
-`scripts/deploy.sh`: push `main` with tags to `origin`. Nobody tags or
-pushes by hand.
+Work and releases go through Antagor.
 
 ## Install
 
@@ -61,8 +53,7 @@ uv tool install "{{ dist_name }} @ git+https://github.com/<owner>/<repo>.git@vX.
 {%- endif %}
 ```
 
-Replace `vX.Y.Z` with the latest release tag (a tag cut by
-`antagor publish`; never install a branch). This is also how an AI agent
+Replace `vX.Y.Z` with the latest release tag (never install a branch). This is also how an AI agent
 bootstraps this CLI on a fresh machine/sandbox where it isn't installed
 yet{% if include_skill %} — see `src/{{ package_name }}/data/SKILL.md`{% endif %}.
 {% if github %}

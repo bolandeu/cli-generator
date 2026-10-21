@@ -67,7 +67,6 @@ def test_antagor_layout() -> None:
     assert re.fullmatch(r"# \S.*", context.splitlines()[0])
     assert re.search(r"^\*\*[^*]+\*\*:$", re.sub(r"<!--.*?-->", "", context, flags=re.DOTALL), re.MULTILINE)
     readme = (root / "README.md").read_text()
-    assert "antagor publish" in readme
     assert "install_hooks" not in readme
     assert "towncrier" not in readme
 
