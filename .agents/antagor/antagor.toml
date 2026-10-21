@@ -6,6 +6,8 @@ worker = "claude-code"
 checks = ["sh scripts/check_template.sh", "claude plugin validate . --strict"]
 # The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
 stall_minutes = 25
+# The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
+heavy = ["sh scripts/check_template.sh"]
 
 [limits]
 # Mode fast: template tasks move or drop whole parts (E-006 CG-047).
