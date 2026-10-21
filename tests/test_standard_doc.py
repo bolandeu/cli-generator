@@ -152,3 +152,7 @@ def test_old_reference_files_are_gone_and_nothing_names_them():
         for name in OLD_NAMES.findall((ROOT / path).read_text(errors="replace"))
     ]
     assert naming == []
+
+
+def test_standard_names_no_decision_record():
+    assert re.findall(r"docs/adr|\bADR\b|\badr[- ]?\d", STANDARD.read_text(), re.IGNORECASE) == []

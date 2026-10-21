@@ -343,8 +343,7 @@ your own.
 **When.** The tool keeps data: journals, results, history, a cache of paid responses.
 
 **Turn on.** `include_db`, or by hand: SQLAlchemy Core, Alembic and psycopg 3 (no ORM, no hand-rolled migrations), and
-the `db` commands below. The reasons: `docs/adr/0006-db-table-conventions.md` and
-`docs/adr/0012-shared-database-rules.md` of `cli-generator`.
+the `db` commands below.
 
 - **Recommended.** All the tool's data goes through this layer, caches included; data kept elsewhere is the tool's
   decision, with its reason in its `AGENTS.md`. Why: Mac and homeserver do not pay twice for one response.
