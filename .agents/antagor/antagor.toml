@@ -16,8 +16,7 @@ max_lines = 4000
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
 [publish]
-# Template gate on the merged main, before the tag and the deploy (Antagor gate_command).
-gate_command = "sh scripts/check_template.sh"
+# No gate_command: the template gate runs in Gitea CI on homeserver after the push.
 tag_prefix = "v"
 versioning = "semver"
 changelog = "CHANGELOG.md"
