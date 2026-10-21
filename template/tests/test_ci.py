@@ -71,3 +71,9 @@ def test_project_files_name_the_gate_of_the_template_tag() -> None:
 
 def test_agents_file_links_the_standard() -> None:
     assert STANDARD in (ROOT / "AGENTS.md").read_text()
+
+
+def test_workflow_runs_on_main_tags_and_the_remote_gate_branch() -> None:
+    triggers = yaml.safe_load(WORKFLOW.read_text())[True]  # YAML reads the key `on` as True
+    assert triggers["push"]["branches"] == ["main", "antagor/publish-*"]
+    assert triggers["push"]["tags"] == ["v*"]
