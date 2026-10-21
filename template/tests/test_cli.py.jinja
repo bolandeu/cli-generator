@@ -23,6 +23,11 @@ def invoke(*args: str, **kwargs):
     return runner.invoke(app, list(args), **kwargs)
 
 
+def plain(text: str) -> str:
+    """The text without ANSI colour codes: CI forces Rich colours the Mac does not."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
 def invoke_json(*args: str, **kwargs) -> tuple[int, dict]:
     """Run a command with --json and parse stdout — the contract agents rely on."""
     result = invoke(*args, "--json", **kwargs)
@@ -106,7 +111,7 @@ def test_doctor_json() -> None:
 def test_doctor_prints_one_line_per_check_for_a_human() -> None:
     result = invoke("doctor")
     assert result.exit_code == 0
-    assert result.stdout.splitlines()[0] == "✓ python"
+    assert plain(result.stdout).splitlines()[0] == "✓ python"
 
 
 # --- error handling contract ---------------------------------------------------
@@ -176,7 +181,7 @@ def test_report_with_a_problem_keeps_the_payload() -> None:
     )
     result = runner.invoke(_app_with(report), ["cmd"])
     assert result.exit_code == 2
-    assert "items: [1]" in result.stdout
+    assert "items: [1]" in plain(result.stdout)
     assert "bad" in result.stderr
 
 
@@ -228,7 +233,7 @@ def test_usage_error_without_json_stays_on_stderr() -> None:
     result = invoke("doctor", "--no-such-option")
     assert result.exit_code == 2
     assert result.stdout == ""
-    assert "--no-such-option" in result.stderr
+    assert "--no-such-option" in plain(result.stderr)
 
 
 def test_require_confirmation_blocks_non_interactive_without_confirm() -> None:

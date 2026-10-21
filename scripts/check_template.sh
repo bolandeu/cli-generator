@@ -130,7 +130,7 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run uv run ruff check .
     run uv run ruff format --check .
     run uv run ty check
-    run uv run pytest -q
+    run env GITHUB_ACTIONS=true FORCE_COLOR=1 PY_COLORS=1 uv run pytest -q
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m i
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0

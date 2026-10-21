@@ -13,7 +13,7 @@ from {{ package_name }}.credentials import health
 from {{ package_name }}.credentials import manager as credentials
 from {{ package_name }}.providers import Health, Provider, Quota
 
-from .test_cli import invoke, invoke_json
+from .test_cli import invoke, invoke_json, plain
 
 NS = "{{ cli_name }}"  # keychain service and env prefix use the command name, not the package
 PREFIX = re.sub(r"[^A-Z0-9]", "_", NS.upper())
@@ -219,8 +219,8 @@ def test_provider_filter_and_unknown_provider(demo_providers) -> None:
 def test_human_output(demo_providers) -> None:
     result = invoke("auth", "status", env=env(demo=BAD))
     assert result.exit_code == 0
-    assert "demo: unchecked (env:" in result.stdout
-    assert "extra (optional): missing" in result.stdout
+    assert "demo: unchecked (env:" in plain(result.stdout)
+    assert "extra (optional): missing" in plain(result.stdout)
     assert BAD not in result.output
 
 

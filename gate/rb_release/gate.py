@@ -61,6 +61,8 @@ COMMANDS = (
     ("ty check", ("uv", "run", "ty", "check")),
     ("pytest", ("uv", "run", "pytest", f"--ignore={CONTRACT_TESTS}")),  # contracts: their own step
 )
+# What a CI runner sets and Typer reads at import: the pytest step runs with them, so a test that breaks in CI breaks here.
+CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 AUDIT_STEP = "vulnerability audit"
 EXIT_PASSED = 0
 EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
@@ -239,7 +241,8 @@ class Gate:
     def run_command(self, argv: tuple[str, ...]) -> str:
         if argv[:2] == ("uv", "run"):  # run lint/types/tests with the configured extras installed
             argv = ("uv", "run", *self._extra_args(), *argv[2:])
-        self.step_output(*argv)
+        env = {**os.environ, **CI_ENV} if "pytest" in argv else None
+        self.step_output(*argv, env=env)
         return ""
 
     def _changed_since(self, tag: str) -> list[str]:
