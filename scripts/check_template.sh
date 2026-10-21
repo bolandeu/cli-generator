@@ -221,7 +221,7 @@ check_update_round() {
 }
 
 VARIANT=repo-tests
-run uv run --with pytest pytest -q "$ROOT/tests"
+run uv run --with pytest --with pyyaml pytest -q "$ROOT/tests"
 VARIANT=gate-tests
 run uv run --directory "$ROOT/gate" ruff check .
 run uv run --directory "$ROOT/gate" ruff format --check .
