@@ -9,8 +9,6 @@ import subprocess
 from pathlib import Path
 from types import ModuleType
 
-import yaml
-
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
@@ -29,23 +27,20 @@ def test_antagor_project_config() -> None:
     config = tomllib.loads((root / ".agents" / "antagor" / "antagor.toml").read_text())
     assert config["schema"] == 1
     # The prefix is the Plane project identifier: the product's full name in capitals (`antagor new`).
-    assert re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", config["prefix"])
-    assert "worker" not in config
-    assert config["heavy"] == ["rb-release check"]
-    tag = yaml.safe_load((root / ".copier-answers.yml").read_text())["_commit"]
-    gate = (
-        'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git'
-        f'@{tag}#subdirectory=gate" rb-release check'
-    )
-    assert config["checks"] == ["python3 scripts/check_command_docstrings.py", gate]
+    assert re.fullmatch(r"[A-Z][A-Z0-9]{1,9}", config["prefix"])
+    # A package may add or reorder checks and set its own worker; the template guarantees only these.
+    assert "python3 scripts/check_command_docstrings.py" in config["checks"]
+    assert "rb-release check" in config["heavy"]
+    publish = config["publish"]
+    if publish.get("gate") == "remote":
+        status_url = publish["gate_status_url"]
+        assert status_url.startswith("https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/")
+        assert status_url.endswith("/commits/{commit}/status")
+    else:
+        assert any(check.endswith("rb-release check") and "cli-generator.git@" in check for check in config["checks"])
     assert config["review"]["required_types"] == ["feature", "bugfix"]
     expected = {"versioning": "semver", "changelog": "CHANGELOG.md", "deploy_command": "sh scripts/deploy.sh"}
     assert {k: config["publish"].get(k) for k in expected} == expected  # Antagor may add its own keys
-    assert config["publish"]["gate"] == "remote"
-    status_url = config["publish"]["gate_status_url"]
-    assert status_url.startswith("https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/")
-    assert status_url.endswith("/commits/{commit}/status")
-    assert "gate_command" not in config["publish"]
     # The Human sets the mode (`antagor mode set`, `antagor new --mode`).
     assert config.get("mode") in (None, "strict", "default", "free", "fast")
     assert "git push origin main --follow-tags" in (SCRIPTS / "deploy.sh").read_text()

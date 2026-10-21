@@ -5,6 +5,8 @@ _subdirectory: template
 _skip_if_exists:
   - "README.md"
   - "tests/help_allowlist.txt"
+  # Antagor keeps its ignore file current (adds lines): written once, never merged.
+  - ".agents/antagor/.gitignore"
 
 _exclude:
   - "copier.yaml"
@@ -15,8 +17,6 @@ _exclude:
   - ".git"
   - ".DS_Store"
   - ".svn"
-  # Antagor owns everything under .agents/antagor/ but its config: it keeps its ignore file current.
-  - ".agents/antagor/.gitignore"
   # A part added after the first release drops its files only when its answer is false: copier renders the
   # previous version with these patterns too (to keep what they exclude), and there that answer is undefined.
   - "{% if include_project is false %}src/{{ package_name }}/commands/project.py{% endif %}"
@@ -95,14 +95,14 @@ cli_name:
 
 antagor_prefix:
   type: str
-  help: "Antagor task prefix: a capital letter, then 1-11 capitals or digits (tasks are <PREFIX>-001), e.g. MEDIAGEN"
+  help: "Antagor task prefix: a capital letter, then 1-9 capitals or digits (tasks are <PREFIX>-001), e.g. MEDIAGEN"
   default: >-
     {%- set from_cli = cli_name | upper | regex_replace('[^A-Z]', '') -%}
     {%- set from_pkg = package_name | upper | regex_replace('[^A-Z]', '') -%}
     {{ (from_cli if from_cli | length >= 2 else (from_pkg if from_pkg | length >= 2 else 'TL'))[:3] }}
   validator: >-
-    {% if not (antagor_prefix | regex_search('^[A-Z][A-Z0-9]{1,11}$')) %}
-    antagor_prefix must be a capital letter, then 1-11 capitals or digits
+    {% if not (antagor_prefix | regex_search('^[A-Z][A-Z0-9]{1,9}$')) %}
+    antagor_prefix must be a capital letter, then 1-9 capitals or digits
     {% endif %}
 
 dist_name:

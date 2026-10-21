@@ -163,8 +163,7 @@ run_gate_on_python_311() {
 }
 
 # write_antagor_ignore, check_antagor_ignore: the Antagor ignore file as Antagor writes it (more lines
-# than the template ever had). The template ships none; a package gets it from Antagor and keeps it
-# through `copier update`.
+# than the template has). The template ships it once; a package keeps it through `copier update`.
 ANTAGOR_IGNORE='state/
 receipts/
 scratch/
@@ -215,8 +214,7 @@ check_variant() {
     cd "$dest"
     run git init -q
     run test -f .agents/antagor/antagor.toml
-    run test ! -e .agents/antagor/.gitignore
-    write_antagor_ignore
+    check_antagor_ignore
     verify_project "$expected_install" README.md
     run test -f .gitea/workflows/ci.yml
     expect_parts absent docs
@@ -323,18 +321,35 @@ expect_parts present providers
 expect_parts absent auth http
 cd "$ROOT"
 VARIANT=prefix
-for prefix in MEDIAGEN SITEGEN; do
+for prefix in MEDIAGEN ABCDEFGHIJ; do
     run uvx copier copy "$ROOT" "$WORK/prefix-$prefix" --data package_name=demotool --data project_name=Demo \
         --data description=d --data author_name=A --data antagor_prefix=$prefix --defaults --trust -q --vcs-ref HEAD
     grep -qx "prefix = \"$prefix\"" "$WORK/prefix-$prefix/.agents/antagor/antagor.toml" || fail "prefix $prefix not in antagor.toml"
 done
-for prefix in mg 1AB; do
+for prefix in ABCDEFGHIJK mg 1AB; do
     step "copier refuses antagor_prefix=$prefix"
     if uvx copier copy "$ROOT" "$WORK/prefix-bad" --data package_name=demotool --data project_name=Demo \
         --data description=d --data author_name=A --data antagor_prefix=$prefix --defaults --trust -q --vcs-ref HEAD >/dev/null 2>&1; then
         fail "antagor_prefix=$prefix was accepted"
     fi
 done
+VARIANT=fast-config
+run uvx copier copy "$ROOT" "$WORK/fast-config" --data package_name=demotool --data project_name=Demo \
+    --data description=d --data author_name=A --defaults --trust -q --vcs-ref HEAD
+(
+    cd "$WORK/fast-config"
+    # A package of mode fast: its own checks and worker, the full gate only through the remote gate and `heavy`.
+    run python3 - <<'PY'
+import re
+path = ".agents/antagor/antagor.toml"
+text = open(path).read()
+text = re.sub(r"(?m)^checks = .*$", 'checks = ["uv run pytest -q --no-cov {test_paths}", "python3 scripts/check_command_docstrings.py"]', text)
+text = text.replace('heavy = ["rb-release check"]', 'heavy = ["rb-release check"]\nworker = "claude-code"')
+open(path, "w").write(text)
+PY
+    run uv sync -q
+    run uv run pytest -q --no-cov tests/test_scripts.py
+) || exit 1
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
 DOCS_FILES=$(part_files docs)
