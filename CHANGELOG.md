@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.8 — 2026-10-21
+
+### Outside epics
+
+- Gate runs on Python 3.11 again, so a package on requires-python >=3.11 takes a new gate tag with no Python change (CG-060)
+
 ## v1.25.7 — 2026-10-21
 
 ### Outside epics
