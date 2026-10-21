@@ -51,6 +51,26 @@ check_gate_files() {
     return 0
 }
 
+# check_antagor_files <repo>: the Antagor config names the remote gate of Gitea repo bolandeu/<repo> and
+# nothing of Antagor's defaults; AGENTS.md and CODING_STANDARDS.md hold no Antagor rule, no commit-first TDD
+# and no machine-local path
+check_antagor_files() {
+    run python3 -c "
+import sys, tomllib
+c = tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))
+want = 'https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/$1/commits/{commit}/status'
+assert c['publish']['gate'] == 'remote' and c['publish']['gate_status_url'] == want, c['publish']
+assert c['heavy'] == ['rb-release check'], c.get('heavy')
+assert not {'worker', 'mode'} & set(c) and 'gate_command' not in c['publish'], c
+"
+    for file in AGENTS.md CODING_STANDARDS.md; do
+        grep -qiE 'hand.?fix|hand_fix' "$file" && fail "$file has a hand-fix line"
+        grep -q '~/Work/' "$file" && fail "$file names ~/Work/"
+        grep -qE 'коммит.* первым|Тест коммитится' "$file" && fail "$file says a test is committed first"
+    done
+    return 0
+}
+
 # part_files <part>: the files of an optional part in a package named demotool; `docs` is the docs
 # command and its OpenCLI document, which left the template
 part_files() {
@@ -161,6 +181,7 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     check_gate_files "$@"
     run_gate
     run antagor -C "$dest" layout check
+    check_antagor_files "$REPO_NAME"
 }
 
 # check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]: the
@@ -169,6 +190,8 @@ check_variant() {
     VARIANT=$1
     expected_install=$2
     shift 2
+    REPO_NAME=demotool
+    case " $* " in *" repository_url=https://"*) REPO_NAME=demo ;; esac
     dest="$WORK/$VARIANT"
     run uvx copier copy "$ROOT" "$dest" \
         --data package_name=demotool --data project_name=Demo \
@@ -240,6 +263,7 @@ check_update_round() {
     # A template release that changes a help text or `describe` changes the snapshots: the project
     # refreshes them after an update (copier's task runs on copy only).
     run uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py
+    REPO_NAME=demotool
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }

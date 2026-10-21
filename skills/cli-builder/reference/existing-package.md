@@ -65,6 +65,8 @@ The Architect may not commit package files, and the worker does not commit.
 2. The Architect writes one task that lists all red steps.
 3. The worker fixes them test-first. The red run of each new test goes in its report, not in git history.
 4. Every Python module the worker touches has a module docstring. Antagor refuses the task otherwise.
+5. The last step: the Human runs `antagor -C <package root> remote-gate-accept` once per package (password). Until
+   then the remote gate is not in force.
 
 ## A script or CLI that is not a package yet
 
@@ -132,7 +134,9 @@ fixes or when the package still has the old gate.
 
    Run it until it ends with `release: gate passed`. `<template tag>` is `_commit` in `.copier-answers.yml` after the update. A new template release can add a rule that
    the package's code fails: fix the code (the loop above).
-10. **Release.** The update is its own ticket, titled `Template vX.Y.Z: …`: the title becomes the changelog line. A
+10. **Remote gate.** The last step: the Human runs `antagor -C <package root> remote-gate-accept` once per package
+    (it asks for the password). Until then the remote gate is not in force.
+11. **Release.** The update is its own ticket, titled `Template vX.Y.Z: …`: the title becomes the changelog line. A
     breaking change for the package's callers is a breaking bump (minor at `0.x`).
 
 Things the update does not do by itself:
