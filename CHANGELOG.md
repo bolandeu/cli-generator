@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.25.7 — 2026-10-21
+
+### Outside epics
+
+- Tests pass in CI as on the Mac: the template's tests pass under the CI variables, and the gate runs pytest with them (CG-057)
+- Package rules say when a change is the Architect's hand fix and when it is a task (CG-058)
+
 ## v1.25.6 — 2026-10-21
 
 ### Outside epics
