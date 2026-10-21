@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.5 — 2026-10-21
+
+### Outside epics
+
+- Template keeps Antagor's ignore file, takes only Antagor's prefixes, and its config test lets a package set its own checks (CG-066)
+
 ## v1.26.4 — 2026-10-21
 
 ### Outside epics
