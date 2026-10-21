@@ -12,3 +12,5 @@ until the Human lifts the freeze.
   3.11 fixture package would be simpler.
 - `rb-release check --keep-going`: list every red step in one run (a package probe took 7 runs).
 - Template modules without a module docstring (27); Antagor now names them in the worker's brief.
+- The remote gate exits 124 when the runner is busy longer than `gate_timeout_minutes` (15); a queue of ~10 min
+  already happened. A repeat `publish` works; a larger timeout would avoid the repeat.
