@@ -1,6 +1,6 @@
 # Freeze list
 
-The template, the gate and the Standard are frozen from v1.26.0 (the Human, 2026-10-21). Only a defect that
+The template, the gate and the Standard are frozen from v1.26.0, released 2026-10-21 (the Human, 2026-10-21). Only a defect that
 makes a package fail the gate or CI, or work wrongly, is fixed (a v1.26.x patch). Everything else waits here
 until the Human lifts the freeze.
 
