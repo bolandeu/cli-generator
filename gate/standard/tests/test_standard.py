@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from conftest import PYPROJECT
 from rb_release.cli import app
+from standard import CI_ENV
 
 STANDARD_STEPS = ["commands", "json", "errors", "health", "docs", "ci"]
 SCRIPT = """
@@ -140,6 +141,34 @@ def test_a_bare_command_that_exits_2_fails_at_commands(in_package) -> None:
     result = _check(in_package, _changed("BARE_EXIT = 0", "BARE_EXIT = 2"))
 
     assert "`demo` exits 2" in _failed_at(result, "commands", "Commands")
+
+
+def test_the_standard_steps_probe_the_cli_without_the_ci_variables(in_package, monkeypatch) -> None:
+    for name, value in CI_ENV.items():
+        monkeypatch.setenv(name, value)
+    module = _changed("import json\n", "import json\nimport os\n")
+    module = module.replace('    return f"Usage: demo {group}', '    text = f"Usage: demo {group}')
+    module = module.replace(
+        "\n\n\ndef error",
+        '\n    bold = "\\x1b[1m" if os.environ.get("GITHUB_ACTIONS") else ""\n'
+        '    return text.replace("Commands:", bold + "Commands:")\n\n\ndef error',
+    )
+
+    result = _check(in_package, module)
+
+    assert "release: standard: commands ... ok" in result.stdout, result.output
+    assert result.exit_code == 0, result.output
+
+
+def test_a_bare_command_without_a_commands_heading_fails_at_commands_under_the_ci_variables(
+    in_package, monkeypatch
+) -> None:
+    for name, value in CI_ENV.items():
+        monkeypatch.setenv(name, value)
+
+    result = _check(in_package, _changed("\\n\\nCommands:", "\\n\\nVerbs:"))
+
+    assert "lists no commands (no Commands heading in its output)" in _failed_at(result, "commands", "Commands")
 
 
 def test_a_command_without_json_fails_at_json(in_package) -> None:

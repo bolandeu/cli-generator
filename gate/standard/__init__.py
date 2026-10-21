@@ -24,6 +24,9 @@ NO_SCRIPT = "skipped: no console script, a library"
 DOCS = ("README.md", "AGENTS.md")
 WORKFLOWS = ".gitea/workflows/"
 GATE_COMMAND = "rb-release check"
+# What a CI runner sets and Typer reads at import (forcing terminal output): the pytest step runs with them,
+# every probe of the installed script runs without them.
+CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 
 _COMMANDS_HEADING = re.compile(r"^(╭─ Commands ─|Commands:$)")  # Typer's rich panel, Click's plain help
 _JSON_OPTION = re.compile(r"(?<![\w-])--json(?![\w-])")
@@ -63,6 +66,11 @@ class Run:
         return f"`{self.command}`"
 
 
+def probe_env() -> dict[str, str]:
+    """The environment for a run of the installed script: the gate's own, without the CI variables."""
+    return {name: value for name, value in os.environ.items() if name not in CI_ENV}
+
+
 class Package:
     """The package at `root` and the console script the gate installed from its wheel (None: a library)."""
 
@@ -75,6 +83,7 @@ class Package:
         result = subprocess.run(  # noqa: S603 - the script the gate has just installed
             [str(self.script), *args],
             cwd=self.root,
+            env=probe_env(),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,

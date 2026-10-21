@@ -52,6 +52,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import standard
+from standard import CI_ENV, probe_env
 
 CONTRACT_TESTS = "tests/test_contracts.py"
 COMMANDS = (
@@ -61,8 +62,6 @@ COMMANDS = (
     ("ty check", ("uv", "run", "ty", "check")),
     ("pytest", ("uv", "run", "pytest", f"--ignore={CONTRACT_TESTS}")),  # contracts: their own step
 )
-# What a CI runner sets and Typer reads at import: the pytest step runs with them, so a test that breaks in CI breaks here.
-CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 AUDIT_STEP = "vulnerability audit"
 EXIT_PASSED = 0
 EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
@@ -444,11 +443,11 @@ class Gate:
         if script is None:
             return self._check_library(python, wheel, project["name"], built)
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
-        printed = self.step_output(str(exe), "--version").splitlines()
+        printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
         reported = printed[-1].strip() if printed else ""
         if reported != built:
             raise StepFailed(f"`{script} --version` printed {reported!r}, but the wheel is version {built}")
-        self.step_output(str(exe), "--help")
+        self.step_output(str(exe), "--help", env=probe_env())
         self.console_script = exe
         return f"{wheel.name}; `{script} --version` = {reported}; `{script} --help` ok"
 
