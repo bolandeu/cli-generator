@@ -162,6 +162,21 @@ run_gate_on_python_311() {
     ) || exit 1
 }
 
+# write_antagor_ignore, check_antagor_ignore: the Antagor ignore file as Antagor writes it (more lines
+# than the template ever had). The template ships none; a package gets it from Antagor and keeps it
+# through `copier update`.
+ANTAGOR_IGNORE='state/
+receipts/
+scratch/
+'
+write_antagor_ignore() {
+    printf '%s' "$ANTAGOR_IGNORE" >.agents/antagor/.gitignore
+}
+check_antagor_ignore() {
+    [ "$(cat .agents/antagor/.gitignore)" = "$(printf '%s' "$ANTAGOR_IGNORE")" ] || fail "the Antagor ignore file changed"
+    test ! -e .agents/antagor/.gitignore.rej || fail "the Antagor ignore file has a conflict"
+}
+
 # verify_project <expected (homeserver, mac) as a Python literal> [README.md]: the checks of a
 # generated project, run inside it, then the gate
 verify_project() {
@@ -199,6 +214,9 @@ check_variant() {
         --defaults --trust -q --vcs-ref HEAD
     cd "$dest"
     run git init -q
+    run test -f .agents/antagor/antagor.toml
+    run test ! -e .agents/antagor/.gitignore
+    write_antagor_ignore
     verify_project "$expected_install" README.md
     run test -f .gitea/workflows/ci.yml
     expect_parts absent docs
@@ -219,6 +237,9 @@ generate_at() {
     run git init -q
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
+    write_antagor_ignore
+    run git add -A
+    run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m antagor-ignore
 }
 
 # update_staged: update the project in the cwd to the working tree through the worker script
@@ -258,6 +279,7 @@ check_update_round() {
     done
     expect_parts present $PARTS
     expect_parts absent docs
+    check_antagor_ignore
     # The help page of the docs command is the project's own file: the update leaves it to the project.
     run rm -f tests/snapshots/help/docs.txt
     # A template release that changes a help text or `describe` changes the snapshots: the project
@@ -300,6 +322,19 @@ check_variant providers-without-auth '(["rbtools"], True)' --data include_provid
 expect_parts present providers
 expect_parts absent auth http
 cd "$ROOT"
+VARIANT=prefix
+for prefix in MEDIAGEN SITEGEN; do
+    run uvx copier copy "$ROOT" "$WORK/prefix-$prefix" --data package_name=demotool --data project_name=Demo \
+        --data description=d --data author_name=A --data antagor_prefix=$prefix --defaults --trust -q --vcs-ref HEAD
+    grep -qx "prefix = \"$prefix\"" "$WORK/prefix-$prefix/.agents/antagor/antagor.toml" || fail "prefix $prefix not in antagor.toml"
+done
+for prefix in mg 1AB; do
+    step "copier refuses antagor_prefix=$prefix"
+    if uvx copier copy "$ROOT" "$WORK/prefix-bad" --data package_name=demotool --data project_name=Demo \
+        --data description=d --data author_name=A --data antagor_prefix=$prefix --defaults --trust -q --vcs-ref HEAD >/dev/null 2>&1; then
+        fail "antagor_prefix=$prefix was accepted"
+    fi
+done
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
 DOCS_FILES=$(part_files docs)

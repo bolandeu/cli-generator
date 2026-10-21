@@ -48,7 +48,6 @@ def test_antagor_project_config() -> None:
     assert "gate_command" not in config["publish"]
     # The Human sets the mode (`antagor mode set`, `antagor new --mode`).
     assert config.get("mode") in (None, "strict", "default", "free", "fast")
-    assert (root / ".agents" / "antagor" / ".gitignore").read_text().split() == ["state/", "receipts/"]
     assert "git push origin main --follow-tags" in (SCRIPTS / "deploy.sh").read_text()
 
 
