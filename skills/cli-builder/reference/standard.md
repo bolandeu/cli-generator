@@ -180,8 +180,8 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** `.env` and `.env.*` are in `.gitignore`.
 - **Recommended.** A key never goes on the command line or into a project file: it comes from an environment variable
   (or, on a dev machine, the OS keychain). Why: arguments show in the process list and in shell history.
-- **Recommended.** A new key is a ticket to sysadmin: the env name, where to get the value, who needs it. The value
-  never goes into the repo, a file or the ticket.
+- **Recommended.** A new key is a request to sysadmin: the env name, where to get the value, who needs it. The value
+  never goes into the repo, a file or the request.
 
 ## Install
 
@@ -252,15 +252,10 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
   `release: audit failed`, exit 3: bump the dependency, the code is fine.
 - **Recommended.** No `version =` in `pyproject.toml` and no version literal in the code: the code reads
   `importlib.metadata.version()`.
-- **Recommended.** `antagor publish --bump patch|minor|major` is the only way a version moves: it merges the accepted
-  tickets, writes `CHANGELOG.md` from their titles, tags and pushes. The Human (or the project's Architect) runs it;
-  nobody pushes by hand, edits `CHANGELOG.md` or adds changelog fragments.
-- **Recommended.** `antagor publish` runs no full gate before the tag: `[publish]` has no `gate_command`. The task
-  checks run the gate before review, and the CI workflow runs it after the push. A red CI after the tag is fixed by the
-  next patch release.
-- **Recommended.** A change is the Architect's hand fix (no ticket) only when it is the smallest one, within the `[architect.hand_fix]` bounds of the Antagor config; code, a test, or a change to what a rule means is always a ticket.
-- **Recommended.** A user-visible change has a ticket whose title says what changed for the user: the title is the
-  changelog line.
+- **Recommended.** A version moves only through Antagor's release. Nobody pushes or tags by hand, edits
+  `CHANGELOG.md` or adds changelog fragments. `[publish]` of the Antagor config has no `gate_command`: the task checks
+  run the gate, and the CI workflow runs it after the push. A red CI after the tag is fixed by the next patch release.
+- **Recommended.** A user-visible change is a task whose title says what changed for the user.
 - **Recommended.** Versions follow SemVer over the public surface: commands, options, the `--json` shapes, exit codes,
   error codes, the `auth status` and `describe` documents, the Python API.
 
@@ -269,7 +264,7 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
   | a fix, no surface change | patch | patch |
   | a new command, option or field; the old behaviour intact | minor | patch |
   | anything removed, renamed or changed | major | minor |
-- **Recommended.** Deprecate before removing: the old form keeps working with a warning on stderr, a ticket titled
+- **Recommended.** Deprecate before removing: the old form keeps working with a warning on stderr, a task titled
   `deprecate …` says so, and the next breaking release removes it.
 
 ## Optional parts

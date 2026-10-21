@@ -67,8 +67,8 @@ the task needs, and nothing else. The Standard, Optional parts, holds each part'
 - Depending on another of our tools: a version range in `dependencies` and `{ index = "gitea" }` in
   `[tool.uv.sources]`; never a git `tag =`, a `branch =` or a committed `path =`.
 - A key several CLIs share: the provider reads the shared name through `legacy_env`; a new key goes to sysadmin as
-  a ticket (`docs/contracts/sysadmin.md`, "Ключи").
-- Do not edit `CHANGELOG.md`: `antagor publish` writes it from ticket titles.
+  a request (`docs/contracts/sysadmin.md`, "Ключи").
+- Do not edit `CHANGELOG.md`.
 
 ## 5. Gate before every commit
 

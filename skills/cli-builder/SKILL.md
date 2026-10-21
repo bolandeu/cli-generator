@@ -35,7 +35,7 @@ inside it is governed by these four rules instead
    test is committed before the code, and its red run goes into the readiness
    report; an existing test is never edited to fit the code — the gate lists
    every test changed or gone since the last tag (`existing tests`), and each
-   goes into the report with its reason; acceptance scenarios come from dev
+   goes into the report with its reason; acceptance cases come from dev
    with the user, contract tests from the consumer — you write the unit tests
    and pass theirs; mutation testing (`uv run --group mutation mutmut run`)
    now and then, outside the gate.
@@ -52,8 +52,7 @@ package sitting unreleased without asking.
 
 1. **Prepare the local repo.** If the directory isn't a git repo yet:
    `git init -b main && git add -A && git commit -m "Initial commit"`, then
-   tag it — the version comes from the tag, and `antagor publish` needs one to
-   bump from: `git tag -a v0.1.0 -m v0.1.0`. Run `antagor hooks install`.
+   tag it — the version comes from the tag: `git tag -a v0.1.0 -m v0.1.0`. Run `antagor hooks install`.
 2. **Push to Gitea.** The first push on repo init is allowed without asking:
    ```bash
    git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git
@@ -74,11 +73,8 @@ package sitting unreleased without asking.
    `.copier-answers.yml`, README.md ("Install") and
    `src/<package_name>/data/SKILL.md` ("Installation") carry the real Gitea URL,
    not an `<owner>/<repo>` placeholder. Commit this before the push.
-5. **Releases after that**: `antagor publish --bump patch|minor|major` (Human
-   only, or the project's Architect) merges the accepted tickets, writes
-   `CHANGELOG.md` from their titles, tags `vX.Y.Z` (semver, PEP 440) and runs
-   `scripts/deploy.sh`. You never push by hand. Pick the part by SemVer
-   (Standard, Release). One ticket per change.
+5. **Releases after that** go through Antagor. Pick the version part by SemVer
+   (Standard, Release). One task per change.
 
 ## Non-negotiables
 
@@ -96,8 +92,7 @@ The parts of the Standard most likely to get skipped under time pressure:
 - Changed a command's behaviour → update its docstring in the same commit, then
   `uv run pytest --snapshot-update` and read the `tests/snapshots/help/` diff.
   Never bypass the docstring check with `SKIP_DOCSTRING_CHECK` (humans only).
-- Versions come only from git tags cut by `antagor publish`; the changelog
-  only from ticket titles; dependencies on our other tools by version range
+- Versions come only from git tags; dependencies on our other tools by version range
   from the Gitea registry.
 - The gate (`rb-release check`, run through `uvx` at the template tag) is
   green before every commit.

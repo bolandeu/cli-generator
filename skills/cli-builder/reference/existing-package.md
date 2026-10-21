@@ -132,7 +132,7 @@ fixes or when the package still has the old gate.
 
    Run it until it ends with `release: gate passed`. `<template tag>` is `_commit` in `.copier-answers.yml` after the update. A new template release can add a rule that
    the package's code fails: fix the code (the loop above).
-10. **Release.** The update is its own ticket, titled `Template vX.Y.Z: …`: the title becomes the changelog line. A
+10. **Release.** The update is its own task, titled `Template vX.Y.Z: …`. A
     breaking change for the package's callers is a breaking bump (minor at `0.x`).
 
 Things the update does not do by itself:
@@ -173,7 +173,7 @@ only `[project] name` does.
    must carry the same name: `tests/test_cli.py` fails otherwise. `DIST_NAME_LEGACY` makes an install still
    registered under the old name report its real version until it is reinstalled; clear it
    (`--data dist_name_legacy=`) in a later release once every machine has the new name.
-2. It is a breaking change for consumers: breaking bump (minor at `0.x`) in a ticket whose title names the old and the
+2. It is a breaking change for consumers: breaking bump (minor at `0.x`) in a task whose title names the old and the
    new name.
 3. Every consumer, in the same wave: rename the dependency and its `[tool.uv.sources]` key
    (`"yandex-oauth>=0.2,<0.3"` → `"rb-yandex-oauth>=0.3,<0.4"`, `rb-yandex-oauth = { index = "gitea" }`), `uv lock`,

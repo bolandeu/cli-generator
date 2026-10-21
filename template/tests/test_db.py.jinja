@@ -334,7 +334,7 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
 
 
 # --- The cache schema: kind="cache" tables live in PostgreSQL schema `cache` ------------
-# (public holds the data). Scenarios approved by the user 2026-10-02 (T30).
+# (public holds the data).
 
 RESPONSE = {"phrase_key": "купить елку", "region": 213, "body": '{"top": []}'}
 
@@ -365,7 +365,7 @@ def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
 
 
 def test_sqlite_ignores_the_cache_schema() -> None:
-    """Scenario 5: on SQLite the cache table is in the same file, read and written as before."""
+    """Case 5: on SQLite the cache table is in the same file, read and written as before."""
     engine = db.open_db()
     with engine.begin() as conn:
         conn.execute(sa.insert(tables.responses).values(**RESPONSE))
@@ -376,7 +376,7 @@ def test_sqlite_ignores_the_cache_schema() -> None:
 
 
 def test_old_cli_on_a_moved_sqlite_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Scenario 4 (SQLite): the previous release refuses a database migrated past it, touching nothing."""
+    """Case 4 (SQLite): the previous release refuses a database migrated past it, touching nothing."""
     db.open_db()  # migrated to head by this release
     _old_cli(monkeypatch, tmp_path)
     code, payload = invoke_json("db", "upgrade")
@@ -414,7 +414,7 @@ def _where(conn: sa.Connection, name: str) -> str | None:
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Scenarios 1-3: db upgrade moves the cache table, rows and dates intact; it works after; so does the view."""
+    """Cases 1-3: db upgrade moves the cache table, rows and dates intact; it works after; so does the view."""
     engine = _pg_engine(monkeypatch)
     with engine.begin() as conn:
         command.upgrade(db.alembic_config(conn), "0001")  # the layout before: everything in public
@@ -435,12 +435,12 @@ def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
         assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA  # and no longer in public
         row = conn.execute(sa.select(tables.responses.c.phrase_key, tables.responses.c.fetched_at)).one()
         assert row == (RESPONSE["phrase_key"], fetched)
-    with db.connect() as conn:  # scenario 2: written and read through tables.py after the move
+    with db.connect() as conn:  # case 2: written and read through tables.py after the move
         conn.execute(sa.insert(tables.responses).values(**{**RESPONSE, "region": 2}))
     with engine.connect() as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(tables.responses)).scalar_one() == 2
         view = sa.text(f"SELECT region FROM {db.PREFIX}v1_responses ORDER BY region")  # noqa: S608
-        assert conn.execute(view).scalars().all() == [2, 213]  # scenario 3
+        assert conn.execute(view).scalars().all() == [2, 213]  # case 3
     assert [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")] == view_columns
     _assert_views_match(engine)
     engine.dispose()
@@ -448,7 +448,7 @@ def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_pg_old_cli_on_a_moved_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Scenario 4: the previous release on a moved base → CLI_TOO_OLD (exit 6), creates nothing."""
+    """Case 4: the previous release on a moved base → CLI_TOO_OLD (exit 6), creates nothing."""
     engine = _pg_engine(monkeypatch)
     db.upgrade(engine)
     _old_cli(monkeypatch, tmp_path)
@@ -465,7 +465,7 @@ def test_pg_old_cli_on_a_moved_database(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_pg_push_writes_into_the_cache_schema(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Scenario 6: db push sends local cache rows into cache.<table> in production."""
+    """Case 6: db push sends local cache rows into cache.<table> in production."""
     engine = _pg_engine(monkeypatch)
     db.upgrade(engine)
     monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL or "")
@@ -485,7 +485,7 @@ def test_pg_push_writes_into_the_cache_schema(monkeypatch: pytest.MonkeyPatch, t
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_pg_no_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Scenario 7a: schema `cache` missing → a clear error, nothing migrated at all."""
+    """Case 7a: schema `cache` missing → a clear error, nothing migrated at all."""
     engine = _pg_engine(monkeypatch)
     with engine.begin() as conn:
         command.upgrade(db.alembic_config(conn), "0001")
@@ -501,7 +501,7 @@ def test_pg_no_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
 def test_pg_no_rights_on_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Scenario 7b: a role without CREATE on `cache` → a clear error, no partial move."""
+    """Case 7b: a role without CREATE on `cache` → a clear error, no partial move."""
     engine = _pg_engine(monkeypatch)
     role = f"{db.PREFIX}limited"
     with engine.begin() as conn:
