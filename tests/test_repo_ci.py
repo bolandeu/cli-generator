@@ -10,7 +10,7 @@ WORKFLOW = Path(__file__).resolve().parent.parent / ".gitea" / "workflows" / "te
 # Tags that exist upstream; some actions publish no floating major tag.
 KNOWN_ACTION_TAGS = {"actions/checkout": {"v4"}}
 
-ANTAGOR_PIN = re.compile(r"uv tool install .*antagor\.git@([0-9a-f]{40}|v\d+\.\d+\.\d+)\b")
+ANTAGOR_INSTALL = re.compile(r"uv tool install .*antagor\.git(?!@)")
 
 
 def load():
@@ -29,6 +29,11 @@ def test_runs_on_push_and_on_demand():
     assert not (triggers["push"] or {}).get("branches"), "antagor/publish-<commit> branches must trigger it"
 
 
+def test_runs_every_night():
+    schedule = load()["triggers"]["schedule"]
+    assert all(re.fullmatch(r"(\S+ ){4}\S+", entry["cron"]) for entry in schedule)
+
+
 def test_job_uses_docker_runner_with_the_ci_cache_volume():
     job = load()["jobs"]["gate"]
     assert job["runs-on"] == "docker"
@@ -44,7 +49,7 @@ def test_installs_the_tools_the_gate_needs():
     assert "astral.sh/uv/install.sh" in runs
     assert "/usr/local/bin/gitleaks" in runs
     assert "/usr/local/bin/osv-scanner" in runs
-    assert ANTAGOR_PIN.search(runs)
+    assert ANTAGOR_INSTALL.search(runs), "antagor installs from current main: no commit or tag"
 
 
 def test_template_gate_is_the_last_step():

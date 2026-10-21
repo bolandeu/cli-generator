@@ -30,7 +30,8 @@ def test_antagor_project_config() -> None:
     assert config["schema"] == 1
     # The prefix is the Plane project identifier: the product's full name in capitals (`antagor new`).
     assert re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", config["prefix"])
-    assert config["worker"] == "claude-code"
+    assert "worker" not in config
+    assert config["heavy"] == ["rb-release check"]
     tag = yaml.safe_load((root / ".copier-answers.yml").read_text())["_commit"]
     gate = (
         'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git'
@@ -40,6 +41,11 @@ def test_antagor_project_config() -> None:
     assert config["review"]["required_types"] == ["feature", "bugfix"]
     expected = {"versioning": "semver", "changelog": "CHANGELOG.md", "deploy_command": "sh scripts/deploy.sh"}
     assert {k: config["publish"].get(k) for k in expected} == expected  # Antagor may add its own keys
+    assert config["publish"]["gate"] == "remote"
+    status_url = config["publish"]["gate_status_url"]
+    assert status_url.startswith("https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/")
+    assert status_url.endswith("/commits/{commit}/status")
+    assert "gate_command" not in config["publish"]
     # The Human sets the mode (`antagor mode set`, `antagor new --mode`).
     assert config.get("mode") in (None, "strict", "default", "free", "fast")
     assert (root / ".agents" / "antagor" / ".gitignore").read_text().split() == ["state/", "receipts/"]
@@ -54,7 +60,7 @@ def test_antagor_layout() -> None:
     agents = (root / "AGENTS.md").read_text()
     for pointer in ("`CONTEXT.md`", "`docs/adr/`", "`CODING_STANDARDS.md`", "`.agents/antagor/`"):
         assert pointer in agents
-    for moved in ("TDD", "--dry-run", "expand/contract"):
+    for moved in ("TDD", "hand fix", "--dry-run", "expand/contract"):
         assert moved not in agents, moved
     assert "AGENTS.md" in (root / "CLAUDE.md").read_text()
     context = (root / "CONTEXT.md").read_text()

@@ -2,9 +2,12 @@ name: template-gate
 
 # The template gate (scripts/check_template.sh) on homeserver: renders every variant of the
 # template and runs their checks. The Mac runs the same script by hand.
+# The nightly run checks every rendered package against antagor's current main.
 # push has no branch filter: antagor publish pushes antagor/publish-<commit> and reads the status.
 on:
   push:
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 jobs:
@@ -44,6 +47,6 @@ jobs:
       # The gate runs antagor's layout check on each generated project.
       - name: antagor
         run: |
-          uv tool install --force "antagor @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/antagor.git@4fd5ab553fc9aae6083bc204eac6ffbd6da825c6"
+          uv tool install --force "antagor @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/antagor.git"
       - name: Template gate
         run: sh scripts/check_template.sh
