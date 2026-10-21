@@ -111,10 +111,11 @@ expect_root_options() {
 
 # run_gate: the gate from this working tree's gate/ through uvx; it changes neither pyproject.toml
 # nor uv.lock. --no-cache: uvx reuses its cached build of a local directory even when the code changed
-# (--refresh and --reinstall do not help, uv 0.10).
+# (--refresh and --reinstall do not help, uv 0.10). Arguments go to uvx: `--python 3.11` runs the gate
+# on the lowest Python a package may declare.
 run_gate() {
     before=$(cat pyproject.toml uv.lock | shasum)
-    run uvx --no-cache --from "$ROOT/gate" rb-release check
+    run uvx --no-cache "$@" --from "$ROOT/gate" rb-release check
     [ "$(cat pyproject.toml uv.lock | shasum)" = "$before" ] || fail "the gate changed pyproject.toml or uv.lock"
 }
 
@@ -232,6 +233,8 @@ VARIANT=template
 grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is still in the template"
 
 check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
+# the gate installs and starts on 3.11; its steps cannot read the template's 3.14 syntax (`except A, B:`)
+run uvx --no-cache --python 3.11 --from "$ROOT/gate" rb-release --help
 expect_parts absent project auth providers db skill describe contracts
 expect_commands auth auth-status doctor run
 expect_root_options absent --project --ai
