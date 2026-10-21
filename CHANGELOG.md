@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.3 — 2026-10-21
+
+### Outside epics
+
+- Package docs take Antagor's own layout skeleton and keep only the package's rules; the template and skill do not retell Antagor (CG-064)
+
 ## v1.26.2 — 2026-10-21
 
 ### Main
