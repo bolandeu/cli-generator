@@ -61,8 +61,13 @@ def test_scanners_are_cached_per_pinned_version() -> None:
 def test_project_files_name_the_gate_of_the_template_tag() -> None:
     import tomllib
 
-    checks = tomllib.loads((ROOT / ".agents" / "antagor" / "antagor.toml").read_text())["checks"]
-    assert GATE in checks
+    config = tomllib.loads((ROOT / ".agents" / "antagor" / "antagor.toml").read_text())
+    # The gate runs among the checks, or as the remote gate (a package of mode fast).
+    publish = config["publish"]
+    if publish.get("gate") == "remote":
+        assert publish["gate_status_url"].endswith("/commits/{commit}/status")
+    else:
+        assert GATE in config["checks"]
     assert GATE in (ROOT / "AGENTS.md").read_text()
     assert GATE in (ROOT / "CODING_STANDARDS.md").read_text()
     # README.md is the project's own (copier skips it on update): not checked here.
