@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.26.2 — 2026-10-21
+
+### Main
+
+- existing-package mode: no per-package remote-gate-accept (one --any-repo consent covers every package)
+
+
 ## v1.26.1 — 2026-10-21
 
 ### Outside epics
