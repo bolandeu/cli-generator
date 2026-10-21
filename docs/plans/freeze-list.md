@@ -8,7 +8,6 @@ until the Human lifts the freeze.
   remote gate (CI on the candidate branch, before the tag) exists now.
 - The gate tag is written in 6 places of a package (Antagor `checks`, CI workflow, README, AGENTS.md, two
   tests), so every gate bump is a task. One source (the CI gate line), the others compared with it.
-- The package CI workflow runs on `main` and tags only; the remote gate needs it on `antagor/publish-*` too.
 - `check_template.sh` checks the gate on Python 3.11 by rewriting a rendered package with `sed`; a small
   3.11 fixture package would be simpler.
 - `rb-release check --keep-going`: list every red step in one run (a package probe took 7 runs).
