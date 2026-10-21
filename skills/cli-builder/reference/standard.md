@@ -258,6 +258,7 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** `antagor publish` runs no full gate before the tag: `[publish]` has no `gate_command`. The task
   checks run the gate before review, and the CI workflow runs it after the push. A red CI after the tag is fixed by the
   next patch release.
+- **Recommended.** A change is the Architect's hand fix (no ticket) only when it is the smallest one, within the `[architect.hand_fix]` bounds of the Antagor config; code, a test, or a change to what a rule means is always a ticket.
 - **Recommended.** A user-visible change has a ticket whose title says what changed for the user: the title is the
   changelog line.
 - **Recommended.** Versions follow SemVer over the public surface: commands, options, the `--json` shapes, exit codes,
