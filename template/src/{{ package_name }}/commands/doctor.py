@@ -26,14 +26,11 @@ def doctor(
     checks: list[dict] = [{"name": "python", "ok": True}]
     checks.append({"name": "cli_version", "ok": True, "detail": installed_version() or DEV_VERSION})
 
-    provider = "default"
     if project := optional_module(f"{_PACKAGE_NAME}.commands.project"):  # include_project=false drops it
-        project_checks, config = project.doctor_checks(ctx)
-        checks.extend(project_checks)
-        provider = config.provider.name if config else provider
+        checks.extend(project.doctor_checks(ctx))
 
     if credentials := optional_module(f"{_PACKAGE_NAME}.credentials.health"):  # include_auth=false drops it
-        checks.extend(credentials.doctor_checks(provider))
+        checks.extend(credentials.doctor_checks())
     checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
     if db := optional_module(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time
         checks.extend(db.doctor_checks())

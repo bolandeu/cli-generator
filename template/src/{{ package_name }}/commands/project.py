@@ -10,7 +10,6 @@ from typer.core import TyperOption
 from .. import output
 from ..core import services
 from ..core.errors import CliTooOld
-from ..core.models import ProjectConfig
 from . import config, init, status
 
 
@@ -34,23 +33,23 @@ def register(app: typer.Typer) -> None:
     )
 
 
-def doctor_checks(ctx: typer.Context) -> tuple[list[dict], ProjectConfig | None]:
-    """The `project`, `config` and `cli_compat` checks of `doctor`, and the project's config when it loads."""
+def doctor_checks(ctx: typer.Context) -> list[dict]:
+    """The `project`, `config` and `cli_compat` checks of `doctor`; outside a project only `project`, and it is ok."""
     start = Path(ctx.obj.get("project") or Path.cwd())
     output.vecho(ctx, f"Searching for a project root starting at: {start}")
     root = services.find_project_root(start)
-    checks: list[dict] = [{"name": "project", "ok": root is not None, "detail": str(root) if root else None}]
     if root is None:
-        return checks, None
+        return [{"name": "project", "ok": True, "detail": "doctor runs outside a project"}]
+    checks: list[dict] = [{"name": "project", "ok": True, "detail": str(root)}]
     try:
         config = services.load_config(root, check_compat=False)
     except Exception as exc:
         checks.append({"name": "config", "ok": False, "detail": str(exc)})
-        return checks, None
+        return checks
     checks.append({"name": "config", "ok": True})
     try:
         services.check_cli_compat(config)
         checks.append({"name": "cli_compat", "ok": True, "detail": f"project requires >= {config.cli.min_version}"})
     except CliTooOld as exc:
         checks.append({"name": "cli_compat", "ok": False, "detail": exc.message})
-    return checks, config
+    return checks
