@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.4 — 2026-10-21
+
+### Outside epics
+
+- Template follows Antagor's own rules: it stops shipping and testing Antagor's ignore file (scratch/), and the prefix question takes Antagor's prefixes (MEDIAGEN) (CG-065)
+
 ## v1.26.3 — 2026-10-21
 
 ### Outside epics
