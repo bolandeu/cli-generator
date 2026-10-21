@@ -54,8 +54,7 @@ package sitting unreleased without asking.
    `git init -b main && git add -A && git commit -m "Initial commit"`, then
    tag it — the version comes from the tag, and `antagor publish` needs one to
    bump from: `git tag -a v0.1.0 -m v0.1.0`. Run `antagor hooks install`.
-2. **Push to Gitea.** The first push on repo init is allowed without asking
-   (Human, 2026-10-18):
+2. **Push to Gitea.** The first push on repo init is allowed without asking:
    ```bash
    git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git
    git push -u origin main --follow-tags
