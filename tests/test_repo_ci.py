@@ -36,7 +36,7 @@ def test_job_uses_docker_runner_with_the_ci_cache_volume():
     assert "--init" in job["container"]["options"]
     assert "ci-cache:/cache" in job["container"]["volumes"]
     assert job["timeout-minutes"] == 60
-    assert job["env"]["UV_PYTHON"] == "3.12"
+    assert job["env"]["UV_PYTHON"] == "3.14"
 
 
 def test_installs_the_tools_the_gate_needs():

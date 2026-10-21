@@ -21,7 +21,7 @@ jobs:
       XDG_CACHE_HOME: /cache/xdg
       UV_PYTHON_INSTALL_DIR: /cache/python
       UV_LINK_MODE: copy
-      UV_PYTHON: "3.12"
+      UV_PYTHON: "3.14"
       UV_TOOL_BIN_DIR: /cache/bin
     steps:
       - uses: actions/checkout@v4

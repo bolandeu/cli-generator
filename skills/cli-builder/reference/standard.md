@@ -25,6 +25,8 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Mandatory** (gate: `build + install wheel`). The package is a Python distribution that `uv build` turns into a
   wheel; a tool has its command as the first entry of `[project.scripts]`, a library has no command and its top-level
   packages import.
+- **Recommended.** The package requires Python 3.14 or newer (`requires-python = ">=3.14"`); CI and local tests run
+  on 3.14. Why: one Python everywhere; a lower minimum nobody tests is a false promise.
 - **Mandatory** (gate: `uv lock --check`). `uv.lock` is committed and matches `pyproject.toml`. Why: every machine and
   the gate install the same set.
 - **Mandatory** (gate: `ruff check`). `uv run ruff check .` passes.
