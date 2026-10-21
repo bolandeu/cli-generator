@@ -14,7 +14,10 @@ changes. Keep the behaviour: what the package did before still works after.
    uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@<template tag>#subdirectory=gate" rb-release check
    ```
 
-   `<template tag>` is `_commit` in `.copier-answers.yml`, else the latest tag of `cli-generator`.
+   `<template tag>` is the latest tag of `cli-generator`. The gate exists only in template tags v1.21.0 and later, so
+   `_commit` of an old package can point at a tag with no gate. `_commit` is the tag only after a copier update. A
+   workflow or a test ported from the template without an update pins that tag as a constant instead of reading
+   `_commit`.
 2. The gate stops at the first red step and prints its name. Open the Standard section that names the step, read the
    rule, fix the package, run the gate again.
 3. Repeat until the last line is `release: gate passed`. A step that is skipped with a notice (`osv-scanner`,
@@ -36,6 +39,9 @@ files: write the file the rule asks for.
 | `standard: ci` | Standard, CI |
 | `vulnerability audit` | Standard, Release |
 
+An old gate in the package is a fix like any other: remove the old release script, its tests and an old gate line in
+the Antagor `checks`. Report removed tests as removed existing tests, not as edited ones.
+
 A tool the package uses beyond the Standard (a database, providers, a project config) has its rules in
 Standard, Optional parts. The gate checks them only when the package has the part.
 
@@ -50,6 +56,15 @@ Rules to keep while you fix:
    `from … import` inside a function relies on.
 5. **A secret found in the repo** is a real finding: tell the Human its name and file. Do not rewrite history.
    Revoking it is the Human's.
+
+## A project under Antagor
+
+The Architect may not commit package files, and the worker does not commit.
+
+1. The Architect runs the gate in a throwaway clone, with temporary fixes, until it has every red step.
+2. The Architect writes one task that lists all red steps.
+3. The worker fixes them test-first. The red run of each new test goes in its report, not in git history.
+4. Every Python module the worker touches has a module docstring. Antagor refuses the task otherwise.
 
 ## A script or CLI that is not a package yet
 
@@ -106,6 +121,7 @@ fixes or when the package still has the old gate.
    `checks`: `grep -n checks .agents/antagor/antagor.toml` must show the uvx command below; the update may keep an old
    line, fix it by hand. A task for a worker: the Architect puts `.agents/antagor/antagor.toml` in `owns_paths` of the
    task, or edits it before the run. Without that the worker leaves the old gate and the package's own tests fail.
+   Drop `gate_command` from `[publish]` of that file if it is there (Standard, Release).
 8. **Lock and snapshots.** `uv lock`, then `uv run pytest --snapshot-update`. Help snapshots are rendered only on
    `copier copy` and when a template release changes a command's help: read the diff in `tests/snapshots/help/`.
 9. **Gate.**
