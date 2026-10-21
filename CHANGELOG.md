@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.3 — 2026-10-21
+
+### Outside epics
+
+- This repo's template gate runs in Gitea Actions on homeserver (CG-053)
+
 ## v1.25.2 — 2026-10-21
 
 ### Outside epics
