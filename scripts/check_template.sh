@@ -237,7 +237,7 @@ generate_at() {
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
     write_antagor_ignore
     run git add -A
-    run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m antagor-ignore
+    run git -c user.name=gate -c user.email=gate@example.invalid commit -q --allow-empty -m antagor-ignore
 }
 
 # update_staged: update the project in the cwd to the working tree through the worker script
@@ -348,7 +348,7 @@ text = text.replace('heavy = ["rb-release check"]', 'heavy = ["rb-release check"
 open(path, "w").write(text)
 PY
     run uv sync -q
-    run uv run pytest -q --no-cov tests/test_scripts.py
+    run uv run pytest -q --no-cov
 ) || exit 1
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
