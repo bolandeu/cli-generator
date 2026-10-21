@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.26.0 — 2026-10-21
+
+### Outside epics
+
+- doctor is healthy on a server with env credentials and no keychain, and outside a project (CG-061)
+- doctor stays offline, and the package CI runs on the remote gate's branch antagor/publish-* (CG-062)
+
 ## v1.25.8 — 2026-10-21
 
 ### Outside epics
