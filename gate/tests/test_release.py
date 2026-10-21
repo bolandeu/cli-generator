@@ -55,6 +55,21 @@ def test_a_passing_package_passes_every_step(in_package) -> None:
     assert result.exit_code == 0
 
 
+def test_a_test_that_fails_under_the_ci_variables_fails_the_pytest_step(in_package, monkeypatch) -> None:
+    root = in_package('"""A demo package."""\n')
+    for name in ("GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS"):
+        monkeypatch.delenv(name, raising=False)
+    (root / "tests" / "test_ci.py").write_text(
+        'import os\n\n\ndef test_runs_outside_ci() -> None:\n    assert "GITHUB_ACTIONS" not in os.environ\n'
+    )
+
+    result = _check()
+
+    assert result.stdout.splitlines()[-1] == "release: pytest ... FAILED"
+    assert "test_runs_outside_ci" in result.stderr
+    assert result.exit_code == 1
+
+
 def test_a_ruff_error_stops_the_gate_at_ruff_check(in_package) -> None:
     in_package("import os\n")
 

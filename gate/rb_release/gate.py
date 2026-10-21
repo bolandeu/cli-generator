@@ -52,6 +52,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import standard
+from standard import CI_ENV, probe_env
 
 CONTRACT_TESTS = "tests/test_contracts.py"
 COMMANDS = (
@@ -239,7 +240,8 @@ class Gate:
     def run_command(self, argv: tuple[str, ...]) -> str:
         if argv[:2] == ("uv", "run"):  # run lint/types/tests with the configured extras installed
             argv = ("uv", "run", *self._extra_args(), *argv[2:])
-        self.step_output(*argv)
+        env = {**os.environ, **CI_ENV} if "pytest" in argv else None
+        self.step_output(*argv, env=env)
         return ""
 
     def _changed_since(self, tag: str) -> list[str]:
@@ -337,7 +339,7 @@ class Gate:
             return f"none ({CONTRACT_TESTS} doesn't exist)"
         argv = ["uv", "run", *self._extra_args(), "pytest", CONTRACT_TESTS]
         argv += ["-vv", "--no-cov", "-p", "no:cacheprovider", "-rfE", "--tb=no"]  # -vv: the reason is not cut off
-        result = subprocess.run(argv, cwd=self.root, text=True, capture_output=True, check=False)
+        result = subprocess.run(argv, cwd=self.root, text=True, capture_output=True, check=False, env=probe_env())
         output = (result.stdout + result.stderr).strip()
         summary = contract_summary(output)
         if result.returncode not in (0, 5):  # 5: no case collected
@@ -441,11 +443,11 @@ class Gate:
         if script is None:
             return self._check_library(python, wheel, project["name"], built)
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
-        printed = self.step_output(str(exe), "--version").splitlines()
+        printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
         reported = printed[-1].strip() if printed else ""
         if reported != built:
             raise StepFailed(f"`{script} --version` printed {reported!r}, but the wheel is version {built}")
-        self.step_output(str(exe), "--help")
+        self.step_output(str(exe), "--help", env=probe_env())
         self.console_script = exe
         return f"{wheel.name}; `{script} --version` = {reported}; `{script} --help` ok"
 
