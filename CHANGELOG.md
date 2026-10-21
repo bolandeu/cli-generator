@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.4 — 2026-10-21
+
+### Outside epics
+
+- Existing-package mode and Standard: the Antagor path, the gate tag of an old package, the old gate, the install choice, the gate in CI after the push (CG-054)
+
 ## v1.25.3 — 2026-10-21
 
 ### Outside epics
