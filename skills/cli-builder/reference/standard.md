@@ -193,6 +193,12 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
   ```
 
   A library has `homeserver = []` and `mac = false`. Why: sysadmin's tool-updater installs from this section.
+
+  Choose the values by who runs the command:
+  1. An agent or an automation on homeserver runs it: `homeserver = ["rbtools"]`.
+  2. The Human or an agent on the Mac runs it: `mac = true`.
+  3. Nobody runs it (a library): `[]` and `false`.
+  4. Unsure: both on.
 - **Mandatory** (gate: `build + install wheel`). The wheel installs into an empty venv with exactly the `uv.lock` set
   (nothing resolved from an index), `uv pip check` passes, and `<cli> --help` works. A package that `[tool.uv.sources]`
   takes from an explicit index installs from that index only, at its locked version. Why: a same-named PyPI package
@@ -247,6 +253,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** `antagor publish --bump patch|minor|major` is the only way a version moves: it merges the accepted
   tickets, writes `CHANGELOG.md` from their titles, tags and pushes. The Human (or the project's Architect) runs it;
   nobody pushes by hand, edits `CHANGELOG.md` or adds changelog fragments.
+- **Recommended.** `antagor publish` runs no full gate before the tag: `[publish]` has no `gate_command`. The task
+  checks run the gate before review, and the CI workflow runs it after the push. A red CI after the tag is fixed by the
+  next patch release.
 - **Recommended.** A user-visible change has a ticket whose title says what changed for the user: the title is the
   changelog line.
 - **Recommended.** Versions follow SemVer over the public surface: commands, options, the `--json` shapes, exit codes,
