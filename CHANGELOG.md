@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.26.6 — 2026-10-21
+
+### Outside epics
+
+- A package with the remote gate passes the template's CI test, and the template gate runs the whole suite of a fast-mode package (CG-067)
+- Error messages and verbose lines keep text in square brackets in human output (CG-068)
+
 ## v1.26.5 — 2026-10-21
 
 ### Outside epics
