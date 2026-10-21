@@ -45,6 +45,5 @@ jobs:
       - name: antagor
         run: |
           uv tool install --force "antagor @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/antagor.git@4fd5ab553fc9aae6083bc204eac6ffbd6da825c6"
-          antagor --version
       - name: Template gate
         run: sh scripts/check_template.sh
