@@ -416,15 +416,19 @@ def test_doctor_is_healthy_with_env_credentials_and_no_keychain(
     assert payload["healthy"] is True
 
 
-def test_doctor_fails_for_an_invalid_required_credential(demo_providers) -> None:
-    payload, checks = doctor_checks(demo=BAD)
-    assert checks["credential"]["ok"] is False
-    assert payload["healthy"] is False
+def test_doctor_makes_no_provider_health_call(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(self) -> Health:
+        pytest.fail("doctor must stay offline: no provider health call")
 
-
-def test_doctor_fails_for_an_expired_required_credential(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(Demo, "expires_at", datetime.now(UTC) - timedelta(days=1))
+    monkeypatch.setattr(Demo, "health_check", forbidden)
     payload, checks = doctor_checks(demo=GOOD)
+    assert checks["credential"]["ok"] is True
+    assert "demo: unchecked" in checks["credential"]["detail"]
+    assert payload["healthy"] is True
+
+
+def test_doctor_fails_for_a_missing_required_credential(demo_providers) -> None:
+    payload, checks = doctor_checks()
     assert checks["credential"]["ok"] is False
     assert payload["healthy"] is False
 

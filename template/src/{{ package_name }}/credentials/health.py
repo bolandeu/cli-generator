@@ -191,9 +191,9 @@ def render(payload: dict) -> None:
 
 
 def doctor_checks() -> list[dict]:
-    """The `credential_store` and `credential` checks of `doctor`, by the rule of `auth status`."""
+    """The `credential_store` and `credential` checks of `doctor`: the rule of `auth status`, offline (presence only)."""
     backend = manager.store_backend()
-    payload, problem = status(cli_name(), installed_version() or DEV_VERSION, check=True, only=None)
+    payload, problem = status(cli_name(), installed_version() or DEV_VERSION, check=False, only=None)
     providers_seen = ", ".join(f"{entry['provider']}: {entry['status']}" for entry in payload["credentials"])
     return [
         {
