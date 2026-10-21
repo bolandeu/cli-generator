@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.1 — 2026-10-21
+
+### Outside epics
+
+- Template follows current Antagor: only package facts in its Antagor files, remote publish gate, heavy gate, and this repo's CI checks against Antagor main every night (CG-063)
+
 ## v1.26.0 — 2026-10-21
 
 ### Outside epics
