@@ -277,7 +277,7 @@ class Gate:
         ]
         if problems:
             raise StepFailed(
-                "pyproject.toml [[tool.rb.external]] doesn't match the code (standard §12):\n  - "
+                "pyproject.toml [[tool.rb.external]] doesn't match the code (the Standard, Technology):\n  - "
                 + "\n  - ".join(problems)
                 + '\nDeclare: [[tool.rb.external]] name = "x", required = true, min_version = "1.0", check = "x --version", why = "..."'
             )
