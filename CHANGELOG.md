@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.1 — 2026-10-21
+
+### Outside epics
+
+- Standard names no ADR of cli-generator: packages have their own docs/adr (CG-051)
+
 ## v1.25.0 — 2026-10-20
 
 ### E-006 — Minimal template with optional parts, and the skill in two modes
