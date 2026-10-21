@@ -4,7 +4,7 @@ name = "rb-release"
 # (uvx --from "git+…/cli-generator.git@<tag>#subdirectory=gate" rb-release check).
 version = "0.0.0"
 description = "The release gate of the CLI standard: rb-release check, run over the package in the current directory"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = ["typer>=0.12"]
 
 [project.scripts]

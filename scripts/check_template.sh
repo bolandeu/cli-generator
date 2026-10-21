@@ -111,11 +111,35 @@ expect_root_options() {
 
 # run_gate: the gate from this working tree's gate/ through uvx; it changes neither pyproject.toml
 # nor uv.lock. --no-cache: uvx reuses its cached build of a local directory even when the code changed
-# (--refresh and --reinstall do not help, uv 0.10).
+# (--refresh and --reinstall do not help, uv 0.10). Arguments go to uvx: `--python 3.11` runs the gate
+# on the lowest Python a package may declare.
 run_gate() {
     before=$(cat pyproject.toml uv.lock | shasum)
-    run uvx --no-cache --from "$ROOT/gate" rb-release check
+    run uvx --no-cache "$@" --from "$ROOT/gate" rb-release check
     [ "$(cat pyproject.toml uv.lock | shasum)" = "$before" ] || fail "the gate changed pyproject.toml or uv.lock"
+}
+
+# run_gate_on_python_311: the gate on Python 3.11, the lowest a package may declare, over a copy of the
+# project in the cwd made 3.11-valid: the template's 3.14-only `except A, B:` gets parentheses and
+# requires-python goes to >=3.11 (the gate parses the package's sources with the Python it runs on).
+run_gate_on_python_311() {
+    dest="$WORK/python311"
+    run git clone -q "$PWD" "$dest"
+    (
+        cd "$dest" || exit 1
+        run sed -i.bak -E 's/^requires-python = .*/requires-python = ">=3.11"/' pyproject.toml
+        run rm pyproject.toml.bak
+        run sed -i.bak -E 's/except ([A-Za-z_.]+(, [A-Za-z_.]+)+):/except (\1):/' \
+            $(git ls-files '*.py')
+        run find . -name '*.bak' -not -path './.git/*' -delete
+        run uv lock -q
+        run uv sync -q --python 3.11
+        run uv run ruff format -q .
+        run git add -A
+        run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m python311
+        run git -c user.name=gate -c user.email=gate@example.invalid tag -f -a v0.1.0 -m v0.1.0
+        run_gate --python 3.11
+    ) || exit 1
 }
 
 # verify_project <expected (homeserver, mac) as a Python literal> [README.md]: the checks of a
@@ -232,6 +256,7 @@ VARIANT=template
 grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is still in the template"
 
 check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
+run_gate_on_python_311
 expect_parts absent project auth providers db skill describe contracts
 expect_commands auth auth-status doctor run
 expect_root_options absent --project --ai
