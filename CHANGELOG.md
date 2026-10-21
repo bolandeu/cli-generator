@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.2 — 2026-10-21
+
+### Outside epics
+
+- Template, gate and skill cite no cli-generator development docs: no old reference files, § numbers, ADRs or ticket ids (CG-052)
+
 ## v1.25.1 — 2026-10-21
 
 ### Outside epics
