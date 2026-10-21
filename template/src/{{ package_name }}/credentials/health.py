@@ -15,7 +15,7 @@ from rich.markup import escape
 
 from .. import output, providers
 from ..core.errors import AuthRequired, CliError, CredentialsUnhealthy, InvalidArguments, ProviderError
-from ..core.version import cli_name
+from ..core.version import DEV_VERSION, cli_name, installed_version
 from ..providers import Health, Provider
 from . import manager
 
@@ -190,20 +190,20 @@ def render(payload: dict) -> None:
         output.human.echo_markup(f"{mark} {escape(line)}")
 
 
-def doctor_checks(provider: str) -> list[dict]:
-    """The `credential_store` and `credential` checks of `doctor`: a usable keychain and a credential for `provider`."""
+def doctor_checks() -> list[dict]:
+    """The `credential_store` and `credential` checks of `doctor`, by the rule of `auth status`."""
     backend = manager.store_backend()
-    available = manager.get_credential(provider) is not None
+    payload, problem = status(cli_name(), installed_version() or DEV_VERSION, check=True, only=None)
+    providers_seen = ", ".join(f"{entry['provider']}: {entry['status']}" for entry in payload["credentials"])
     return [
         {
             "name": "credential_store",
-            "ok": backend is not None,
-            "detail": backend or "no usable OS keychain backend; credentials must come from environment variables",
+            "ok": True,  # the keychain is a convenience of development; environment variables are the source in production
+            "detail": backend or "no OS keychain backend; credentials come from environment variables",
         },
         {
             "name": "credential",
-            "ok": available,
-            "detail": f"provider '{provider}'"
-            + ("" if available else f" — run '{cli_name()} auth login --provider {provider}'"),
+            "ok": problem is None,
+            "detail": providers_seen or "no providers with credentials",
         },
     ]

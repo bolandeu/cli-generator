@@ -116,7 +116,10 @@ def test_doctor_reports_a_missing_project(tmp_path: Path) -> None:
     assert code == 0
     names = [check["name"] for check in payload["checks"]]
     assert names[:3] == ["python", "cli_version", "project"]
-    assert payload["healthy"] is False  # no project here
+    project = payload["checks"][2]
+    assert project["ok"] is True  # doctor outside a project is not a failure
+    assert "outside a project" in project["detail"]
+    assert "config" not in names
 
 
 def test_doctor_reports_config_parse_error(tmp_path: Path) -> None:

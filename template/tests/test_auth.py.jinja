@@ -391,8 +391,44 @@ def test_unavailable_keychain_warns_once_and_only_without_env(
     assert [r.levelname for r in caplog.records].count("WARNING") == 1
 
 
+def doctor_checks(**values: str | None) -> tuple[dict, dict[str, dict]]:
+    result = invoke("doctor", "--json", env=env(**values))
+    payload = json.loads(result.stdout)
+    return payload, {check["name"]: check for check in payload["checks"]}
+
+
 def test_doctor_reports_credential_checks(fake_keyring) -> None:
     _, payload = invoke_json("doctor")
     names = [check["name"] for check in payload["checks"]]
     assert "credential_store" in names
     assert "credential" in names
+
+
+def test_doctor_is_healthy_with_env_credentials_and_no_keychain(
+    demo_providers, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(credentials, "store_backend", lambda: None)
+    payload, checks = doctor_checks(demo=GOOD)
+    assert checks["credential_store"]["ok"] is True
+    assert "environment variables" in checks["credential_store"]["detail"]
+    assert checks["credential"]["ok"] is True
+    assert "demo" in checks["credential"]["detail"]
+    assert payload["healthy"] is True
+
+
+def test_doctor_fails_for_an_invalid_required_credential(demo_providers) -> None:
+    payload, checks = doctor_checks(demo=BAD)
+    assert checks["credential"]["ok"] is False
+    assert payload["healthy"] is False
+
+
+def test_doctor_fails_for_an_expired_required_credential(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Demo, "expires_at", datetime.now(UTC) - timedelta(days=1))
+    payload, checks = doctor_checks(demo=GOOD)
+    assert checks["credential"]["ok"] is False
+    assert payload["healthy"] is False
+
+
+def test_doctor_never_names_a_provider_the_package_does_not_register(demo_providers) -> None:
+    result = invoke("doctor", "--json", env=env(demo=BAD))
+    assert "default" not in result.stdout
