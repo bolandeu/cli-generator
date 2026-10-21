@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.25.5 — 2026-10-21
+
+### Outside epics
+
+- Template-gate CI: drop the antagor --version step line (antagor has no such option) (CG-055)
+
 ## v1.25.4 — 2026-10-21
 
 ### Outside epics
