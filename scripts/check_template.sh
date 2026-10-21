@@ -99,7 +99,7 @@ expect_commands() {
 expect_root_options() {
     want=$1
     shift
-    root_help=$(uv run demotool --help)
+    root_help=$(env -u GITHUB_ACTIONS -u FORCE_COLOR -u PY_COLORS uv run demotool --help)
     for option in "$@"; do
         if printf '%s' "$root_help" | grep -qE -- "$option( |$)"; then
             [ "$want" = present ] || fail "the root help lists $option"

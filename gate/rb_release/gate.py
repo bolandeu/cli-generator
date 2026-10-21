@@ -339,7 +339,7 @@ class Gate:
             return f"none ({CONTRACT_TESTS} doesn't exist)"
         argv = ["uv", "run", *self._extra_args(), "pytest", CONTRACT_TESTS]
         argv += ["-vv", "--no-cov", "-p", "no:cacheprovider", "-rfE", "--tb=no"]  # -vv: the reason is not cut off
-        result = subprocess.run(argv, cwd=self.root, text=True, capture_output=True, check=False)
+        result = subprocess.run(argv, cwd=self.root, text=True, capture_output=True, check=False, env=probe_env())
         output = (result.stdout + result.stderr).strip()
         summary = contract_summary(output)
         if result.returncode not in (0, 5):  # 5: no case collected
