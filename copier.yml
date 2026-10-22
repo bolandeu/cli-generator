@@ -5,8 +5,6 @@ _subdirectory: template
 _skip_if_exists:
   - "README.md"
   - "tests/help_allowlist.txt"
-  # Antagor keeps its ignore file current (adds lines): written once, never merged.
-  - ".agents/antagor/.gitignore"
 
 _exclude:
   - "copier.yaml"
@@ -17,6 +15,10 @@ _exclude:
   - ".git"
   - ".DS_Store"
   - ".svn"
+  # Antagor's own files (`antagor new`, `antagor upgrade --apply`): the template neither ships nor touches them.
+  - "CLAUDE.md"
+  - "docs/adr/README.md"
+  - ".agents/antagor/.gitignore"
   # A part added after the first release drops its files only when its answer is false: copier renders the
   # previous version with these patterns too (to keep what they exclude), and there that answer is undefined.
   - "{% if include_project is false %}src/{{ package_name }}/commands/project.py{% endif %}"

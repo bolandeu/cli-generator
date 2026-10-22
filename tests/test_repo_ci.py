@@ -10,8 +10,6 @@ WORKFLOW = Path(__file__).resolve().parent.parent / ".gitea" / "workflows" / "te
 # Tags that exist upstream; some actions publish no floating major tag.
 KNOWN_ACTION_TAGS = {"actions/checkout": {"v4"}}
 
-ANTAGOR_INSTALL = re.compile(r"uv tool install .*antagor\.git(?!@)")
-
 
 def load():
     workflow = yaml.safe_load(WORKFLOW.read_text())
@@ -49,7 +47,7 @@ def test_installs_the_tools_the_gate_needs():
     assert "astral.sh/uv/install.sh" in runs
     assert "/usr/local/bin/gitleaks" in runs
     assert "/usr/local/bin/osv-scanner" in runs
-    assert ANTAGOR_INSTALL.search(runs), "antagor installs from current main: no commit or tag"
+    assert "antagor" not in runs, "the template gate does not need Antagor"
 
 
 def test_template_gate_is_the_last_step():

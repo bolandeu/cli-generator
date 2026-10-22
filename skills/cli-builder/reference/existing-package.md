@@ -139,7 +139,9 @@ Things the update does not do by itself:
 
 - **Old release tooling.** `towncrier` (`[tool.towncrier]`, `changelog.d/`, the marker comment), `.githooks/`,
   `scripts/install_hooks.sh`, `herdr_name` and the hooks in `.claude/settings.json`: delete them, run
-  `git config --unset core.hooksPath` and `antagor hooks install`. Keep the released sections of `CHANGELOG.md`; delete
+  `git config --unset core.hooksPath`, then bring the project to Antagor's current files: a package with Antagor's
+  config (`.agents/antagor/antagor.toml`) runs `antagor -C <package> upgrade --apply`; a package without it runs
+  `ANTAGOR_ROLE=architect antagor new --prefix <PREFIX>` as in the skill's Publish. Keep the released sections of `CHANGELOG.md`; delete
   a `## [Unreleased]` heading (a package never released renames it `## [X.Y.Z] - <date>`).
 - **Version from the tag.** A `version =` line in `pyproject.toml` with no tag: tag the commit first
   (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`), then use `dynamic = ["version"]` (Standard, Release).

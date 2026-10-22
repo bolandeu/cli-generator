@@ -19,11 +19,6 @@ run() {
     "$@" || { printf '\nFAILED [%s]: %s\n' "$VARIANT" "$*" >&2; exit 1; }
 }
 
-command -v antagor >/dev/null 2>&1 || {
-    printf '\nFAILED: antagor не найден в PATH: нужен для antagor layout check\n' >&2
-    exit 1
-}
-
 # The last template version that copied the gate into scripts/release.py.
 GATE_COPY_TAG=v1.20.10
 STANDARD=https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md
@@ -51,9 +46,8 @@ check_gate_files() {
     return 0
 }
 
-# check_antagor_files <repo>: the Antagor config names the remote gate of Gitea repo bolandeu/<repo> and
-# nothing of Antagor's defaults; AGENTS.md and CODING_STANDARDS.md hold no Antagor rule, no commit-first TDD
-# and no machine-local path
+# check_antagor_files <repo>: the Antagor config names the remote gate of Gitea repo bolandeu/<repo>;
+# AGENTS.md and CODING_STANDARDS.md hold no Antagor rule, no commit-first TDD and no machine-local path
 check_antagor_files() {
     run python3 -c "
 import sys, tomllib
@@ -61,7 +55,7 @@ c = tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))
 want = 'https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/$1/commits/{commit}/status'
 assert c['publish']['gate'] == 'remote' and c['publish']['gate_status_url'] == want, c['publish']
 assert c['heavy'] == ['rb-release check'], c.get('heavy')
-assert not {'worker', 'mode'} & set(c) and 'gate_command' not in c['publish'], c
+assert 'gate_command' not in c['publish'], c
 "
     for file in AGENTS.md CODING_STANDARDS.md; do
         grep -qiE 'hand.?fix|hand_fix' "$file" && fail "$file has a hand-fix line"
@@ -162,18 +156,36 @@ run_gate_on_python_311() {
     ) || exit 1
 }
 
-# write_antagor_ignore, check_antagor_ignore: the Antagor ignore file as Antagor writes it (more lines
-# than the template has). The template ships it once; a package keeps it through `copier update`.
+# write_antagor_files, check_antagor_files_kept: the files Antagor owns, as Antagor writes them. The template
+# ships none of them; a package that has them keeps them through `copier update`.
 ANTAGOR_IGNORE='state/
 receipts/
 scratch/
 '
-write_antagor_ignore() {
+write_antagor_files() {
+    mkdir -p .agents/antagor docs/adr
     printf '%s' "$ANTAGOR_IGNORE" >.agents/antagor/.gitignore
+    [ -e CLAUDE.md ] || printf '# CLAUDE.md\n\nRead AGENTS.md.\n' >CLAUDE.md
+    [ -e docs/adr/README.md ] || printf '# ADR format\n' >docs/adr/README.md
 }
-check_antagor_ignore() {
+check_antagor_files_kept() {
     [ "$(cat .agents/antagor/.gitignore)" = "$(printf '%s' "$ANTAGOR_IGNORE")" ] || fail "the Antagor ignore file changed"
-    test ! -e .agents/antagor/.gitignore.rej || fail "the Antagor ignore file has a conflict"
+    for file in CLAUDE.md docs/adr/README.md .agents/antagor/.gitignore; do
+        [ "$(git show "HEAD:$file")" = "$(cat "$file")" ] || fail "$file changed in the update"
+        test ! -e "$file.rej" || fail "$file has a conflict"
+    done
+}
+# expect_no_antagor_files: a package rendered from the template has none of the files Antagor owns
+expect_no_antagor_files() {
+    for file in CLAUDE.md docs/adr/README.md .agents/antagor/.gitignore; do
+        test ! -e "$file" || fail "the template ships $file"
+    done
+    for file in AGENTS.md CONTEXT.md CODING_STANDARDS.md .agents/antagor/antagor.toml; do
+        test -f "$file" || fail "the template does not ship $file"
+    done
+    for line in .DS_Store Thumbs.db; do
+        grep -qxF "$line" .gitignore || fail ".gitignore lacks $line"
+    done
 }
 
 # verify_project <expected (homeserver, mac) as a Python literal> [README.md]: the checks of a
@@ -181,7 +193,6 @@ check_antagor_ignore() {
 verify_project() {
     expected_install=$1
     shift
-    dest=$PWD
     run uv sync -q
     run uv run python -c "import tomllib; i = tomllib.load(open('pyproject.toml', 'rb'))['tool']['rb']['install']; \
 assert (i['homeserver'], i['mac']) == $expected_install, i"
@@ -194,7 +205,6 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0
     check_gate_files "$@"
     run_gate
-    run antagor -C "$dest" layout check
     check_antagor_files "$REPO_NAME"
 }
 
@@ -214,7 +224,7 @@ check_variant() {
     cd "$dest"
     run git init -q
     run test -f .agents/antagor/antagor.toml
-    check_antagor_ignore
+    expect_no_antagor_files
     verify_project "$expected_install" README.md
     run test -f .gitea/workflows/ci.yml
     expect_parts absent docs
@@ -235,9 +245,9 @@ generate_at() {
     run git init -q
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m previous
-    write_antagor_ignore
+    write_antagor_files
     run git add -A
-    run git -c user.name=gate -c user.email=gate@example.invalid commit -q --allow-empty -m antagor-ignore
+    run git -c user.name=gate -c user.email=gate@example.invalid commit -q --allow-empty -m antagor-files
 }
 
 # update_staged: update the project in the cwd to the working tree through the worker script
@@ -277,7 +287,7 @@ check_update_round() {
     done
     expect_parts present $PARTS
     expect_parts absent docs
-    check_antagor_ignore
+    check_antagor_files_kept
     # The help page of the docs command is the project's own file: the update leaves it to the project.
     run rm -f tests/snapshots/help/docs.txt
     # A template release that changes a help text or `describe` changes the snapshots: the project
@@ -338,13 +348,15 @@ run uvx copier copy "$ROOT" "$WORK/fast-config" --data package_name=demotool --d
     --data description=d --data author_name=A --defaults --trust -q --vcs-ref HEAD
 (
     cd "$WORK/fast-config"
-    # A package of mode fast: its own checks and worker, the full gate only through the remote gate and `heavy`.
+    # A package of mode fast with Antagor's own lines: its checks without the gate command, a worker, a changed
+    # review section; the full gate only through the remote gate and `heavy`.
     run python3 - <<'PY'
 import re
 path = ".agents/antagor/antagor.toml"
 text = open(path).read()
 text = re.sub(r"(?m)^checks = .*$", 'checks = ["uv run pytest -q --no-cov {test_paths}", "python3 scripts/check_command_docstrings.py"]', text)
-text = text.replace('heavy = ["rb-release check"]', 'heavy = ["rb-release check"]\nworker = "claude-code"')
+text = text.replace('heavy = ["rb-release check"]', 'mode = "fast"\nworker = "claude-code"\nheavy = ["rb-release check"]')
+text = text.replace('required_types = ["feature", "bugfix"]', 'required_types = ["feature"]\nreviewer = "claude-code"')
 open(path, "w").write(text)
 PY
     run uv sync -q
