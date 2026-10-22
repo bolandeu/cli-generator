@@ -119,8 +119,9 @@ fixes or when the package still has the old gate.
    `README.md` by hand.
 7. **No gate line in the Antagor config.** `.agents/antagor/antagor.toml` keeps the docstring check in `checks`, the
    remote gate in `[publish]` and `heavy = ["rb-release check"]`. It has no gate command and no `gate_command` in
-   `[publish]` (Standard, Release). The update drops the gate line from an unchanged `checks`; in a changed `checks`
-   (mode fast) delete it by hand. Only `.gitea/workflows/ci.yml` writes the gate command with the template tag.
+   `[publish]` (Standard, Release). The update drops the gate line from an unchanged `checks`. A package of mode fast wrote its own
+   `checks`: this update, once, conflicts on that one line. Resolve it: keep the package's own `checks`, with no gate
+   command, and delete the conflict markers. Only `.gitea/workflows/ci.yml` writes the gate command with the template tag.
    `AGENTS.md` and `CODING_STANDARDS.md` name the `rb-release check` step of that workflow. A task for a worker: the
    Architect puts `.agents/antagor/antagor.toml` in `owns_paths` of the task.
 8. **Lock and snapshots.** `uv lock`, then `uv run pytest --snapshot-update`. Help snapshots are rendered only on
