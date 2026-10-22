@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.8 — 2026-10-22
+
+### Outside epics
+
+- The package's config test no longer asserts Antagor's prefix rule or schema (CG-070)
+
 ## v1.26.7 — 2026-10-22
 
 ### Outside epics
