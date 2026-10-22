@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from typer.core import TyperGroup, TyperOption
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from conftest import PYPROJECT, git
@@ -170,10 +172,13 @@ def test_without_keep_going_the_gate_stops_at_the_first_failed_step(in_package, 
 
 
 def test_the_help_names_keep_going_and_when_to_use_it() -> None:
-    result = CliRunner().invoke(app, ["check", "--help"], prog_name=CLI)
+    # The option as Click holds it, not the Rich help page: CI forces colour codes and panel borders into that page.
+    group = get_command(app)
+    assert isinstance(group, TyperGroup)
+    (keep_going,) = (param for param in group.commands["check"].params if "--keep-going" in param.opts)
+    assert isinstance(keep_going, TyperOption)
 
-    assert "--keep-going" in result.stdout
-    assert "first run on an old package" in " ".join(result.stdout.split())
+    assert "first run on an old package" in (keep_going.help or "")
 
 
 def test_outside_a_package_is_a_usage_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
