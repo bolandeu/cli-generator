@@ -1,3 +1,5 @@
+"""The `doctor` command: checks of this CLI's own setup, one line per check."""
+
 from __future__ import annotations
 
 import typer

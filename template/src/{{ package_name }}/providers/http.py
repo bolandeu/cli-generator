@@ -1,3 +1,7 @@
+"""The HTTP provider: one httpx client with retries, timeouts and the User-Agent of this CLI, and the mapping of HTTP
+failures to the CLI's errors.
+"""
+
 from __future__ import annotations
 
 import functools

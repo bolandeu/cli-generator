@@ -1,3 +1,5 @@
+"""The `describe` command: the machine-readable description (OpenCLI document) of this CLI for agents."""
+
 from __future__ import annotations
 
 import json

@@ -1,3 +1,5 @@
+"""The `skill` command group: print this CLI's agent skill or install it for AI tools."""
+
 from __future__ import annotations
 
 from pathlib import Path

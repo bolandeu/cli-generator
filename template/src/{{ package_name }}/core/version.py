@@ -1,3 +1,7 @@
+"""The installed version, summary and command name of this package, read from its distribution metadata, and the probes
+for optional modules.
+"""
+
 from __future__ import annotations
 
 import functools

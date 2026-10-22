@@ -1,3 +1,5 @@
+"""Every error a command raises, with its exit code and error code, and the table of exit codes the Standard defines."""
+
 from __future__ import annotations
 
 from .._distribution import DIST_NAME

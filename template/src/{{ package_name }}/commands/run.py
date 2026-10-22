@@ -1,3 +1,5 @@
+"""The `run` command: the example action of the template, where a package puts its own work."""
+
 from __future__ import annotations
 
 import typer
