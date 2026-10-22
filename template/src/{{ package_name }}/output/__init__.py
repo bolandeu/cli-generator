@@ -1,3 +1,7 @@
+"""The output layer every command goes through: global options, the `guard` decorator (JSON envelope, exit codes,
+`--dry-run`, confirmation) and the result and error emitters.
+"""
+
 from __future__ import annotations
 
 import functools
@@ -39,6 +43,7 @@ __all__ = [
 ]
 
 _CLI_NAME = cli_name()
+_PACKAGE_NAME = __name__.split(".")[0]
 # Click's UsageError (unknown option, missing argument, bad value): recent Typer ships its own copy of Click,
 # so it is taken from Typer's BadParameter, never imported from the `click` package.
 _UsageError = cast("type[Exception]", typer.BadParameter.__bases__[0])
@@ -259,10 +264,12 @@ def guard(func: Callable) -> Callable:
             )
 
     # Docstrings are the --help text; `{cli}` in their `Example:` lines becomes
-    # this CLI's name, so template-born commands need no Jinja rendering.
+    # this CLI's name and `{package}` the package's (the project folder's name),
+    # so template-born commands need no Jinja rendering.
     # Escaped because Typer renders help as rich markup, which silently drops
     # anything in brackets (`[[tool.rb.external]]`, `[x]`).
-    wrapper.__doc__ = escape((func.__doc__ or "").replace("{cli}", _CLI_NAME)) or None
+    doc = (func.__doc__ or "").replace("{cli}", _CLI_NAME).replace("{package}", _PACKAGE_NAME)
+    wrapper.__doc__ = escape(doc) or None
     _GUARDED.add(wrapper)
     return wrapper
 

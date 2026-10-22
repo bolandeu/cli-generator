@@ -198,6 +198,20 @@ expect_no_antagor_files() {
     done
 }
 
+# check_module_docstrings: every Python module of the rendered project in the cwd (not of an updated one, which
+# keeps files the template no longer renders for it) starts with a module docstring;
+# names the modules that do not. The project's own Python parses them: the template uses syntax of its Python
+check_module_docstrings() {
+    step "every Python module has a module docstring"
+    missing=$(find . -name '*.py' -not -path './.git/*' -not -path './.venv/*' | uv run -q python -c "
+import ast, sys
+for path in sys.stdin.read().split():
+    if ast.get_docstring(ast.parse(open(path).read())) is None:
+        print(path)
+")
+    [ -z "$missing" ] || fail "modules without a module docstring: $(echo $missing)"
+}
+
 # verify_project <expected (homeserver, mac) as a Python literal>: the checks of a
 # generated project, run inside it, then the gate
 verify_project() {
@@ -235,6 +249,7 @@ check_variant() {
     run git init -q
     run test -f .agents/antagor/antagor.toml
     expect_no_antagor_files
+    check_module_docstrings
     verify_project "$expected_install"
     run test -f .gitea/workflows/ci.yml
     expect_parts absent docs

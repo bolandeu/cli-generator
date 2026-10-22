@@ -1,3 +1,5 @@
+"""The `db` command group: migrate, inspect and reset the tool's database."""
+
 from __future__ import annotations
 
 from datetime import datetime

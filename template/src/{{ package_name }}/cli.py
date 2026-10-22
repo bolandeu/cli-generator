@@ -1,3 +1,7 @@
+"""The root Typer app: global options, the command groups and the optional commands a generated package has, wired
+together, and the console-script entry point.
+"""
+
 from __future__ import annotations
 
 import typer

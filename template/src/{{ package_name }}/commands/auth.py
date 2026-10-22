@@ -1,3 +1,7 @@
+"""The `auth` command group: `status` reports the health of the credentials of every provider, or an empty report when
+the package has none.
+"""
+
 from __future__ import annotations
 
 import importlib

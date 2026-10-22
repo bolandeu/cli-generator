@@ -1,3 +1,7 @@
+"""The credential store: save, read and delete a provider's secrets in the system keyring, or in environment variables
+where no keyring exists.
+"""
+
 from __future__ import annotations
 
 import json
