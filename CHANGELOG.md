@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.27.0 — 2026-10-22
+
+### E-007 — Simpler package upkeep: one gate line, a gate that lists every red step, documented modules
+
+A template update touches the gate tag in one package file and never conflicts on it; one gate run shows every red step; every module a package gets from the template has a module docstring. Every change makes the template, its upkeep, its updates or its use by packages simpler; none adds a new part.
+Time: 1.5h since the epic was approved
+
+- The gate command with its tag lives only in the package's CI workflow; Antagor's checks hold no gate (CG-071)
+
 ## v1.26.8 — 2026-10-22
 
 ### Outside epics
