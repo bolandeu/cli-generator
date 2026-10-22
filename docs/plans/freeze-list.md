@@ -14,7 +14,5 @@ until the Human lifts the freeze.
 - Template modules without a module docstring (27); Antagor now names them in the worker's brief.
 - The remote gate exits 124 when the runner is busy longer than `gate_timeout_minutes` (15); a queue of ~10 min
   already happened. A repeat `publish` works; a larger timeout would avoid the repeat.
-- Generated tests pin Antagor's own settings (`checks`, the ignore file's lines, the prefix rule); each Antagor
-  change broke packages (v1.26.4–v1.26.6). Test only the package's facts (gate, docstring check), not Antagor's.
 - `init --help` says it creates `.{cli}/config.toml`, but the folder is named by the package (`.rb_mediagen/`,
   not `.mediagen/`): wrong only when the command name differs from the package name.
