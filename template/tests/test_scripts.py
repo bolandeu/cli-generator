@@ -32,8 +32,6 @@ def test_antagor_project_config() -> None:
         status_url = publish["gate_status_url"]
         assert status_url.startswith("https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/")
         assert status_url.endswith("/commits/{commit}/status")
-    else:
-        assert any(check.endswith("rb-release check") and "cli-generator.git@" in check for check in config["checks"])
     expected = {"versioning": "semver", "changelog": "CHANGELOG.md", "deploy_command": "sh scripts/deploy.sh"}
     assert {k: config["publish"].get(k) for k in expected} == expected  # Antagor may add its own keys
     assert "git push origin main --follow-tags" in (SCRIPTS / "deploy.sh").read_text()

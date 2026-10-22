@@ -253,8 +253,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** No `version =` in `pyproject.toml` and no version literal in the code: the code reads
   `importlib.metadata.version()`.
 - **Recommended.** A version moves only through Antagor's release. Nobody pushes or tags by hand, edits
-  `CHANGELOG.md` or adds changelog fragments. `[publish]` of the Antagor config has no `gate_command`: the task checks
-  run the gate, and the CI workflow runs it after the push. A red CI after the tag is fixed by the next patch release.
+  `CHANGELOG.md` or adds changelog fragments. The Antagor config holds the docstring check in `checks`, the gate in `heavy`, and no gate
+  command; `[publish]` has `gate = "remote"`: the CI workflow runs the full gate before the tag, and the tag waits for
+  it. The CI workflow is the only package file that writes the gate command with the template tag.
 - **Recommended.** A user-visible change is a task whose title says what changed for the user.
 - **Recommended.** Versions follow SemVer over the public surface: commands, options, the `--json` shapes, exit codes,
   error codes, the `auth status` and `describe` documents, the Python API.

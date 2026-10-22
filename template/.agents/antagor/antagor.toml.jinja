@@ -1,7 +1,7 @@
 schema = 1
 prefix = "{{ antagor_prefix }}"
 name = "{{ cli_name }}"
-checks = ["python3 scripts/check_command_docstrings.py", '{{ gate_command }}']
+checks = ["python3 scripts/check_command_docstrings.py"]
 heavy = ["rb-release check"]
 
 [review]
