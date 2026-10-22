@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.26.7 — 2026-10-22
+
+### Outside epics
+
+- Antagor owns its files: the template ships only package facts and the skill runs antagor new (CG-069)
+
 ## v1.26.6 — 2026-10-21
 
 ### Outside epics
