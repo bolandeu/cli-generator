@@ -25,18 +25,28 @@ STANDARD=https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/br
 
 fail() { printf '\nFAILED [%s]: %s\n' "$VARIANT" "$*" >&2; exit 1; }
 
-# check_gate_files [README.md]: the project has no copy of the gate, no adopt_core answer and no
-# rb-cli-core in any tracked file; its CI, antagor.toml, AGENTS.md (and README.md when named) call
-# the uvx gate at the template tag of .copier-answers.yml; AGENTS.md and the package skill link the
-# Standard and cite no § numbers
+# check_gate_files: the project has no copy of the gate, no adopt_core answer and no rb-cli-core in any
+# tracked file; only its CI workflow writes the uvx gate command at the template tag of .copier-answers.yml;
+# Antagor's checks hold the docstring check and no gate command; AGENTS.md and CODING_STANDARDS.md name the CI
+# step; AGENTS.md and the package skill link the Standard and cite no § numbers
 check_gate_files() {
     run test ! -e scripts/release.py
     grep -q adopt_core .copier-answers.yml && fail "adopt_core in .copier-answers.yml"
     git grep -q rb-cli-core && fail "rb-cli-core in $(git grep -l rb-cli-core | tr '\n' ' ')"
     tag=$(sed -n 's/^_commit: //p' .copier-answers.yml)
     gate="uvx --from \"git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@$tag#subdirectory=gate\" rb-release check"
-    for file in .gitea/workflows/ci.yml .agents/antagor/antagor.toml AGENTS.md "$@"; do
-        grep -qF "$gate" "$file" || fail "$file does not call: $gate"
+    grep -qF "$gate" .gitea/workflows/ci.yml || fail ".gitea/workflows/ci.yml does not call: $gate"
+    # README.md is the project's own (copier skips it on update): an old one may still hold the command
+    holders=$(git grep -lF 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@' -- . ':!README.md' | tr '\n' ' ')
+    [ "$holders" = ".gitea/workflows/ci.yml " ] || fail "the gate command is in: $holders"
+    run python3 -c "
+import tomllib
+c = tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))
+assert 'python3 scripts/check_command_docstrings.py' in c['checks'], c['checks']
+assert not any('rb-release' in check for check in c['checks']), c['checks']
+"
+    for file in AGENTS.md CODING_STANDARDS.md; do
+        grep -qF '.gitea/workflows/ci.yml' "$file" || fail "$file does not name the CI workflow"
     done
     for file in AGENTS.md src/demotool/data/SKILL.md; do
         [ "$file" = AGENTS.md ] || [ -e "$file" ] || continue  # the package skill is an optional part
@@ -188,7 +198,7 @@ expect_no_antagor_files() {
     done
 }
 
-# verify_project <expected (homeserver, mac) as a Python literal> [README.md]: the checks of a
+# verify_project <expected (homeserver, mac) as a Python literal>: the checks of a
 # generated project, run inside it, then the gate
 verify_project() {
     expected_install=$1
@@ -203,7 +213,7 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run git add -A
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m i
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0
-    check_gate_files "$@"
+    check_gate_files
     run_gate
     check_antagor_files "$REPO_NAME"
 }
@@ -225,7 +235,7 @@ check_variant() {
     run git init -q
     run test -f .agents/antagor/antagor.toml
     expect_no_antagor_files
-    verify_project "$expected_install" README.md
+    verify_project "$expected_install"
     run test -f .gitea/workflows/ci.yml
     expect_parts absent docs
 }
@@ -266,6 +276,18 @@ update_staged() {
 # run the full checks in the updated project.
 check_update_round() {
     generate_at "$@"
+    if [ -n "${FAST_CHECKS:-}" ]; then
+        # A package of mode fast: its checks are its own, without the gate command.
+        run python3 - <<'PY'
+import re
+path = ".agents/antagor/antagor.toml"
+text = open(path).read()
+text = re.sub(r"(?m)^checks = .*$", 'checks = ["uv run pytest -q --no-cov {test_paths}", "python3 scripts/check_command_docstrings.py"]', text)
+open(path, "w").write(text)
+PY
+        run git add -A
+        run git -c user.name=gate -c user.email=gate@example.invalid commit -q -m fast-checks
+    fi
     if [ -z "${CLEAN_TREE:-}" ]; then
         # The change a worker that may not commit holds: `_src_path` written another way (a trailing slash).
         run sed -i.bak -E 's|^(_src_path: .*[^/])$|\1/|' .copier-answers.yml
@@ -273,6 +295,19 @@ check_update_round() {
         grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: gate edit missing\n' "$VARIANT" >&2; exit 1; }
     fi
     update_staged
+    if [ -n "${FAST_CHECKS:-}" ]; then
+        # The one line both sides changed: the template dropped the gate from `checks`, the package wrote its own
+        # `checks`. It is the only conflict; the package keeps its own line, as the update step of the skill says.
+        conflicts=$(grep -rlE '^<<<<<<< ' . --exclude-dir=.git --exclude-dir=.venv | tr '\n' ' ')
+        [ -z "$conflicts" ] || [ "$conflicts" = "./.agents/antagor/antagor.toml " ] || fail "conflicts in: $conflicts"
+        run python3 - <<'PY'
+import re
+path = ".agents/antagor/antagor.toml"
+text = open(path).read()
+text = re.sub(r"(?ms)^<<<<<<< .*?\n=======\n.*?\n>>>>>>> [^\n]*\n", 'checks = ["uv run pytest -q --no-cov {test_paths}", "python3 scripts/check_command_docstrings.py"]\n', text)
+open(path, "w").write(text)
+PY
+    fi
     if [ -z "${CLEAN_TREE:-}" ]; then
         grep -qE '^_src_path: .*/$' .copier-answers.yml || { printf '\nFAILED [%s]: staged change lost\n' "$VARIANT" >&2; exit 1; }
     fi
@@ -375,9 +410,17 @@ if git -C "$ROOT" show "$previous:copier.yml" | grep -q '^include_project:'; the
     PARTS="project auth providers http db skill describe contracts"
     check_update_round update-round "$previous" --data include_project=true --data include_auth=true \
         --data include_db=true --data include_skill=true --data include_describe=true --data include_contracts=true
+    FAST_CHECKS=1
+    check_update_round update-fast-checks "$previous" --data include_project=true \
+        --data include_auth=true --data include_db=true --data include_skill=true --data include_describe=true \
+        --data include_contracts=true
+    FAST_CHECKS=
 else
     PARTS="project auth providers http skill describe contracts"
     check_update_round update-round "$previous"
+    FAST_CHECKS=1
+    check_update_round update-fast-checks "$previous"
+    FAST_CHECKS=
 fi
 PARTS="project auth providers http skill describe contracts"
 REMOVABLE="$DOCS_FILES scripts/release.py tests/data/index/gitea/rb_x-0.1.0-py3-none-any.whl tests/data/index/pypi/rb_x-0.9.0-py3-none-any.whl"

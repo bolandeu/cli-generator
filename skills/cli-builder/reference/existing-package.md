@@ -40,7 +40,7 @@ files: write the file the rule asks for.
 | `vulnerability audit` | Standard, Release |
 
 An old gate in the package is a fix like any other: remove the old release script, its tests and an old gate line in
-the Antagor `checks`. Report removed tests as removed existing tests, not as edited ones.
+the Antagor `checks` (the CI workflow is the only file that holds the gate command). Report removed tests as removed existing tests, not as edited ones.
 
 A tool the package uses beyond the Standard (a database, providers, a project config) has its rules in
 Standard, Optional parts. The gate checks them only when the package has the part.
@@ -117,11 +117,13 @@ fixes or when the package still has the old gate.
 6. **The old gate gone.** `git ls-files scripts/release.py` prints nothing, and
    `grep -n 'cli-core' pyproject.toml uv.lock` finds nothing. Remove what is left by hand. Edit the gate command in
    `README.md` by hand.
-7. **The gate line in the Antagor config.** `.agents/antagor/antagor.toml` (not a root `antagor.toml`) carries it in
-   `checks`: `grep -n checks .agents/antagor/antagor.toml` must show the uvx command below; the update may keep an old
-   line, fix it by hand. A task for a worker: the Architect puts `.agents/antagor/antagor.toml` in `owns_paths` of the
-   task, or edits it before the run. Without that the worker leaves the old gate and the package's own tests fail.
-   Drop `gate_command` from `[publish]` of that file if it is there (Standard, Release).
+7. **No gate line in the Antagor config.** `.agents/antagor/antagor.toml` keeps the docstring check in `checks`, the
+   remote gate in `[publish]` and `heavy = ["rb-release check"]`. It has no gate command and no `gate_command` in
+   `[publish]` (Standard, Release). The update drops the gate line from an unchanged `checks`. A package of mode fast wrote its own
+   `checks`: this update, once, conflicts on that one line. Resolve it: keep the package's own `checks`, with no gate
+   command, and delete the conflict markers. Only `.gitea/workflows/ci.yml` writes the gate command with the template tag.
+   `AGENTS.md` and `CODING_STANDARDS.md` name the `rb-release check` step of that workflow. A task for a worker: the
+   Architect puts `.agents/antagor/antagor.toml` in `owns_paths` of the task.
 8. **Lock and snapshots.** `uv lock`, then `uv run pytest --snapshot-update`. Help snapshots are rendered only on
    `copier copy` and when a template release changes a command's help: read the diff in `tests/snapshots/help/`.
 9. **Gate.**
