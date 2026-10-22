@@ -8,3 +8,6 @@ until the Human lifts the freeze.
   3.11 fixture package would be simpler.
 - The remote gate exits 124 when the runner is busy longer than `gate_timeout_minutes` (15); a queue of ~10 min
   already happened. A repeat `publish` works; a larger timeout would avoid the repeat.
+- A package with a browser (Playwright, spider) needs in its CI: `uvx playwright@<locked> install --with-deps chromium`,
+  container `--shm-size=1g`, `CRAWLEE_DISABLE_BROWSER_SANDBOX=1` (the job runs as root). Each such package wrote it
+  by hand; a note in the Standard, CI, would save the next one five red runs.
