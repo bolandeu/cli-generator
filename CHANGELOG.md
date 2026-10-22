@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.27.1 — 2026-10-22
+
+### E-007 — Simpler package upkeep: one gate line, a gate that lists every red step, documented modules
+
+A template update touches the gate tag in one package file and never conflicts on it; one gate run shows every red step; every module a package gets from the template has a module docstring. Every change makes the template, its upkeep, its updates or its use by packages simpler; none adds a new part.
+Time: 2.1h since the epic was approved
+
+- rb-release check --keep-going runs every step and lists all failed steps (CG-072)
+- Every Python module a package gets from the template has a module docstring; init's help names the package's folder (CG-073)
+
 ## v1.27.0 — 2026-10-22
 
 ### E-007 — Simpler package upkeep: one gate line, a gate that lists every red step, documented modules
