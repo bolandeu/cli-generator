@@ -357,6 +357,9 @@ text = open(path).read()
 text = re.sub(r"(?m)^checks = .*$", 'checks = ["uv run pytest -q --no-cov {test_paths}", "python3 scripts/check_command_docstrings.py"]', text)
 text = text.replace('heavy = ["rb-release check"]', 'mode = "fast"\nworker = "claude-code"\nheavy = ["rb-release check"]')
 text = text.replace('required_types = ["feature", "bugfix"]', 'required_types = ["feature"]\nreviewer = "claude-code"')
+# Antagor owns the schema number and the prefix rule: the package's tests do not assert them.
+text = re.sub(r"(?m)^schema = .*$", "schema = 2", text)
+text = re.sub(r"(?m)^prefix = .*$", 'prefix = "ABCDEFGHIJKL"', text)
 open(path, "w").write(text)
 PY
     run uv sync -q

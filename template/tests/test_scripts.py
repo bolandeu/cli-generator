@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -25,9 +24,6 @@ def test_antagor_project_config() -> None:
 
     root = SCRIPTS.parent
     config = tomllib.loads((root / ".agents" / "antagor" / "antagor.toml").read_text())
-    assert config["schema"] == 1
-    # The prefix is the Plane project identifier: the product's full name in capitals (`antagor new`).
-    assert re.fullmatch(r"[A-Z][A-Z0-9]{1,9}", config["prefix"])
     # A package may add or reorder checks; the template guarantees only the package's own facts.
     assert "python3 scripts/check_command_docstrings.py" in config["checks"]
     assert "rb-release check" in config["heavy"]
