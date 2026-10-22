@@ -52,10 +52,12 @@ package sitting unreleased without asking.
 
 1. **Prepare the local repo.** If the directory isn't a git repo yet:
    `git init -b main && git add -A && git commit -m "Initial commit"`, then
-   tag it — the version comes from the tag: `git tag -a v0.1.0 -m v0.1.0`. Run `antagor hooks install`.
+   `git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git`. Then run
+   `ANTAGOR_ROLE=architect antagor new --prefix <PREFIX>`: with origin set and that role, `new` runs no repository
+   script and asks nothing. It writes Antagor's own files, ignore lines and hooks. Give the Human the steps it lists.
+   Commit what it wrote, then tag the commit — the version comes from the tag: `git tag -a v0.1.0 -m v0.1.0`.
 2. **Push to Gitea.** The first push on repo init is allowed without asking:
    ```bash
-   git remote add origin https://homeserver.tailee01ab.ts.net:3000/bolandeu/<name>.git
    git push -u origin main --follow-tags
    ```
    The first push creates the repo (push-to-create in the `bolandeu` org;
