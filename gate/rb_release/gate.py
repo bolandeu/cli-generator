@@ -2,7 +2,10 @@
 
 Gate steps, in order — the first failure stops everything and prints that
 step's name and output, then `release: code failed` (exit 1) or, when only
-the vulnerability audit failed, `release: audit failed` (exit 3):
+the vulnerability audit failed, `release: audit failed` (exit 3). With
+`--keep-going` every step runs: a step that needs a failed step is skipped,
+and after the last step the failed and skipped steps are listed before the
+same verdict:
 
     secret scan (gitleaks over the git history; skipped with a notice when
     gitleaks isn't installed) · uv lock --check · ruff check ·
@@ -50,6 +53,7 @@ import tomllib
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import standard
 from standard import CI_ENV, probe_env
@@ -63,6 +67,7 @@ COMMANDS = (
     ("pytest", ("uv", "run", "pytest", f"--ignore={CONTRACT_TESTS}")),  # contracts: their own step
 )
 AUDIT_STEP = "vulnerability audit"
+WHEEL_STEP = "build + install wheel"  # the Standard's steps that probe the CLI run its installed script
 EXIT_PASSED = 0
 EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
 EXIT_AUDIT_FAILED = 3  # only the osv-scanner audit: the code is fine, a dependency has a known vulnerability
@@ -73,6 +78,14 @@ Echo = Callable[..., None]  # typer.echo: (message, nl=True, err=False)
 
 class NotAPackage(Exception):
     """The gate was pointed at a directory without pyproject.toml: a usage error."""
+
+
+class Step(NamedTuple):
+    """One gate step: its name, what it runs, and the step whose success it needs (None: none)."""
+
+    name: str
+    run: Callable[[], str]
+    needs: str | None = None
 
 
 class StepFailed(Exception):
@@ -462,37 +475,62 @@ class Gate:
         except standard.Broken as exc:
             raise StepFailed(f"Standard, section {rule.section}: {exc}") from exc
 
-    def steps(self) -> list[tuple[str, Callable[[], str]]]:
+    def steps(self) -> list[Step]:
         return [
-            ("secret scan", self.check_secrets),
-            *((name, lambda argv=argv: self.run_command(argv)) for name, argv in COMMANDS),
-            ("contracts", self.check_contracts),
-            ("existing tests", self.check_existing_tests),
-            ("install section", self.check_install_section),
-            ("external dependencies", self.check_external_deps),
-            ("build + install wheel", self.check_installed_wheel),
-            *((f"standard: {rule.step}", lambda rule=rule: self.check_standard(rule)) for rule in standard.RULES),
-            (AUDIT_STEP, self.check_vulnerabilities),
+            Step("secret scan", self.check_secrets),
+            *(Step(name, lambda argv=argv: self.run_command(argv)) for name, argv in COMMANDS),
+            Step("contracts", self.check_contracts),
+            Step("existing tests", self.check_existing_tests),
+            Step("install section", self.check_install_section),
+            Step("external dependencies", self.check_external_deps),
+            Step(WHEEL_STEP, self.check_installed_wheel),
+            *(
+                Step(
+                    f"standard: {rule.step}",
+                    lambda rule=rule: self.check_standard(rule),
+                    WHEEL_STEP if rule.probes_cli else None,
+                )
+                for rule in standard.RULES
+            ),
+            Step(AUDIT_STEP, self.check_vulnerabilities),
         ]
 
-    def run_steps(self, echo: Echo) -> int:
-        """Run every step, one `release: <step> ...` line each; the exit code: 0 passed, 1 code failed, 3 audit failed."""
-        with self._scratch:
-            return self._run_steps(echo)
+    def run_steps(self, echo: Echo, keep_going: bool = False) -> int:
+        """Run the steps, one `release: <step> ...` line each; the exit code: 0 passed, 1 code failed, 3 audit failed.
 
-    def _run_steps(self, echo: Echo) -> int:
-        for name, step in self.steps():
-            echo(f"release: {name} ... ", nl=False)
+        Without `keep_going` the first failed step ends the run; with it every step runs.
+        """
+        with self._scratch:
+            return self._run_steps(echo, keep_going)
+
+    def _run_steps(self, echo: Echo, keep_going: bool) -> int:
+        failed: list[str] = []
+        skipped: list[str] = []
+        for step in self.steps():
+            echo(f"release: {step.name} ... ", nl=False)
+            if step.needs in failed or step.needs in skipped:
+                echo(f"skipped (needs '{step.needs}')")
+                skipped.append(step.name)
+                continue
             try:
-                detail = step()
+                detail = step.run()
             except StepFailed as exc:
                 echo("FAILED")
-                echo(f"\nrelease: gate step '{name}' failed:\n{exc.output}", err=True)
-                # Last line + exit code tell whoever runs the gate (an agent, CI) whether
-                # the code is broken or only a dependency needs a security bump.
-                audit = name == AUDIT_STEP
-                echo(f"release: {'audit' if audit else 'code'} failed", err=True)
-                return EXIT_AUDIT_FAILED if audit else EXIT_CODE_FAILED
+                echo(f"\nrelease: gate step '{step.name}' failed:\n{exc.output}", err=True)
+                failed.append(step.name)
+                if not keep_going:
+                    break
+                continue
             echo(f"ok ({detail})" if detail else "ok")
-        echo("release: gate passed")
-        return EXIT_PASSED
+        if not failed:
+            echo("release: gate passed")
+            return EXIT_PASSED
+        if keep_going:
+            echo(f"release: failed steps: {', '.join(failed)}", err=True)
+            if skipped:
+                echo(f"release: skipped steps: {', '.join(skipped)}", err=True)
+        # Last line + exit code tell whoever runs the gate (an agent, CI) whether
+        # the code is broken or only a dependency needs a security bump.
+        audit = failed == [AUDIT_STEP]
+        echo(f"release: {'audit' if audit else 'code'} failed", err=True)
+        return EXIT_AUDIT_FAILED if audit else EXIT_CODE_FAILED

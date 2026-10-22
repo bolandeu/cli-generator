@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from conftest import PYPROJECT, git
 from rb_release.cli import app
-from rb_release.gate import Gate, StepFailed, changed_existing_tests, contract_summary, external_programs
+from rb_release.gate import Gate, Step, StepFailed, changed_existing_tests, contract_summary, external_programs
 
 CLI = "rb-release"
 STEPS = [
@@ -82,6 +82,98 @@ def test_a_ruff_error_stops_the_gate_at_ruff_check(in_package) -> None:
     assert "F401" in result.stderr
     assert result.stderr.strip().splitlines()[-1] == "release: code failed"
     assert result.exit_code == 1
+
+
+# --- --keep-going: every step runs, the failed ones are listed at the end -------------------------------------------
+
+
+def _fake_steps(monkeypatch: pytest.MonkeyPatch, *steps: Step) -> None:
+    monkeypatch.setattr(Gate, "steps", lambda self: list(steps))
+
+
+def _pass() -> str:
+    return ""
+
+
+def _fail() -> str:
+    raise StepFailed("it broke")
+
+
+def _keep_going():
+    return CliRunner().invoke(app, ["check", "--keep-going"], prog_name=CLI)
+
+
+def test_keep_going_runs_every_step_and_lists_the_failed_ones(in_package, monkeypatch) -> None:
+    in_package('"""A demo package."""\n')
+    _fake_steps(monkeypatch, Step("one", _fail), Step("two", _pass), Step("three", _fail), Step("four", _pass))
+
+    result = _keep_going()
+
+    assert result.stdout.splitlines() == [
+        "release: one ... FAILED",
+        "release: two ... ok",
+        "release: three ... FAILED",
+        "release: four ... ok",
+    ]
+    assert result.stderr.strip().splitlines()[-2:] == ["release: failed steps: one, three", "release: code failed"]
+    assert result.exit_code == 1
+
+
+def test_keep_going_lists_a_step_that_needs_a_failed_step_as_skipped(in_package, monkeypatch) -> None:
+    in_package('"""A demo package."""\n')
+    _fake_steps(monkeypatch, Step("build", _fail), Step("install", _pass, needs="build"), Step("lint", _pass))
+
+    result = _keep_going()
+
+    assert result.stdout.splitlines() == [
+        "release: build ... FAILED",
+        "release: install ... skipped (needs 'build')",
+        "release: lint ... ok",
+    ]
+    stderr_end = result.stderr.strip().splitlines()[-3:]
+    assert stderr_end == ["release: failed steps: build", "release: skipped steps: install", "release: code failed"]
+    assert result.exit_code == 1
+
+
+def test_keep_going_with_only_the_audit_failed_exits_3(in_package, monkeypatch) -> None:
+    in_package('"""A demo package."""\n')
+    _fake_steps(monkeypatch, Step("lint", _pass), Step("vulnerability audit", _fail))
+
+    result = _keep_going()
+
+    assert result.stderr.strip().splitlines()[-2:] == [
+        "release: failed steps: vulnerability audit",
+        "release: audit failed",
+    ]
+    assert result.exit_code == 3
+
+
+def test_keep_going_with_every_step_passing_passes(in_package, monkeypatch) -> None:
+    in_package('"""A demo package."""\n')
+    _fake_steps(monkeypatch, Step("lint", _pass), Step("tests", _pass))
+
+    result = _keep_going()
+
+    assert result.stdout.splitlines()[-1] == "release: gate passed"
+    assert result.exit_code == 0
+
+
+def test_without_keep_going_the_gate_stops_at_the_first_failed_step(in_package, monkeypatch) -> None:
+    in_package('"""A demo package."""\n')
+    _fake_steps(monkeypatch, Step("one", _pass), Step("two", _fail), Step("three", _pass))
+
+    result = _check()
+
+    assert result.stdout.splitlines() == ["release: one ... ok", "release: two ... FAILED"]
+    assert result.stderr.splitlines() == ["", "release: gate step 'two' failed:", "it broke", "release: code failed"]
+    assert result.exit_code == 1
+
+
+def test_the_help_names_keep_going_and_when_to_use_it() -> None:
+    result = CliRunner().invoke(app, ["check", "--help"], prog_name=CLI)
+
+    assert "--keep-going" in result.stdout
+    assert "first run on an old package" in " ".join(result.stdout.split())
 
 
 def test_outside_a_package_is_a_usage_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

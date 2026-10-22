@@ -27,23 +27,33 @@ def main_options(
 
 
 @app.command()
-def check(ctx: typer.Context) -> None:
+def check(
+    ctx: typer.Context,
+    keep_going: bool = typer.Option(
+        False,
+        "--keep-going",
+        help="Run every step and list all failed steps at the end. Use it for the first run on an old package.",
+    ),
+) -> None:
     """Run the release gate against the package in the current directory or `--project`.
 
     The steps run in order, read from the package's own pyproject.toml. Each
     step prints `release: <step> ... ok`; the first failure stops the gate
-    with its output on stderr. The last line and the exit code give the
+    with its output on stderr. With `--keep-going` every step runs (a step that
+    needs a failed step is skipped); the failed and skipped steps are listed
+    at the end. The last line and the exit code give the
     verdict: `release: gate passed` (0), `release: code failed` (1),
     `release: audit failed` (3). No pyproject.toml there: exit 2.
 
     Example: rb-release check
+    Example: rb-release check --keep-going
     """
     try:
         gate = Gate.at(Path(ctx.obj.get("project") or Path.cwd()))
     except NotAPackage as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(EXIT_USAGE) from exc
-    raise typer.Exit(gate.run_steps(typer.echo))
+    raise typer.Exit(gate.run_steps(typer.echo, keep_going))
 
 
 def main() -> None:
