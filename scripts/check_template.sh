@@ -200,10 +200,10 @@ expect_no_antagor_files() {
 
 # check_module_docstrings: every Python module of the rendered project in the cwd (not of an updated one, which
 # keeps files the template no longer renders for it) starts with a module docstring;
-# names the modules that do not
+# names the modules that do not. The project's own Python parses them: the template uses syntax of its Python
 check_module_docstrings() {
     step "every Python module has a module docstring"
-    missing=$(find . -name '*.py' -not -path './.git/*' -not -path './.venv/*' | python3 -c "
+    missing=$(find . -name '*.py' -not -path './.git/*' -not -path './.venv/*' | uv run -q python -c "
 import ast, sys
 for path in sys.stdin.read().split():
     if ast.get_docstring(ast.parse(open(path).read())) is None:
