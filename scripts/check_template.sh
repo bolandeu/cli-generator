@@ -289,19 +289,19 @@ antagor_name() {
     python3 -c "import tomllib; print(tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))['name'])"
 }
 
-# check_name_update <name> <expected name, or kept> <in-place|with-dest|hand-named> [copier copy --data args...]:
-# generate a package with the command gsc from the previous release tag and update it to the working tree, in
-# place or with the project as the destination argument (hand-named: in place, after the package wrote the
-# expected name by hand). The Antagor config and the answers hold the expected name (kept: the name it had) and
-# its config has no conflict.
+# check_name_update <name> <expected name> <in-place|with-dest> [hand-named] [copier copy --data args...]: generate a
+# package with the command gsc from the previous release tag (hand-named: then write the expected name into its
+# Antagor config by hand) and update it to the working tree, in place or with the project as the destination
+# argument. The Antagor config holds the expected name and has no conflict.
 check_name_update() {
     variant=name-$1
     expected=$2
     how=$3
     shift 3
+    hand_named=false
+    if [ "${1:-}" = hand-named ]; then hand_named=true; shift; fi
     generate_at "$variant" "$previous" --data cli_name=gsc "$@"
-    [ "$expected" = kept ] && expected=$(antagor_name)
-    if [ "$how" = hand-named ]; then
+    if [ "$hand_named" = true ]; then
         run sed -i.bak "s/^name = .*/name = \"$expected\"/" .agents/antagor/antagor.toml
         run rm .agents/antagor/antagor.toml.bak
         run git -c user.name=gate -c user.email=gate@example.invalid commit -q -am hand-named
@@ -310,8 +310,6 @@ check_name_update() {
     test ! -e .agents/antagor/antagor.toml.rej || fail "the Antagor config has a conflict"
     grep -q '^<<<<<<< ' .agents/antagor/antagor.toml && fail "the Antagor config has a conflict"
     [ "$(antagor_name)" = "$expected" ] || fail "the Antagor name is $(antagor_name), expected: $expected"
-    answer=$(sed -n 's/^antagor_name: //p' .copier-answers.yml)
-    [ "$answer" = "$expected" ] || fail "the antagor_name answer is '$answer', expected: $expected"
     cd "$ROOT"
 }
 
@@ -426,21 +424,18 @@ for prefix in ABCDEFGHIJK mg 1AB; do
     fi
 done
 VARIANT=antagor-name
-# The Antagor project name is the package's folder name: the Gitea repository of repository_url, else the
-# destination folder of `copier copy`.
+# The Antagor project name is the destination folder of `copier copy`, never the command or the repository name.
 GSC_URL=https://homeserver.tailee01ab.ts.net:3000/bolandeu/google-search-console
-run uvx copier copy "$ROOT" "$WORK/name-gsc" --data package_name=demotool --data project_name=Demo \
+mkdir -p "$WORK/name-dot/demo-folder"
+run uvx copier copy "$ROOT" "$WORK/demo-folder" --data package_name=demotool --data project_name=Demo \
     --data description=d --data author_name=A --data cli_name=gsc --data repository_url=$GSC_URL \
     --defaults --trust -q --vcs-ref HEAD
-[ "$(cd "$WORK/name-gsc" && antagor_name)" = google-search-console ] || fail "the name is not google-search-console"
-run uvx copier copy "$ROOT" "$WORK/demo-folder" --data package_name=demotool --data project_name=Demo \
-    --data description=d --data author_name=A --defaults --trust -q --vcs-ref HEAD
 [ "$(cd "$WORK/demo-folder" && antagor_name)" = demo-folder ] || fail "the name is not demo-folder"
-mkdir -p "$WORK/name-dot/demo-folder"
 (
     cd "$WORK/name-dot/demo-folder" || exit 1
     run uvx copier copy "$ROOT" . --data package_name=demotool --data project_name=Demo \
-        --data description=d --data author_name=A --defaults --trust -q --vcs-ref HEAD
+        --data description=d --data author_name=A --data cli_name=gsc --data repository_url=$GSC_URL \
+        --defaults --trust -q --vcs-ref HEAD
     [ "$(antagor_name)" = demo-folder ] || fail "the name of a copy into . is not demo-folder"
 ) || exit 1
 VARIANT=fast-config
@@ -467,11 +462,12 @@ PY
 ) || exit 1
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
-check_name_update url google-search-console in-place --data repository_url=$GSC_URL
-check_name_update url-git-dest google-search-console with-dest --data repository_url=$GSC_URL.git
-check_name_update url-hand-named google-search-console hand-named --data repository_url=$GSC_URL/
-check_name_update blank kept in-place
-check_name_update blank-dest kept with-dest
+# An update never changes the Antagor name: neither a name written by hand nor the command the template wrote.
+DATAIO_URL=https://github.com/bolandeu/rb-dataio
+check_name_update dataio dataio in-place hand-named --data repository_url=$DATAIO_URL
+check_name_update dataio-dest dataio with-dest hand-named --data repository_url=$DATAIO_URL
+check_name_update unedited gsc in-place --data repository_url=$GSC_URL
+check_name_update unedited-dest gsc with-dest --data repository_url=$GSC_URL
 DOCS_FILES=$(part_files docs)
 REMOVABLE=$DOCS_FILES
 # A tag with the part questions generates a package with every part on (its default is none); an older tag

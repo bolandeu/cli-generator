@@ -202,20 +202,14 @@ repository_url:
   help: "GitHub mirror URL of this package (e.g. https://github.com/bolandeu/mycli); Gitea is the primary store, the mirror is private and nobody pushes to it — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
   default: ""
 
-# The Antagor project name: the package's folder name, which is also its Gitea repository name. The answer is kept:
-# on `copier update` `_copier_conf.dst_path` is a temporary folder or `.`, so a package made before this question
-# without repository_url keeps the name the template wrote, its command.
+# The Antagor project name: the package's folder name, which is also its Gitea repository name (repository_url is
+# the GitHub mirror, its name can differ). On `copier update` `_copier_conf.dst_path` is a temporary folder or `.`,
+# so the default renders what the template wrote before this question, the command: the merge keeps the package's
+# line. The answer is kept.
 antagor_name:
   type: str
   help: "Antagor project name: the package's folder name, which is also its Gitea repository name"
-  default: >-
-    {%- if repository_url -%}
-    {{ repository_url | regex_replace('/+$', '') | regex_replace('\.git$', '') | basename }}
-    {%- elif updating -%}
-    {{ cli_name }}
-    {%- else -%}
-    {{ _copier_conf.dst_path | realpath | basename }}
-    {%- endif -%}
+  default: "{{ cli_name if updating else _copier_conf.dst_path | realpath | basename }}"
 
 install_homeserver_users:
   type: str

@@ -110,11 +110,8 @@ fixes or when the package still has the old gate.
    the command of a package with `_` in its name: pass `--data cli_name=<the command in [project.scripts]>`. Without a
    `dist_name` answer the default `rb-<slug>` renames the distribution: to keep the name pass
    `--data dist_name=<current [project] name>`. A missing `antagor_prefix` is passed as `--data antagor_prefix=<PREFIX>`.
-   The Antagor project name (`name` in the Antagor config) is the package's folder name. Without an
-   `antagor_name` answer the update takes it from `repository_url` (its last part, without `.git`); without
-   `repository_url` the package keeps its name. When that name is not the folder name, pass
-   `--data antagor_name=<folder name>` once: the answers file keeps it. A name the package already wrote by hand
-   gives no conflict.
+   The Antagor project name (`name` in the Antagor config) is the package's folder name. The update never changes
+   that line. When the name differs from the folder, edit the line once by hand: later updates keep it.
 4. **Update.** `uvx copier update --trust --defaults`. It three-way-merges the template diff since `_commit`; business
    logic, extra commands and tests survive. `README.md` is never touched (`_skip_if_exists`).
 5. **Conflicts** land as `*.rej` files or inline markers. Resolve hunk by hunk: keep the package's commands, providers
