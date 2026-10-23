@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.27.3 — 2026-10-23
+
+### Outside epics
+
+- Generated packages run coverage with the ctrace core (sysmon on 3.14 grows memory per CLI invoke) (CG-077)
+- Antagor project name in generated packages is the folder name, not the CLI name (CG-076)
+
 ## v1.27.2 — 2026-10-23
 
 ### Outside epics
