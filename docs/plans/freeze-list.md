@@ -11,3 +11,11 @@ until the Human lifts the freeze.
 - A package with a browser (Playwright, spider) needs in its CI: `uvx playwright@<locked> install --with-deps chromium`,
   container `--shm-size=1g`, `CRAWLEE_DISABLE_BROWSER_SANDBOX=1` (the job runs as root). Each such package wrote it
   by hand; a note in the Standard, CI, would save the next one five red runs.
+- Update flow (`existing-package.md`), gaps found by batches 2–3 (2026-10-23): `copier update` needs `git stash -u`
+  first and `--trust` always; changing an option (`include_project=false`) deleted an edited package file
+  (`core/services.py`): check `git status | grep '^ D'`; a conflict next to a reworded comment drops a package block;
+  template example tables merge into `tables.py` as duplicates; template tests assume the default project folder; the
+  gate's pytest step runs with CI colour variables and help/describe snapshots may hold a Mac data-dir path; a
+  leaked key in history: a fingerprint-only `.gitleaksignore` line (accepted, not yet in the Standard); old
+  `.git/hooks/pre-commit` with only the docstring check can be deleted; the docstring checker flags a ctx-only
+  signature change; `skills.frontmatter()` keeps YAML quotes; doctor checks with `status` ok/warn/fail.
