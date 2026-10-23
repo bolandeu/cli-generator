@@ -19,3 +19,8 @@ until the Human lifts the freeze.
   leaked key in history: a fingerprint-only `.gitleaksignore` line (accepted, not yet in the Standard); old
   `.git/hooks/pre-commit` with only the docstring check can be deleted; the docstring checker flags a ctx-only
   signature change; `skills.frontmatter()` keeps YAML quotes; doctor checks with `status` ok/warn/fail.
+- Update flow, batch 4 (2026-10-23): a package's own `core/db.py` or `commands/db.py` collides with the `db` part;
+  `errors.py` keeps the Database* errors without `include_db`; files a package deleted (`core/deps.py`) stay deleted
+  though new template code imports them; `AGENTS.md` is not written when `CLAUDE.md` exists; the 3.11 → 3.14 jump
+  needs ruff fixes (UP047, `except (A, B)`); rich elides long option names under the CI env; `uv.lock` changes are
+  not in the conflict list; README install lines are the package's to fix (`_skip_if_exists`).
