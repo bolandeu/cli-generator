@@ -24,3 +24,7 @@ until the Human lifts the freeze.
   though new template code imports them; `AGENTS.md` is not written when `CLAUDE.md` exists; the 3.11 → 3.14 jump
   needs ruff fixes (UP047, `except (A, B)`); rich elides long option names under the CI env; `uv.lock` changes are
   not in the conflict list; README install lines are the package's to fix (`_skip_if_exists`).
+- `gate_status_url` in the Antagor config takes the repository name from `repository_url` (the GitHub mirror, e.g.
+  dataio's `rb-dataio`), not from the folder; a new package whose mirror name differs gets a wrong gate URL and
+  fixes it by hand. Rendering `{{ antagor_name }}` there is not a fix: on update it would rewrite existing
+  packages' correct URLs to the command (gsc). Needs an update-safe default like `antagor_name` (2026-10-23).
