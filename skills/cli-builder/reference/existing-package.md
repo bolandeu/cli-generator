@@ -96,7 +96,8 @@ the logic into `core/`.
 Use it for a package with `.copier-answers.yml`. The update is optional for the gate; do it to take the template's
 fixes or when the package still has the old gate.
 
-1. **Clean tree.** `git status` shows nothing; `copier update` refuses otherwise. Commit or stash, never delete. A
+1. **Clean tree.** `git status` shows nothing; `copier update` refuses otherwise. Untracked files count too. Commit, or
+   run `git stash -u` before the update and `git stash pop` after its commit; never delete. A
    worker that may not commit stages (`git add -A`) and runs the staged script in place of `uvx copier update`, with the
    same arguments:
    `uvx --from copier python <skill dir>/scripts/copier_update_staged.py --trust --defaults [--vcs-ref … --data k=v …]`
@@ -113,7 +114,8 @@ fixes or when the package still has the old gate.
    logic, extra commands and tests survive. `README.md` is never touched (`_skip_if_exists`).
 5. **Conflicts** land as `*.rej` files or inline markers. Resolve hunk by hunk: keep the package's commands, providers
    and settings, take the template's structural changes. Never take one side wholesale (`git checkout --theirs/--ours`,
-   copying the template file over). Delete each `.rej` and read `git diff` before the gate.
+   copying the template file over). Delete each `.rej` and read `git diff` before the gate. A hunk next to a reworded template comment can carry a
+   package block (e.g. `[[tool.rb.external]]`): read the diff of the package's `pyproject.toml` line by line.
 6. **The old gate gone.** `git ls-files scripts/release.py` prints nothing, and
    `grep -n 'cli-core' pyproject.toml uv.lock` finds nothing. Remove what is left by hand. Edit the gate command in
    `README.md` by hand.
@@ -151,15 +153,18 @@ Things the update does not do by itself:
   (and `.github/` if nothing else is in it); port a workflow of the package's own by hand.
 - **Secret scan.** `brew install gitleaks`. A fake test value of the package's own goes in the root `.gitleaks.toml`
   `regexes` as one exact string (`'''^<value>$'''`), never a path or a rule disable. Any other finding is a leaked
-  key (loop, rule 5). A tracked env file: `git rm --cached <file>`, and treat its values as leaked.
+  key (loop, rule 5). A real key leaked in history and revoked by the Human: one line per finding in
+  `.gitleaksignore`, the fingerprint `<commit>:<file>:<rule>:<line>`, with no value. Never a path, a rule disable or
+  the key's value. A tracked env file: `git rm --cached <file>`, and treat its values as leaked.
 - **Dependencies on our packages.** In `[tool.uv.sources]` replace `rb-x = { git = "…", tag = "vX.Y.Z" }` with
   `rb-x = { index = "gitea" }`; `"rb-x>=X.Y"` stays in `dependencies`; `uv lock`.
 - **Extra skills.** Skills beyond the conventions one (in `.agents/skills/`, or a patched `skill` command) move into
   `src/<package_name>/data/skills/<name>/SKILL.md` (frontmatter name `<cli>-<name>`; Standard, Package skill). Drop the
   patch of `commands/skill.py`.
 - **Changing an option** (`--data include_auth=false`, `include_providers=false`): copier deletes the files the new
-  answers no longer generate, except files the package edited. Run `git status`, delete such leftovers by hand and
-  the help snapshots of commands that are gone, then the gate. A package without credentials that does not use
+  answers no longer generate, and may delete a file the package edited (business logic included). Run `git status` and
+  restore every deleted package file from HEAD (`git checkout HEAD -- <file>`). Delete the leftovers of the option by
+  hand, and the help snapshots of commands that are gone, then run the gate. A package without credentials that does not use
   `providers/` answers `include_providers=false`; a deleted template file comes back on the next update.
 - **A bare commit hash in `_commit`.** The package was generated before the template had releases; `copier update`
   works from that commit and moves `_commit` to the latest tag.
