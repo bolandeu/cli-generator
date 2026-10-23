@@ -176,7 +176,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Mandatory** (gate: `secret scan`). No key, token or password is in the repo or its git history. The scan is
   `gitleaks` over the whole history (install it: `brew install gitleaks`; without it the step is skipped with a
   notice). A fake test value is allowed in the root `.gitleaks.toml` as one exact string, never a path or a disabled
-  rule. Any other finding is a leaked key: tell the Human its name and file; revoking it is the Human's.
+  rule. Any other finding is a leaked key: tell the Human its name and file; revoking it is the Human's. When the
+  Human has revoked a key that stays in history, `.gitleaksignore` may hold exactly one fingerprint line per finding
+  (`<commit>:<file>:<rule>:<line>`, no value); never a path, a disabled rule or the key's value.
 - **Recommended.** `.env` and `.env.*` are in `.gitignore`.
 - **Recommended.** A key never goes on the command line or into a project file: it comes from an environment variable
   (or, on a dev machine, the OS keychain). Why: arguments show in the process list and in shell history.
