@@ -258,6 +258,17 @@ def test_a_group_lists_the_commands_of_every_translated_panel() -> None:
     assert listed_commands(GROUP_USAGE + panels) == ["crawl", "sitemaps", "report"]
 
 
+def test_a_group_with_its_own_argument_lists_only_its_commands() -> None:
+    from standard import listed_commands
+
+    usage = " Usage: semkit read [OPTIONS] [IN] COMMAND [ARGS]...\n\n"
+    panels = "╭─ Аргументы ─╮\n│ in  [IN]  Входной файл. │\n╰─╯\n"
+    panels += "╭─ Параметры ─╮\n│ --help  Справка. │\n╰─╯\n"
+    panels += "╭─ Команды ─╮\n│ csv   Прочитать CSV.  │\n│ xlsx  Прочитать XLSX. │\n╰─╯\n"
+
+    assert listed_commands(usage + panels) == ["csv", "xlsx"]
+
+
 def test_a_help_with_only_options_lists_no_commands() -> None:
     from standard import listed_commands
 
