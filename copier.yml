@@ -202,6 +202,21 @@ repository_url:
   help: "GitHub mirror URL of this package (e.g. https://github.com/bolandeu/mycli); Gitea is the primary store, the mirror is private and nobody pushes to it — fills the `uv tool install git+…` command in README.md/SKILL.md; leave blank for a placeholder"
   default: ""
 
+# The Antagor project name: the package's folder name, which is also its Gitea repository name. The answer is kept:
+# on `copier update` `_copier_conf.dst_path` is a temporary folder or `.`, so a package made before this question
+# without repository_url keeps the name the template wrote, its command.
+antagor_name:
+  type: str
+  help: "Antagor project name: the package's folder name, which is also its Gitea repository name"
+  default: >-
+    {%- if repository_url -%}
+    {{ repository_url | regex_replace('/+$', '') | regex_replace('\.git$', '') | basename }}
+    {%- elif updating -%}
+    {{ cli_name }}
+    {%- else -%}
+    {{ _copier_conf.dst_path | realpath | basename }}
+    {%- endif -%}
+
 install_homeserver_users:
   type: str
   help: "Homeserver users the tool-updater installs this tool for, comma-separated ([tool.rb.install] homeserver); blank = build and publish only"
