@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001 - the tests feed the gate help titled in Russian
 """The gate's `standard: <rule>` steps: `rb-release check` on a fixture CLI that meets every mandatory rule of the
 Standard, and on copies of it that each break one rule (one change applied here)."""
 
@@ -160,15 +161,59 @@ def test_the_standard_steps_probe_the_cli_without_the_ci_variables(in_package, m
     assert result.exit_code == 0, result.output
 
 
-def test_a_bare_command_without_a_commands_heading_fails_at_commands_under_the_ci_variables(
+def test_a_bare_command_without_a_commands_section_fails_at_commands_under_the_ci_variables(
     in_package, monkeypatch
 ) -> None:
     for name, value in CI_ENV.items():
         monkeypatch.setenv(name, value)
+    module = _changed("\\n\\nCommands:\\n{rows}", "{rows[:0]}")
 
-    result = _check(in_package, _changed("\\n\\nCommands:", "\\n\\nVerbs:"))
+    result = _check(in_package, module)
 
-    assert "lists no commands (no Commands heading in its output)" in _failed_at(result, "commands", "Commands")
+    assert "lists no commands" in _failed_at(result, "commands", "Commands")
+
+
+def test_a_translated_plain_commands_heading_is_found(in_package) -> None:
+    result = _check(in_package, _changed("\\n\\nCommands:", "\\n\\nКоманды:").replace("Options:", "Параметры:"))
+
+    assert "release: standard: commands ... ok" in result.stdout, result.output
+    assert "release: standard: health ... ok" in result.stdout, result.output
+
+
+def _rich(commands: str, options: str) -> str:
+    """The compliant CLI whose group help is Typer's rich panels, titled `commands` and `options`."""
+    module = _changed("def group_help(group: str) -> str:", "def plain_group_help(group: str) -> str:")
+    return module.replace(
+        "def error(",
+        f"""def group_help(group: str) -> str:
+    rows = "\\n".join(f"│ {{name}}  {{about}} │" for name, about in children(group).items())
+    panel = "╭─ {options} ─╮\\n│ --json │\\n╰─╯\\n" if not group else ""
+    return f"Usage: demo {{group}} COMMAND\\n\\n" + panel + f"╭─ {commands} ─╮\\n{{rows}}\\n╰─╯\\n"
+
+
+def error(""",
+        1,
+    )
+
+
+@pytest.mark.parametrize(("commands", "options"), [("Commands", "Options"), ("Команды", "Параметры")])
+def test_a_rich_commands_panel_is_found_in_english_and_translated(in_package, commands, options) -> None:
+    result = _check(in_package, _rich(commands, options))
+
+    assert result.exit_code == 0, result.output
+    assert "release: standard: commands ... ok (3 commands and 1 groups answer --help)" in result.stdout, result.output
+    assert "release: standard: health ... ok" in result.stdout
+
+
+def test_the_options_panel_is_never_taken_for_commands() -> None:
+    from standard import listed_commands
+
+    plain = "Usage: demo\n\nКоманды:\n  status  Show.\n\nПараметры:\n  --json  Output.\n"
+    rich = "╭─ Параметры ─╮\n│ --json  Output. │\n│ --help  Help. │\n╰─╯\n╭─ Команды ─╮\n│ status  Show. │\n╰─╯\n"
+
+    assert listed_commands(plain) == ["status"]
+    assert listed_commands(rich) == ["status"]
+    assert listed_commands("Options:\n  --json  Output.\n") == []
 
 
 def test_a_command_without_json_fails_at_json(in_package) -> None:
