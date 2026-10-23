@@ -28,7 +28,10 @@ GATE_COMMAND = "rb-release check"
 # every probe of the installed script runs without them.
 CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 
-_COMMANDS_HEADING = re.compile(r"^(╭─ Commands ─|Commands:$)")  # Typer's rich panel, Click's plain help
+_USAGE = re.compile(r"^\s*Usage: (.*)$", re.MULTILINE)  # Typer and Click print the metavars untranslated
+# Loose alone, strict together: a section counts only when every one of its entries is shaped like a command.
+_SECTION_HEADING = re.compile(r"^(╭─ .+ ─|\S.*:$)")  # Typer's rich panel, Click's plain heading: in any language
+_COMMAND_ENTRY = re.compile(r"\w\S*(\s{2}|$)")  # a name, then its help: not an option (`-…`, `*  -…`), not a message
 _JSON_OPTION = re.compile(r"(?<![\w-])--json(?![\w-])")
 
 
@@ -36,22 +39,44 @@ class Broken(Exception):
     """The package breaks a mandatory rule; the message names the command or the file."""
 
 
-def listed_commands(help_text: str) -> list[str]:
-    """The names a help text lists under its Commands heading: Click's `Commands:` or Typer's `╭─ Commands ─╮`."""
-    lines = iter(help_text.splitlines())
-    if not any(_COMMANDS_HEADING.match(line) for line in lines):
-        return []
-    names: list[str] = []
+def _entries(lines: Iterable[str]) -> list[str]:
+    """The entries of the section whose heading was just read, up to its end; wrapped description lines are skipped."""
+    entries: list[str] = []
     indent = None
     for line in lines:
-        body = line.rstrip().removeprefix("│").removesuffix("│")
+        body = line.rstrip().removeprefix("│").removesuffix("│").rstrip()
         if not body.strip() or body.startswith("╰"):
             break
         depth = len(body) - len(body.lstrip())
         indent = depth if indent is None else indent
         if depth == indent:  # deeper: a wrapped description line
-            names.append(body.split()[0])
+            entries.append(body.strip())
+    return entries
+
+
+def listed_commands(help_text: str) -> list[str]:
+    """The names a group's help lists: the entries of every section whose entries are commands, under any title.
+
+    A help is a group's when its usage line has the COMMAND metavar; any other help lists no commands. An entry
+    named like a metavar of the usage line (`[IN]`, `CRAWL_ID`) is the group's own argument, never a command.
+    """
+    metavars = _usage_metavars(help_text)
+    if "command" not in metavars:
+        return []
+    lines = help_text.splitlines()
+    names: list[str] = []
+    for number, line in enumerate(lines):
+        entries = _entries(lines[number + 1 :]) if _SECTION_HEADING.match(line) else []
+        if entries and all(_COMMAND_ENTRY.match(entry) for entry in entries):
+            names += [name for name in (entry.split()[0] for entry in entries) if name.lower() not in metavars]
     return names
+
+
+def _usage_metavars(help_text: str) -> set[str]:
+    """The metavars of the help's usage line (`[OPTIONS] [IN] COMMAND`), lowercased, brackets stripped."""
+    usage = _USAGE.search(help_text)
+    words = (word.strip("[].") for word in usage.group(1).split()) if usage else ()
+    return {word.lower() for word in words if word.isupper()}
 
 
 @dataclass(frozen=True)
@@ -151,7 +176,7 @@ def check_commands(package: Package) -> str:
     if bare.code:
         raise Broken(f"{bare} exits {bare.code}: with no arguments it lists the commands and exits 0")
     if not package.helps:
-        raise Broken(f"{bare} lists no commands (no Commands heading in its output)")
+        raise Broken(f"{bare} lists no commands (no commands section in its output)")
     failing = [run for run in package.helps.values() if run.code]
     if failing:
         raise Broken(f"{failing[0]} exits {failing[0].code}: every command and group answers --help with exit 0")

@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001 - the tests feed the gate help titled in Russian
 """The gate's `standard: <rule>` steps: `rb-release check` on a fixture CLI that meets every mandatory rule of the
 Standard, and on copies of it that each break one rule (one change applied here)."""
 
@@ -151,7 +152,7 @@ def test_the_standard_steps_probe_the_cli_without_the_ci_variables(in_package, m
     module = module.replace(
         "\n\n\ndef error",
         '\n    bold = "\\x1b[1m" if os.environ.get("GITHUB_ACTIONS") else ""\n'
-        '    return text.replace("Commands:", bold + "Commands:")\n\n\ndef error',
+        '    return text.replace("\\n  ", "\\n  " + bold)\n\n\ndef error',
     )
 
     result = _check(in_package, module)
@@ -160,15 +161,118 @@ def test_the_standard_steps_probe_the_cli_without_the_ci_variables(in_package, m
     assert result.exit_code == 0, result.output
 
 
-def test_a_bare_command_without_a_commands_heading_fails_at_commands_under_the_ci_variables(
+def test_a_bare_command_without_a_commands_section_fails_at_commands_under_the_ci_variables(
     in_package, monkeypatch
 ) -> None:
     for name, value in CI_ENV.items():
         monkeypatch.setenv(name, value)
+    module = _changed("\\n\\nCommands:\\n{rows}", "{rows[:0]}")
 
-    result = _check(in_package, _changed("\\n\\nCommands:", "\\n\\nVerbs:"))
+    result = _check(in_package, module)
 
-    assert "lists no commands (no Commands heading in its output)" in _failed_at(result, "commands", "Commands")
+    assert "lists no commands" in _failed_at(result, "commands", "Commands")
+
+
+def test_a_translated_plain_commands_heading_is_found(in_package) -> None:
+    result = _check(in_package, _changed("\\n\\nCommands:", "\\n\\nКоманды:").replace("Options:", "Параметры:"))
+
+    assert "release: standard: commands ... ok" in result.stdout, result.output
+    assert "release: standard: health ... ok" in result.stdout, result.output
+
+
+def _rich(commands: str, options: str) -> str:
+    """The compliant CLI whose group help is Typer's rich panels, titled `commands` and `options`."""
+    module = _changed("def group_help(group: str) -> str:", "def plain_group_help(group: str) -> str:")
+    return module.replace(
+        "def error(",
+        f"""def group_help(group: str) -> str:
+    rows = "\\n".join(f"│ {{name}}  {{about}} │" for name, about in children(group).items())
+    panel = "╭─ {options} ─╮\\n│ --json │\\n╰─╯\\n" if not group else ""
+    return f"Usage: demo {{group}} COMMAND\\n\\n" + panel + f"╭─ {commands} ─╮\\n{{rows}}\\n╰─╯\\n"
+
+
+def error(""",
+        1,
+    )
+
+
+@pytest.mark.parametrize(("commands", "options"), [("Commands", "Options"), ("Команды", "Параметры")])
+def test_a_rich_commands_panel_is_found_in_english_and_translated(in_package, commands, options) -> None:
+    result = _check(in_package, _rich(commands, options))
+
+    assert result.exit_code == 0, result.output
+    assert "release: standard: commands ... ok (3 commands and 1 groups answer --help)" in result.stdout, result.output
+    assert "release: standard: health ... ok" in result.stdout
+
+
+GROUP_USAGE = " Usage: demo [OPTIONS] COMMAND [ARGS]...\n\n"
+LEAF_USAGE = " Usage: demo urls [OPTIONS] CRAWL_ID\n\n"
+
+
+@pytest.mark.parametrize(
+    ("options", "commands"), [("Options:", "Commands:"), ("Параметры:", "Команды:"), ("Параметры:", "Commands:")]
+)
+def test_the_plain_options_section_is_never_taken_for_commands(options, commands) -> None:
+    from standard import listed_commands
+
+    help_text = f"Usage: demo [OPTIONS] COMMAND [ARGS]...\n\n{commands}\n  status  Show.\n\n{options}\n  --json  Out.\n"
+
+    assert listed_commands(help_text) == ["status"]
+
+
+@pytest.mark.parametrize(("options", "commands"), [("Options", "Commands"), ("Параметры", "Команды")])
+def test_the_rich_options_panel_is_never_taken_for_commands(options, commands) -> None:
+    from standard import listed_commands
+
+    panels = f"╭─ {options} ─╮\n│ --json  Out. │\n│ --help  Help. │\n╰─╯\n╭─ {commands} ─╮\n│ status  Show. │\n╰─╯\n"
+
+    assert listed_commands(GROUP_USAGE + panels) == ["status"]
+
+
+@pytest.mark.parametrize("arguments", ["Arguments", "Аргументы"])
+def test_a_leaf_with_an_arguments_panel_lists_no_commands(arguments) -> None:
+    from standard import listed_commands
+
+    panels = f"╭─ {arguments} ─╮\n│ *  crawl_id  TEXT  [required] │\n╰─╯\n"
+    required = "╭─ Options ─╮\n│ *  --issue  TEXT  Issue. [required] │\n│    --json        Out.             │\n╰─╯\n"
+
+    assert listed_commands(LEAF_USAGE + panels + required) == []
+
+
+def test_a_group_error_panel_lists_no_commands() -> None:
+    from standard import listed_commands
+
+    error = "Usage: demo [OPTIONS] COMMAND [ARGS]...\nTry 'demo --help' for help.\n"
+    error += "╭─ Error ───────────────────╮\n│ No such command 'urlz'.   │\n╰───────────────────────────╯\n"
+
+    assert listed_commands(error) == []
+
+
+def test_a_group_lists_the_commands_of_every_translated_panel() -> None:
+    from standard import listed_commands
+
+    panels = "╭─ Параметры ─╮\n│ --help  Справка. │\n╰─╯\n"
+    panels += "╭─ Обход ─╮\n│ crawl      Обойти.         │\n│ sitemaps   Карты сайта.    │\n╰─╯\n"
+    panels += "╭─ Отчёты ─╮\n│ report     Отчёт по обходу │\n│            с переносом.    │\n╰─╯\n"
+
+    assert listed_commands(GROUP_USAGE + panels) == ["crawl", "sitemaps", "report"]
+
+
+def test_a_group_with_its_own_argument_lists_only_its_commands() -> None:
+    from standard import listed_commands
+
+    usage = " Usage: semkit read [OPTIONS] [IN] COMMAND [ARGS]...\n\n"
+    panels = "╭─ Аргументы ─╮\n│ in  [IN]  Входной файл. │\n╰─╯\n"
+    panels += "╭─ Параметры ─╮\n│ --help  Справка. │\n╰─╯\n"
+    panels += "╭─ Команды ─╮\n│ csv   Прочитать CSV.  │\n│ xlsx  Прочитать XLSX. │\n╰─╯\n"
+
+    assert listed_commands(usage + panels) == ["csv", "xlsx"]
+
+
+def test_a_help_with_only_options_lists_no_commands() -> None:
+    from standard import listed_commands
+
+    assert listed_commands("Usage: demo [OPTIONS] COMMAND [ARGS]...\n\nOptions:\n  --json  Out.\n") == []
 
 
 def test_a_command_without_json_fails_at_json(in_package) -> None:
