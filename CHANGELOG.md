@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.27.2 — 2026-10-23
+
+### Outside epics
+
+- Gate finds the commands of a CLI whose help is translated (CG-074)
+- Update instructions: option change can delete edited files; stash, conflicts, revoked keys (CG-075)
+
 ## v1.27.1 — 2026-10-22
 
 ### E-007 — Simpler package upkeep: one gate line, a gate that lists every red step, documented modules
