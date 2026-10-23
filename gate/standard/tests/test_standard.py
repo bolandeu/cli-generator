@@ -152,7 +152,7 @@ def test_the_standard_steps_probe_the_cli_without_the_ci_variables(in_package, m
     module = module.replace(
         "\n\n\ndef error",
         '\n    bold = "\\x1b[1m" if os.environ.get("GITHUB_ACTIONS") else ""\n'
-        '    return text.replace("Commands:", bold + "Commands:")\n\n\ndef error',
+        '    return text.replace("\\n  ", "\\n  " + bold)\n\n\ndef error',
     )
 
     result = _check(in_package, module)
@@ -205,15 +205,63 @@ def test_a_rich_commands_panel_is_found_in_english_and_translated(in_package, co
     assert "release: standard: health ... ok" in result.stdout
 
 
-def test_the_options_panel_is_never_taken_for_commands() -> None:
+GROUP_USAGE = " Usage: demo [OPTIONS] COMMAND [ARGS]...\n\n"
+LEAF_USAGE = " Usage: demo urls [OPTIONS] CRAWL_ID\n\n"
+
+
+@pytest.mark.parametrize(
+    ("options", "commands"), [("Options:", "Commands:"), ("Параметры:", "Команды:"), ("Параметры:", "Commands:")]
+)
+def test_the_plain_options_section_is_never_taken_for_commands(options, commands) -> None:
     from standard import listed_commands
 
-    plain = "Usage: demo\n\nКоманды:\n  status  Show.\n\nПараметры:\n  --json  Output.\n"
-    rich = "╭─ Параметры ─╮\n│ --json  Output. │\n│ --help  Help. │\n╰─╯\n╭─ Команды ─╮\n│ status  Show. │\n╰─╯\n"
+    help_text = f"Usage: demo [OPTIONS] COMMAND [ARGS]...\n\n{commands}\n  status  Show.\n\n{options}\n  --json  Out.\n"
 
-    assert listed_commands(plain) == ["status"]
-    assert listed_commands(rich) == ["status"]
-    assert listed_commands("Options:\n  --json  Output.\n") == []
+    assert listed_commands(help_text) == ["status"]
+
+
+@pytest.mark.parametrize(("options", "commands"), [("Options", "Commands"), ("Параметры", "Команды")])
+def test_the_rich_options_panel_is_never_taken_for_commands(options, commands) -> None:
+    from standard import listed_commands
+
+    panels = f"╭─ {options} ─╮\n│ --json  Out. │\n│ --help  Help. │\n╰─╯\n╭─ {commands} ─╮\n│ status  Show. │\n╰─╯\n"
+
+    assert listed_commands(GROUP_USAGE + panels) == ["status"]
+
+
+@pytest.mark.parametrize("arguments", ["Arguments", "Аргументы"])
+def test_a_leaf_with_an_arguments_panel_lists_no_commands(arguments) -> None:
+    from standard import listed_commands
+
+    panels = f"╭─ {arguments} ─╮\n│ *  crawl_id  TEXT  [required] │\n╰─╯\n"
+    required = "╭─ Options ─╮\n│ *  --issue  TEXT  Issue. [required] │\n│    --json        Out.             │\n╰─╯\n"
+
+    assert listed_commands(LEAF_USAGE + panels + required) == []
+
+
+def test_a_group_error_panel_lists_no_commands() -> None:
+    from standard import listed_commands
+
+    error = "Usage: demo [OPTIONS] COMMAND [ARGS]...\nTry 'demo --help' for help.\n"
+    error += "╭─ Error ───────────────────╮\n│ No such command 'urlz'.   │\n╰───────────────────────────╯\n"
+
+    assert listed_commands(error) == []
+
+
+def test_a_group_lists_the_commands_of_every_translated_panel() -> None:
+    from standard import listed_commands
+
+    panels = "╭─ Параметры ─╮\n│ --help  Справка. │\n╰─╯\n"
+    panels += "╭─ Обход ─╮\n│ crawl      Обойти.         │\n│ sitemaps   Карты сайта.    │\n╰─╯\n"
+    panels += "╭─ Отчёты ─╮\n│ report     Отчёт по обходу │\n│            с переносом.    │\n╰─╯\n"
+
+    assert listed_commands(GROUP_USAGE + panels) == ["crawl", "sitemaps", "report"]
+
+
+def test_a_help_with_only_options_lists_no_commands() -> None:
+    from standard import listed_commands
+
+    assert listed_commands("Usage: demo [OPTIONS] COMMAND [ARGS]...\n\nOptions:\n  --json  Out.\n") == []
 
 
 def test_a_command_without_json_fails_at_json(in_package) -> None:

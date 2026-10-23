@@ -11,7 +11,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import cached_property
@@ -28,9 +28,9 @@ GATE_COMMAND = "rb-release check"
 # every probe of the installed script runs without them.
 CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 
-_PANEL_HEADING = re.compile(r"^╭─ .+ ─")  # Typer's rich panel
-_PLAIN_HEADING = re.compile(r"^\S.*:$")  # Click's plain help
-_COMMAND_NAME = re.compile(r"\w")
+_GROUP_USAGE = re.compile(r"^\s*Usage: .*\bCOMMAND\b", re.MULTILINE)  # Typer and Click print the metavar untranslated
+_SECTION_HEADING = re.compile(r"^(╭─ .+ ─|\S.*:$)")  # Typer's rich panel, Click's plain heading: in any language
+_COMMAND_ENTRY = re.compile(r"\w\S*(\s{2}|$)")  # a name, then its help: not an option (`-…`, `*  -…`), not a message
 _JSON_OPTION = re.compile(r"(?<![\w-])--json(?![\w-])")
 
 
@@ -38,45 +38,34 @@ class Broken(Exception):
     """The package breaks a mandatory rule; the message names the command or the file."""
 
 
-def _entries(lines: Iterator[str]) -> list[str]:
-    """The first word of each entry of the section whose heading was just read; wrapped description lines are skipped."""
-    names: list[str] = []
+def _entries(lines: Iterable[str]) -> list[str]:
+    """The entries of the section whose heading was just read, up to its end; wrapped description lines are skipped."""
+    entries: list[str] = []
     indent = None
     for line in lines:
-        body = line.rstrip().removeprefix("│").removesuffix("│")
+        body = line.rstrip().removeprefix("│").removesuffix("│").rstrip()
         if not body.strip() or body.startswith("╰"):
             break
         depth = len(body) - len(body.lstrip())
         indent = depth if indent is None else indent
         if depth == indent:  # deeper: a wrapped description line
-            names.append(body.split()[0])
-    return names
-
-
-def _sections(help_text: str) -> list[tuple[bool, list[str]]]:
-    """Every section of a help text, titled in any language: (is it a Typer rich panel, its entry names)."""
-    lines = help_text.splitlines()
-    found: list[tuple[bool, list[str]]] = []
-    for number, line in enumerate(lines):
-        rich = bool(_PANEL_HEADING.match(line))
-        indented = lines[number + 1 : number + 2] and lines[number + 1].startswith(" ")
-        if rich or (_PLAIN_HEADING.match(line) and indented):
-            found.append((rich, _entries(iter(lines[number + 1 :]))))
-    return found
+            entries.append(body.strip())
+    return entries
 
 
 def listed_commands(help_text: str) -> list[str]:
-    """The names a help text lists in its commands section: the one whose entries are names, not options.
+    """The names a group's help lists: the entries of every section whose entries are commands, under any title.
 
-    The heading's title does not matter (a package may translate it). A rich panel right before the options
-    panel lists Typer's arguments, not commands.
+    A help is a group's when its usage line has the COMMAND metavar; any other help lists no commands.
     """
-    sections = _sections(help_text)
+    if not _GROUP_USAGE.search(help_text):
+        return []
+    lines = help_text.splitlines()
     names: list[str] = []
-    for (rich, section), (_, following) in zip(sections, [*sections[1:], (False, [])], strict=True):
-        before_options = rich and following[:1] and following[0].startswith("-")
-        if section and _COMMAND_NAME.match(section[0]) and not before_options:
-            names += section
+    for number, line in enumerate(lines):
+        entries = _entries(lines[number + 1 :]) if _SECTION_HEADING.match(line) else []
+        if entries and all(_COMMAND_ENTRY.match(entry) for entry in entries):
+            names += [entry.split()[0] for entry in entries]
     return names
 
 
