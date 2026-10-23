@@ -4,7 +4,8 @@
 # homeserver users, no Mac) and providers without credentials, prove copier update rounds from the
 # previous release tag and from v1.20.10 (the last template that copied the gate) keep every part, check
 # the rendered [tool.rb.install] and which parts each package has, run the generated project's checks and
-# the release gate from this working tree's gate/ through uvx. Non-zero exit on any failure.
+# the release gate from this working tree's gate/ through uvx, and check the Antagor project name on copy and
+# on update, in place and with a destination argument. Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
 
@@ -275,12 +276,41 @@ generate_at() {
     run git -c user.name=gate -c user.email=gate@example.invalid commit -q --allow-empty -m antagor-files
 }
 
-# update_staged: update the project in the cwd to the working tree through the worker script
-# (stdin closed, no credential variables)
+# update_staged [copier update args...]: update the project in the cwd to the working tree through the worker
+# script (stdin closed, no credential variables)
 update_staged() {
     run env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_READ_TOKEN -u GITEA_TOKEN -u DOPPLER_TOKEN \
         uvx --from copier python "$ROOT/skills/cli-builder/scripts/copier_update_staged.py" \
-        --trust --defaults -q --vcs-ref HEAD </dev/null
+        --trust --defaults -q --vcs-ref HEAD "$@" </dev/null
+}
+
+# antagor_name: the project name in the Antagor config of the project in the cwd
+antagor_name() {
+    python3 -c "import tomllib; print(tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))['name'])"
+}
+
+# check_name_update <name> <expected name> <in-place|with-dest> [hand-named] [copier copy --data args...]: generate a
+# package with the command gsc from the previous release tag (hand-named: then write the expected name into its
+# Antagor config by hand) and update it to the working tree, in place or with the project as the destination
+# argument. The Antagor config holds the expected name and has no conflict.
+check_name_update() {
+    variant=name-$1
+    expected=$2
+    how=$3
+    shift 3
+    hand_named=false
+    if [ "${1:-}" = hand-named ]; then hand_named=true; shift; fi
+    generate_at "$variant" "$previous" --data cli_name=gsc "$@"
+    if [ "$hand_named" = true ]; then
+        run sed -i.bak "s/^name = .*/name = \"$expected\"/" .agents/antagor/antagor.toml
+        run rm .agents/antagor/antagor.toml.bak
+        run git -c user.name=gate -c user.email=gate@example.invalid commit -q -am hand-named
+    fi
+    if [ "$how" = with-dest ]; then update_staged "$(pwd -P)"; else update_staged; fi
+    test ! -e .agents/antagor/antagor.toml.rej || fail "the Antagor config has a conflict"
+    grep -q '^<<<<<<< ' .agents/antagor/antagor.toml && fail "the Antagor config has a conflict"
+    [ "$(antagor_name)" = "$expected" ] || fail "the Antagor name is $(antagor_name), expected: $expected"
+    cd "$ROOT"
 }
 
 # check_update_round <name> <template tag> [copier copy --data args...]: with CLEAN_TREE=1 the staged
@@ -393,6 +423,21 @@ for prefix in ABCDEFGHIJK mg 1AB; do
         fail "antagor_prefix=$prefix was accepted"
     fi
 done
+VARIANT=antagor-name
+# The Antagor project name is the destination folder of `copier copy`, never the command or the repository name.
+GSC_URL=https://homeserver.tailee01ab.ts.net:3000/bolandeu/google-search-console
+mkdir -p "$WORK/name-dot/demo-folder"
+run uvx copier copy "$ROOT" "$WORK/demo-folder" --data package_name=demotool --data project_name=Demo \
+    --data description=d --data author_name=A --data cli_name=gsc --data repository_url=$GSC_URL \
+    --defaults --trust -q --vcs-ref HEAD
+[ "$(cd "$WORK/demo-folder" && antagor_name)" = demo-folder ] || fail "the name is not demo-folder"
+(
+    cd "$WORK/name-dot/demo-folder" || exit 1
+    run uvx copier copy "$ROOT" . --data package_name=demotool --data project_name=Demo \
+        --data description=d --data author_name=A --data cli_name=gsc --data repository_url=$GSC_URL \
+        --defaults --trust -q --vcs-ref HEAD
+    [ "$(antagor_name)" = demo-folder ] || fail "the name of a copy into . is not demo-folder"
+) || exit 1
 VARIANT=fast-config
 run uvx copier copy "$ROOT" "$WORK/fast-config" --data package_name=demotool --data project_name=Demo \
     --data description=d --data author_name=A --defaults --trust -q --vcs-ref HEAD
@@ -417,6 +462,12 @@ PY
 ) || exit 1
 previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 [ -n "$previous" ] || { VARIANT=update-round; fail "no release tag to update from"; }
+# An update never changes the Antagor name: neither a name written by hand nor the command the template wrote.
+DATAIO_URL=https://github.com/bolandeu/rb-dataio
+check_name_update dataio dataio in-place hand-named --data repository_url=$DATAIO_URL
+check_name_update dataio-dest dataio with-dest hand-named --data repository_url=$DATAIO_URL
+check_name_update unedited gsc in-place --data repository_url=$GSC_URL
+check_name_update unedited-dest gsc with-dest --data repository_url=$GSC_URL
 DOCS_FILES=$(part_files docs)
 REMOVABLE=$DOCS_FILES
 # A tag with the part questions generates a package with every part on (its default is none); an older tag
