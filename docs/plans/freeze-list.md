@@ -28,3 +28,7 @@ until the Human lifts the freeze.
   dataio's `rb-dataio`), not from the folder; a new package whose mirror name differs gets a wrong gate URL and
   fixes it by hand. Rendering `{{ antagor_name }}` there is not a fix: on update it would rewrite existing
   packages' correct URLs to the command (gsc). Needs an update-safe default like `antagor_name` (2026-10-23).
+- Gate, contracts step: under pytest-xdist (`-n auto` in addopts) `-vv` prints `[gw0] [ 50%] PASSED
+  tests/test_contracts.py::test_contract[x]`, which `_CONTRACT_RESULT` doesn't match: the summary says '0 cases'.
+  Pass/fail is still the return code, so only the text is wrong. Fix: run the step with `-p no:xdist`, or accept
+  both line forms (semkit, 2026-10-24; semkit works around it in its conftest).
