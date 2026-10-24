@@ -38,3 +38,8 @@ until the Human lifts the freeze.
   agents' classifiers block removing it (the Human does); the Antagor config of such a package has no `[publish]`
   block (`versioning = "semver"`, `gate = "remote"`, `gate_status_url`) — copied from a template package by hand;
   a library's install step is not spelled out.
+- Batch 5, more: a package not from the template has no `scripts/deploy.sh`, and a hand commit can't add it (hook:
+  a hand fix only changes existing files); without `deploy_command` `antagor publish` tags locally and pushes nothing
+  (google-oauth uses `deploy_command = "git push origin main --follow-tags"`); the template ci.yml comment names
+  `.copier-answers.yml`; no library variant of AGENTS.md/CI in the docs; `task-create` needs `--no-epic --confirmed`
+  without an epic, and the Antagor config is edited by the Architect on main, not by a worker through owns.
