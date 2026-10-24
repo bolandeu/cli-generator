@@ -47,3 +47,7 @@ until the Human lifts the freeze.
   (no GitHub credentials on the runner); no gate step catches it, so "Dependencies on our packages" is tied to no
   red step (wordpress-bulk-editor, yandex-webmaster moved to the Gitea index by hand). Fixing a package before
   `antagor new` leaves those commits out of the first changelog.
+- Update under Antagor (mediagen, 2026-10-24): the worker's worktree holds Antagor's untracked `.antagor-handoff/`,
+  so `copier update` refuses a dirty tree (asked antagor to exclude it); the Architect's files that conflict
+  (Antagor config, AGENTS.md, CODING_STANDARDS.md) get the template side on main by the Architect, then the task
+  merges main; the template side of the Antagor config drops a project's own `worker` and extra `checks` — keep them.
