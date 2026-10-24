@@ -36,7 +36,7 @@ until the Human lifts the freeze.
   line has the tag pasted by hand (no `_commit`); help snapshots need the render env pinned in conftest (the template's
   test_help does it itself); a stale `.git/hooks/pre-commit` from an old `install_hooks.sh` stops `antagor new` and
   agents' classifiers block removing it (the Human does); the Antagor config of such a package has no `[publish]`
-  block (`gate = "remote"`, `gate_status_url`, `deploy_command`; semver is written by `antagor new` since 4f5c2a1) — copied by hand;
+  block (`gate = "remote"`, `gate_status_url`, `deploy_command`; semver is written by `antagor new` since a082910) — copied by hand;
   a library's install step is not spelled out.
 - Batch 5, more: a package not from the template has no `scripts/deploy.sh`, and a hand commit can't add it (hook:
   a hand fix only changes existing files); without `deploy_command` `antagor publish` tags locally and pushes nothing
