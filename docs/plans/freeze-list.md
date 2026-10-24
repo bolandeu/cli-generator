@@ -51,3 +51,6 @@ until the Human lifts the freeze.
   so `copier update` refuses a dirty tree (asked antagor to exclude it); the Architect's files that conflict
   (Antagor config, AGENTS.md, CODING_STANDARDS.md) get the template side on main by the Architect, then the task
   merges main; the template side of the Antagor config drops a project's own `worker` and extra `checks` — keep them.
+- Batch 5, llmkit: the CI runner's lowest Python is 3.11.2, where an `except*` re-raise is wrapped in an
+  ExceptionGroup (local 3.11.14 passes); the gate's missing-`doctor` step was not in my brief's red list (the brief
+  listed steps, not causes); `antagor publish --main` does not merge a task in `publish` (`antagor publish <id>`).
