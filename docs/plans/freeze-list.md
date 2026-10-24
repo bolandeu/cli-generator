@@ -43,3 +43,7 @@ until the Human lifts the freeze.
   (google-oauth uses `deploy_command = "git push origin main --follow-tags"`); the template ci.yml comment names
   `.copier-answers.yml`; no library variant of AGENTS.md/CI in the docs; `task-create` needs `--no-epic --confirmed`
   without an epic, and the Antagor config is edited by the Architect on main, not by a worker through owns.
+- Batch 5, more: a dependency on our package by a git URL on GitHub passes the local gate but fails CI at `uv sync`
+  (no GitHub credentials on the runner); no gate step catches it, so "Dependencies on our packages" is tied to no
+  red step (wordpress-bulk-editor, yandex-webmaster moved to the Gitea index by hand). Fixing a package before
+  `antagor new` leaves those commits out of the first changelog.
