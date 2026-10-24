@@ -32,3 +32,9 @@ until the Human lifts the freeze.
   tests/test_contracts.py::test_contract[x]`, which `_CONTRACT_RESULT` doesn't match: the summary says '0 cases'.
   Pass/fail is still the return code, so only the text is wrong. Fix: run the step with `-p no:xdist`, or accept
   both line forms (semkit, 2026-10-24; semkit works around it in its conftest).
+- Gate loop for a package not from the template (`existing-package.md`), batch 5 (2026-10-24): the CI workflow's gate
+  line has the tag pasted by hand (no `_commit`); help snapshots need the render env pinned in conftest (the template's
+  test_help does it itself); a stale `.git/hooks/pre-commit` from an old `install_hooks.sh` stops `antagor new` and
+  agents' classifiers block removing it (the Human does); the Antagor config of such a package has no `[publish]`
+  block (`versioning = "semver"`, `gate = "remote"`, `gate_status_url`) — copied from a template package by hand;
+  a library's install step is not spelled out.
