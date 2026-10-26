@@ -53,3 +53,7 @@ until the Human lifts the freeze.
 - Batch 5, llmkit: the CI runner's lowest Python is 3.11.2, where an `except*` re-raise is wrapped in an
   ExceptionGroup (local 3.11.14 passes); the gate's missing-`doctor` step was not in my brief's red list (the brief
   listed steps, not causes); `antagor publish --main` does not merge a task in `publish` (`antagor publish <id>`).
+- Update under Antagor (semkit, 2026-10-26): an update replaces the project's own copies of template tests
+  (test_ci, test_scripts) — the gate lists them as removed/changed existing tests, say so; `task-create` needs each
+  `[check: …]` to equal a `--check` string and counts `--read-first` with the body's "Read first" (max 5); a Renovate
+  PR left open by a hand update closes itself on Renovate's next run.
