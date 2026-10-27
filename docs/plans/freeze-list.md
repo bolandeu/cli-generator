@@ -67,5 +67,8 @@ until the Human lifts the freeze.
   2-slot runner; a queued publish-branch run outlasts Antagor's 15 min remote-gate wait (bukvarix v0.6.2 failed that
   way). Dropping the `tags` trigger is safe (the tag's commit is already gated); `main` stays for hand pushes.
 - Gate step times (antagor, 2026-10-27): Antagor reads CI job steps and logs, but the whole gate is one workflow
-  step. Not split in the workflow (it would copy the gate's step list into every package). Candidate: the gate
-  prints each step's duration in its own line (`release: pytest ... ok (412 s)`).
+  step. Not split in the workflow (it would copy the gate's step list into every package). Antagor now times each
+  step from Gitea's per-line log stamps, with no gate change — keep the `<tool>: <check> ... <result>` line format,
+  Antagor parses it. semkit's 525 s: pytest 191 s, `standard: errors` 159 s, `standard: commands` 130 s (164
+  commands, each run with --help and with a bad option), wheel 31 s. Candidate: run the per-command Standard
+  checks in one process or in parallel.
