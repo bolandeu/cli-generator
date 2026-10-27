@@ -57,3 +57,8 @@ until the Human lifts the freeze.
   (test_ci, test_scripts) — the gate lists them as removed/changed existing tests, say so; `task-create` needs each
   `[check: …]` to equal a `--check` string and counts `--read-first` with the body's "Read first" (max 5); a Renovate
   PR left open by a hand update closes itself on Renovate's next run.
+- Parallel work vs machine size (antagor, incident 2026-10-26: semkit `-n auto` × 3 workers = 30 processes with word
+  vectors, the Mac hung): candidate Recommended rule — code that runs work in parallel takes its worker count from
+  free memory and cores, an env var lowers it, a process that loads a large model states its memory per worker; the
+  template CI could set PYTEST_XDIST_AUTO_NUM_WORKERS. Not now: only semkit uses xdist (SEMKIT-088 caps it in a
+  `pytest_xdist_auto_num_workers` hook); Antagor caps its workers' env.
