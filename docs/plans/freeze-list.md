@@ -66,3 +66,6 @@ until the Human lifts the freeze.
   tags `v*`, and `antagor publish` pushes one commit to all three — three identical 15–20 min gates per release on a
   2-slot runner; a queued publish-branch run outlasts Antagor's 15 min remote-gate wait (bukvarix v0.6.2 failed that
   way). Dropping the `tags` trigger is safe (the tag's commit is already gated); `main` stays for hand pushes.
+- Gate step times (antagor, 2026-10-27): Antagor reads CI job steps and logs, but the whole gate is one workflow
+  step. Not split in the workflow (it would copy the gate's step list into every package). Candidate: the gate
+  prints each step's duration in its own line (`release: pytest ... ok (412 s)`).
