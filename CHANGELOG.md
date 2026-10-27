@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.27.4 — 2026-10-27
+
+### Outside epics
+
+- Template CI no longer runs on tag pushes (three identical gates per release) (CG-078)
+
 ## v1.27.3 — 2026-10-23
 
 ### Outside epics
