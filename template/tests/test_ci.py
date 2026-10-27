@@ -80,7 +80,7 @@ def test_agents_file_links_the_standard() -> None:
     assert STANDARD in (ROOT / "AGENTS.md").read_text()
 
 
-def test_workflow_runs_on_main_tags_and_the_remote_gate_branch() -> None:
+def test_workflow_runs_on_main_and_the_remote_gate_branch_not_on_tags() -> None:
     triggers = yaml.safe_load(WORKFLOW.read_text())[True]  # YAML reads the key `on` as True
     assert triggers["push"]["branches"] == ["main", "antagor/publish-*"]
-    assert triggers["push"]["tags"] == ["v*"]
+    assert "tags" not in triggers["push"]

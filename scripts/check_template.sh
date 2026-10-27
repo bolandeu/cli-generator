@@ -291,7 +291,7 @@ antagor_name() {
 
 # check_name_update <name> <expected name> <in-place|with-dest> [hand-named] [copier copy --data args...]: generate a
 # package with the command gsc from the previous release tag (hand-named: then write the expected name into its
-# Antagor config by hand) and update it to the working tree, in place or with the project as the destination
+# Antagor config by hand; an empty expected name: the name the tag wrote) and update it to the working tree, in place or with the project as the destination
 # argument. The Antagor config holds the expected name and has no conflict.
 check_name_update() {
     variant=name-$1
@@ -306,6 +306,7 @@ check_name_update() {
         run rm .agents/antagor/antagor.toml.bak
         run git -c user.name=gate -c user.email=gate@example.invalid commit -q -am hand-named
     fi
+    [ -n "$expected" ] || expected=$(antagor_name)
     if [ "$how" = with-dest ]; then update_staged "$(pwd -P)"; else update_staged; fi
     test ! -e .agents/antagor/antagor.toml.rej || fail "the Antagor config has a conflict"
     grep -q '^<<<<<<< ' .agents/antagor/antagor.toml && fail "the Antagor config has a conflict"
@@ -466,8 +467,8 @@ previous=$(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | head -n 1)
 DATAIO_URL=https://github.com/bolandeu/rb-dataio
 check_name_update dataio dataio in-place hand-named --data repository_url=$DATAIO_URL
 check_name_update dataio-dest dataio with-dest hand-named --data repository_url=$DATAIO_URL
-check_name_update unedited gsc in-place --data repository_url=$GSC_URL
-check_name_update unedited-dest gsc with-dest --data repository_url=$GSC_URL
+check_name_update unedited "" in-place --data repository_url=$GSC_URL
+check_name_update unedited-dest "" with-dest --data repository_url=$GSC_URL
 DOCS_FILES=$(part_files docs)
 REMOVABLE=$DOCS_FILES
 # A tag with the part questions generates a package with every part on (its default is none); an older tag
