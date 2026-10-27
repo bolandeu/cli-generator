@@ -62,3 +62,7 @@ until the Human lifts the freeze.
   free memory and cores, an env var lowers it, a process that loads a large model states its memory per worker; the
   template CI could set PYTEST_XDIST_AUTO_NUM_WORKERS. Not now: only semkit uses xdist (SEMKIT-088 caps it in a
   `pytest_xdist_auto_num_workers` hook); Antagor caps its workers' env.
+- CI load per release (sysadmin, 2026-10-27): the template workflow runs on push to `main`, `antagor/publish-*` and
+  tags `v*`, and `antagor publish` pushes one commit to all three — three identical 15–20 min gates per release on a
+  2-slot runner; a queued publish-branch run outlasts Antagor's 15 min remote-gate wait (bukvarix v0.6.2 failed that
+  way). Dropping the `tags` trigger is safe (the tag's commit is already gated); `main` stays for hand pushes.
