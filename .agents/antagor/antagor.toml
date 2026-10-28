@@ -9,6 +9,9 @@ stall_minutes = 25
 # The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
 heavy = ["sh scripts/check_template.sh"]
 
+# the workserver, 48 cores (the Human 28.10: at least four tasks at once); heavy checks queue on the machine
+parallel = 4
+
 [limits]
 # Mode fast: template tasks move or drop whole parts (E-006 CG-047).
 max_files = 150
