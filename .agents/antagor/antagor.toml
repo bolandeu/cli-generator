@@ -21,9 +21,10 @@ max_lines = 4000
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
 [publish]
-# The gate before the tag: the template gate in Gitea CI on the pushed candidate branch.
-gate = "remote"
-gate_status_url = "https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/cli-generator/commits/{commit}/status"
+# The gate before the tag: the template gate on this machine (the Human 29.10: Gitea only stores releases, no remote
+# test runs)
+gate = "local"
+gate_command = "sh scripts/check_template.sh"
 tag_prefix = "v"
 versioning = "semver"
 changelog = "CHANGELOG.md"
