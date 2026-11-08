@@ -10,6 +10,14 @@ benefit: 'The inventory of describable CLIs in your answers (14 CLI, 650 command
   is short: llmkit, wordpress-bulk-editor and mediagen answer describe --json too.
   A correct number keeps the ''every installed package appears'' check honest and
   stops a standard-wide rule being written from a wrong sample.'
+triage:
+  serves: []
+  risks: []
+  why: Consumers filter family membership by binary prefix and lose rb-llmkit, rb-wordpress-bulk-editor
+    and rb-mediagen; the Standard never says membership is the distribution name.
+  score: 2.0
+  route: task
+  at: '2026-11-08T09:24:56+00:00'
 ---
 
 Measured on this machine (macOS, 2026-11-08), by distribution name from 'uv tool list':
