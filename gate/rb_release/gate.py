@@ -32,7 +32,7 @@ same verdict:
     every top-level package imports and importlib.metadata reports that
     version) · the Standard's mandatory rules (standard/: `standard: commands`,
     `json`, `errors`, `health` probe that installed console script, skipped for
-    a library; `docs`, `ci` read the package's files — a failure names the
+    a library; `params` reads its `describe --json`; `docs`, `ci` read the package's files — a failure names the
     Standard's section) · osv-scanner over uv.lock (skipped with a
     notice when osv-scanner isn't installed)
 

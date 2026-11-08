@@ -409,7 +409,17 @@ below.
   one `--json` output without the `{"ok": ...}` envelope.
 - **Recommended.** The document is introspected from the commands, never written by hand: commands, options,
   arguments, `arity`, `acceptedValues`, and `exitCodes` from the table in Errors. What OpenCLI has no field for goes
-  into `metadata` as `x-rb-*` (tool names, env vars, data tables and views, external programs, skills).
+  into `metadata` as `x-rb-*`: the per-parameter fields below, and on the root command the tool names, env vars, data
+  tables and views, external programs and skills.
+- **Mandatory** (gate: `standard: params`). Every option and every argument carries `x-rb-type`: a Typer type name
+  from this closed list — `boolean`, `str`, `int`, `float`, `choice`, `path`, `file`, `datetime`, `int range`,
+  `float range`. A new name in the list is an additive change.
+- **Mandatory** (gate: `standard: params`). Every option and every argument carries `x-rb-default`: the value, or
+  `null` when the parameter has no default, or its default is computed at run time.
+- **Mandatory** (gate: `standard: params`). `x-rb-multiple` is present and `true` iff the parameter is repeatable or
+  variadic; absent means single.
+- **Recommended.** A hidden command, option or argument carries `hidden: true`; absent means visible. It is an
+  OpenCLI field; the template has emitted it since v1.5.0.
 - **Recommended.** It is public API: it changes only by adding fields.
 
 ### Consumer contracts

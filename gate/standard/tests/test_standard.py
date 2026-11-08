@@ -4,6 +4,8 @@ Standard, and on copies of it that each break one rule (one change applied here)
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from typer.testing import CliRunner
 
@@ -11,7 +13,7 @@ from conftest import PYPROJECT
 from rb_release.cli import app
 from standard import CI_ENV
 
-STANDARD_STEPS = ["commands", "json", "errors", "health", "docs", "ci"]
+STANDARD_STEPS = ["commands", "json", "errors", "health", "docs", "params", "ci"]
 SCRIPT = """
 [project.scripts]
 demo = "demo:main"
@@ -321,6 +323,100 @@ def test_a_package_without_its_docs_fails_at_docs(in_package, missing: str) -> N
     assert missing in _failed_at(_check(in_package, remove=missing), "docs", "Docs")
 
 
+def _meta(*pairs: tuple[str, object]) -> list[dict]:
+    return [{"name": name, "value": value} for name, value in pairs]
+
+
+def described() -> dict:
+    """An OpenCLI document whose parameter entries meet the Standard's Describe rules."""
+    return {
+        "opencli": "0.1",
+        "command": {
+            "name": "demo",
+            "options": [
+                {"name": "--json", "metadata": _meta(("x-rb-type", "boolean"), ("x-rb-default", None))},
+                {
+                    "name": "--tag",
+                    "metadata": _meta(("x-rb-type", "str"), ("x-rb-default", None), ("x-rb-multiple", True)),
+                },
+            ],
+            "commands": [
+                {
+                    "name": "status",
+                    "arguments": [
+                        {"name": "target", "metadata": _meta(("x-rb-type", "path"), ("x-rb-default", "here"))}
+                    ],
+                }
+            ],
+        },
+    }
+
+
+def _describe(in_package, document: dict):
+    """The gate over the compliant CLI plus a `describe` command that prints `document`."""
+    module = _changed(
+        '"auth status": ("Report the credentials.", ["--json"]),',
+        '"auth status": ("Report the credentials.", ["--json"]),\n    "describe": ("Print the document.", ["--json"]),',
+    )
+    module = module.replace(
+        "BARE_EXIT = 0",
+        f"DOCUMENT = json.loads(\n    {json.dumps(document)!r}\n)\nBARE_EXIT = 0",
+    )
+    module = module.replace(
+        "    if path not in COMMANDS:",
+        '    if path == "describe":\n'
+        '        unknown = [option for option in options if option not in ["--json", "--help"]]\n'
+        "        if unknown:\n"
+        '            return error(f"No such option: {unknown[0]}", True)\n'
+        "        print(json.dumps(DOCUMENT))\n"
+        "        return 0\n"
+        "    if path not in COMMANDS:",
+    )
+    return _check(in_package, module)
+
+
+def test_a_documented_parameter_entry_passes_at_params(in_package) -> None:
+    result = _describe(in_package, described())
+
+    assert (
+        "release: standard: params ... ok (3 parameter entries carry a type, a default and their repeatability)"
+        in result.stdout
+    ), result.output
+    assert result.exit_code == 0, result.output
+
+
+def test_a_parameter_without_a_type_fails_at_params(in_package) -> None:
+    document = described()
+    document["command"]["options"][0]["metadata"] = _meta(("x-rb-default", None))
+
+    assert "`demo --json` has no x-rb-type" in _failed_at(_describe(in_package, document), "params", "Describe")
+
+
+def test_a_type_outside_the_list_fails_at_params(in_package) -> None:
+    document = described()
+    document["command"]["options"][1]["metadata"] = _meta(("x-rb-type", "uuid"), ("x-rb-default", None))
+
+    assert "`demo --tag`: x-rb-type 'uuid' is not one of" in _failed_at(
+        _describe(in_package, document), "params", "Describe"
+    )
+
+
+def test_a_parameter_without_a_default_fails_at_params(in_package) -> None:
+    document = described()
+    document["command"]["commands"][0]["arguments"][0]["metadata"] = _meta(("x-rb-type", "path"))
+
+    assert "`demo status target` has no x-rb-default" in _failed_at(
+        _describe(in_package, document), "params", "Describe"
+    )
+
+
+def test_a_single_parameter_marked_multiple_fails_at_params(in_package) -> None:
+    document = described()
+    document["command"]["options"][0]["metadata"].append({"name": "x-rb-multiple", "value": False})
+
+    assert "`demo --json`: x-rb-multiple is False" in _failed_at(_describe(in_package, document), "params", "Describe")
+
+
 def test_a_package_without_a_gitea_workflow_fails_at_ci(in_package) -> None:
     result = _check(in_package, remove=".gitea/workflows/ci.yml")
 
@@ -333,6 +429,6 @@ def test_a_library_without_a_console_script_skips_the_cli_rules(in_package) -> N
     result = CliRunner().invoke(app, ["check"])
 
     lines = {line.split(" ... ")[0]: line.split(" ... ")[1] for line in result.stdout.splitlines() if " ... " in line}
-    for step in ("commands", "json", "errors", "health"):
+    for step in ("commands", "json", "errors", "health", "params"):
         assert lines[f"release: standard: {step}"] == "ok (skipped: no console script, a library)"
     assert result.exit_code == 0
