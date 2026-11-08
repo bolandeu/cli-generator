@@ -5,7 +5,7 @@ title: Discovery by distribution name, not by binary name — the describe inven
 created: '2026-11-08T09:08:20+00:00'
 source_project: mcp
 source_path: /Users/bolandau/Work/tools/mcp
-status: new
+status: epic
 benefit: 'The inventory of describable CLIs in your answers (14 CLI, 650 commands)
   is short: llmkit, wordpress-bulk-editor and mediagen answer describe --json too.
   A correct number keeps the ''every installed package appears'' check honest and
@@ -18,6 +18,8 @@ triage:
   score: 2.0
   route: task
   at: '2026-11-08T09:24:56+00:00'
+epic: E-009
+before_epic: new
 ---
 
 Measured on this machine (macOS, 2026-11-08), by distribution name from 'uv tool list':
