@@ -6,6 +6,15 @@ source_project: llmkit
 source_path: /Users/bolandau/Work/tools/llmkit
 status: new
 benefit: the template and the Standard agree, consumers stop guessing
+triage:
+  serves: []
+  risks: []
+  why: The Standard never names the per-parameter metadata or hidden, so a consumer
+    cannot separate a rule from an accident; the template also drops x-rb-default
+    when the default is not serializable.
+  score: 3.0
+  route: task
+  at: '2026-11-08T09:23:01+00:00'
 ---
 
 From the llmkit architect, after comparing live describe --json across llm, hostme, serp, context and reading the template at v1.27.3.
