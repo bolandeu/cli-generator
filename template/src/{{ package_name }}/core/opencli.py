@@ -58,9 +58,18 @@ def document(root: Any) -> dict:
 
 
 def _bundled_skills() -> list[dict]:
-    """The agent skills the package ships (the package skill part, copier's include_skill); none without it."""
+    """The agent skills the package ships (the package skill part, copier's include_skill); none without it.
+
+    Each entry names the skill, describes it and carries the path of the directory that holds its
+    SKILL.md, so a consumer reads the text with no second process. A zip import has no such
+    directory: `path` is left out rather than invented.
+    """
     skills = optional_module(f"{_PACKAGE_NAME}.core.skills")
-    return [{"name": s.name, "description": s.description} for s in skills.bundled()] if skills else []
+    if not skills:
+        return []
+    return [
+        {"name": s.name, "description": s.description, **({"path": s.path} if s.path else {})} for s in skills.bundled()
+    ]
 
 
 def info() -> dict:

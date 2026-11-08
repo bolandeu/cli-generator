@@ -118,6 +118,17 @@ def test_root_metadata() -> None:
     names = [entry["name"] for entry in meta["x-rb-env"]]
     assert len(names) == len(set(names))
 
+def test_bundled_skills_point_at_the_directory_that_holds_them() -> None:
+    """Each entry carries the directory that holds its SKILL.md; with no skill part the list is empty."""
+    entries = _meta(DOCUMENT["command"])["x-rb-skills"]
+{%- if include_skill %}
+    assert entries
+    for entry in entries:
+        assert Path(entry["path"], "SKILL.md").is_file(), entry["name"]
+{%- else %}
+    assert entries == []
+{%- endif %}
+
 
 class DescribeSnapshot(SingleFileSnapshotExtension):
     """tests/snapshots/describe.json, pretty-printed for readable diffs."""
@@ -145,6 +156,9 @@ def test_describe_snapshot(snapshot) -> None:
     for item in document["command"]["metadata"]:
         if item["name"] == "x-rb-template-version":
             item["value"] = "<template-version>"
+        # The skill sits in this machine's site-packages: where, is not the contract.
+        for skill in item["value"] if item["name"] == "x-rb-skills" else []:
+            skill["path"] = "<skill-path>"
     rendered = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
     assert rendered == snapshot(extension_class=DescribeSnapshot)
 

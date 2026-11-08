@@ -410,6 +410,8 @@ below.
 - **Recommended.** The document is introspected from the commands, never written by hand: commands, options,
   arguments, `arity`, `acceptedValues`, and `exitCodes` from the table in Errors. What OpenCLI has no field for goes
   into `metadata` as `x-rb-*` (tool names, env vars, data tables and views, external programs, skills).
+- **Recommended.** Each `x-rb-skills` entry names the skill, describes it and points at its directory in the
+  installed distribution, so a consumer reads the skill text with no extra call.
 - **Recommended.** It is public API: it changes only by adding fields.
 
 ### Consumer contracts
