@@ -1,5 +1,9 @@
 # Freeze list
 
+> Extracted 2026-11-08 by task CG-082: every item below has a verdict and a
+> candidate idea title in that task's report. This file is a source record, not
+> a plan; it stays until the Human confirms the extraction.
+
 The template, the gate and the Standard are frozen from v1.26.0, released 2026-10-21 (the Human, 2026-10-21). Only a defect that
 makes a package fail the gate or CI, or work wrongly, is fixed (a v1.26.x patch). Everything else waits here
 until the Human lifts the freeze.
