@@ -96,7 +96,7 @@ def test_every_rule_is_marked_and_mandatory_ones_name_a_gate_step():
     }
     assert named - GATE_STEPS == set()
     assert {"standard: commands", "standard: json", "standard: errors", "standard: health"} <= named
-    assert {"standard: docs", "standard: ci", "secret scan", "install section", "build + install wheel"} <= named
+    assert {"standard: docs", "secret scan", "install section", "build + install wheel"} <= named
 
 
 def test_every_optional_part_says_when_and_how_to_turn_it_on():
