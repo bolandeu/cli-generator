@@ -8,6 +8,15 @@ status: new
 benefit: Every generated package inherits the same CI step; a mutable tag means a
   compromised or moved upstream tag runs in all of them. A SHA pin closes it once,
   in the template.
+triage:
+  serves: []
+  risks: []
+  why: The template's workflow runs actions/checkout@v4, a mutable tag inherited by
+    every package; a SHA pin closes it once, though CG-IDEA-001 may remove the remote
+    CI entirely.
+  score: 2.0
+  route: task
+  at: '2026-11-08T10:43:01+00:00'
 ---
 
 Advisory from rb-mcp's first publish (v0.1.0, 2026-11-08):
