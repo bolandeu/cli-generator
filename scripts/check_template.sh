@@ -237,11 +237,11 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     check_antagor_files
 }
 
-# expect_no_workflow: the package in the cwd has no workflow file under any forge: its gate is local, so an
-# updated package loses the one the template rendered before (the Standard, CI)
+# expect_no_workflow: the package in the cwd has no workflow file under any forge: its gate is local, so a package
+# generates none and an updated one loses the one the template rendered before (the Standard, CI)
 expect_no_workflow() {
     found=$(find .gitea .github -type f 2>/dev/null || true)
-    [ -z "$found" ] || fail "a workflow is still there: $(echo $found)"
+    [ -z "$found" ] || { printf '%s\n' "$found" >&2; fail "the package has a workflow"; }
 }
 
 # check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]: the
@@ -259,9 +259,7 @@ check_variant() {
     run git init -q
     run test -f .agents/antagor/antagor.toml
     expect_no_antagor_files
-    # A new package renders no workflow of any forge: the gate is local.
-    run test ! -e .gitea
-    run test ! -e .github
+    expect_no_workflow
     check_module_docstrings
     verify_project "$expected_install"
     expect_parts absent docs

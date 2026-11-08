@@ -224,9 +224,11 @@ def check_docs(package: Package) -> str:
 
 def check_ci(package: Package) -> str:
     for forge in FORGES:
-        for path in sorted((package.root / forge).glob("*")):
-            if path.suffix in (".yml", ".yaml") and GATE_COMMAND in path.read_text(errors="replace"):
-                raise Broken(f"{path.relative_to(package.root)} runs `{GATE_COMMAND}`: the gate runs locally")
+        for path in sorted((package.root / forge).rglob("*")):
+            if path.is_file() and path.suffix in (".yml", ".yaml"):
+                lines = path.read_text(errors="replace").splitlines()
+                if any(GATE_COMMAND in line and not line.lstrip().startswith("#") for line in lines):
+                    raise Broken(f"{path.relative_to(package.root)} runs `{GATE_COMMAND}`: the gate runs locally")
     return "no workflow runs the gate: it runs locally"
 
 
