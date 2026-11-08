@@ -8,6 +8,14 @@ status: new
 benefit: 'Anyone copying an MCP server snippet from the Standard gets a spawn failure
   at the first call: fastmcp passes StdioTransport(log_file=...) straight to subprocess
   as stderr, and io.StringIO has no fileno.'
+triage:
+  serves: []
+  risks: []
+  why: 'This repo mentions MCP nowhere: no Standard chapter, no log_file example,
+    no StringIO; the premise points at another document.'
+  score: 0.0
+  route: task
+  at: '2026-11-08T10:09:01+00:00'
 ---
 
 Finding from rb-mcp MCP-001 (2026-11-08):
