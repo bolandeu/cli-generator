@@ -1,16 +1,19 @@
 """This tool's tables, as SQLAlchemy Core — mirrors the latest migration (`migrations/versions/`).
 
+A new package declares no table: add the tool's own to `metadata` and its views to `views`
+as the tool needs them, together with the migration that creates them. `tests/test_db.py`
+keeps a worked example — `items`, a data table pushed to production, and `responses`, a
+cache — with every rule below applied.
+
 Every name starts with `PREFIX` (`<tool>_`): the shared PostgreSQL holds every
 tool's tables (and Directus') in one `public` schema. Change a table here *and* add
-a migration by hand (copy the example in `migrations/versions/`) — tests/test_db.py
-fails when the migrated schema and this metadata disagree.
+a migration by hand — tests/test_db.py fails when the migrated schema lacks a table or
+column this metadata declares.
 
 Every table has a single-column PRIMARY KEY — Directus can't show or edit a
 table without one and doesn't support a composite one: a surrogate `id`, with the
 natural key as a UNIQUE constraint (tests/test_db.py checks this metadata and the
 migrated database).
-
-`items` below is the template's example: replace it with the tool's own tables.
 
 Every table says what its rows are, `info={"kind": "data"}` or `"cache"` (tests/test_db.py
 fails without it): `data` is the tool's result and lost when deleted; `cache` is a copy
@@ -49,32 +52,6 @@ metadata = sa.MetaData(
     }
 )
 
-items = sa.Table(
-    f"{PREFIX}items",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("phrase", sa.Text, nullable=False),  # as the user typed it
-    sa.Column("phrase_key", sa.Text, nullable=False),  # core.normalize.norm_phrase(phrase)
-    sa.Column("region", sa.Integer, nullable=False),
-    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    sa.UniqueConstraint("phrase_key", "region"),  # the natural key
-    info={"kind": "data", "push": {"since": "created_at"}},
-)
-
-# The template's example of a cache table: one stored API response per phrase and region.
-responses = sa.Table(
-    f"{PREFIX}responses",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("phrase_key", sa.Text, nullable=False),
-    sa.Column("region", sa.Integer, nullable=False),
-    sa.Column("body", sa.Text, nullable=False),
-    sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    sa.UniqueConstraint("phrase_key", "region"),
-    schema=CACHE_SCHEMA,
-    info={"kind": "cache"},
-)
-
 # The `<tool>_v1_*` views other tools, Directus and the platform read instead of the
 # tables — the tool's data contract, published by `describe --json` (x-rb-data.views).
 # Declared here for that, created by a migration (`CREATE VIEW`); tests/test_db.py
@@ -82,23 +59,3 @@ responses = sa.Table(
 # Columns never change: a different shape is a new `_v2_` view next to the old one.
 # Kept out of `metadata`, which mirrors the tables only.
 views = sa.MetaData()
-
-v1_items = sa.Table(
-    f"{PREFIX}v1_items",
-    views,
-    sa.Column("phrase", sa.Text, comment="The phrase as the user typed it"),
-    sa.Column("phrase_key", sa.Text, comment="The normalized phrase: the key to join on"),
-    sa.Column("region", sa.Integer, comment="Region id"),
-    sa.Column("created_at", sa.DateTime(timezone=True), comment="When the row was added"),
-    comment="The template's example: one row per stored phrase and region",
-)
-
-v1_responses = sa.Table(
-    f"{PREFIX}v1_responses",
-    views,
-    sa.Column("phrase_key", sa.Text, comment="The normalized phrase: the key to join on"),
-    sa.Column("region", sa.Integer, comment="Region id"),
-    sa.Column("body", sa.Text, comment="The provider's response, as received"),
-    sa.Column("fetched_at", sa.DateTime(timezone=True), comment="When it was fetched"),
-    comment="The template's example of a view over a cache table (in schema `cache`; the view stays in public)",
-)

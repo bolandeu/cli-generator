@@ -1,15 +1,14 @@
-"""Tests of the database layer: names, migrations, the tables' declared kinds and views, on SQLite."""
+"""Tests of the database layer: names, migrations, the tables' declared rules and views, on SQLite."""
 
 from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from typer.testing import CliRunner
@@ -24,6 +23,80 @@ runner = CliRunner()
 # the throwaway server scripts/pg_test.sh starts and names in TEST_DATABASE_URL.
 PG_URL = os.environ.get("TEST_DATABASE_URL")
 
+# The example the layer is proven on — the template's `items` (a data table pushed to
+# production) and `responses` (a cache), with a `<tool>_v1_*` view over each. A package
+# declares its own in core/tables.py and creates them in a migration; the tests build this
+# one on the engine (`example_schema`), so the package ships no example table.
+EXAMPLE = sa.MetaData(naming_convention=tables.metadata.naming_convention)
+
+items = sa.Table(
+    f"{tables.PREFIX}items",
+    EXAMPLE,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("phrase", sa.Text, nullable=False),  # as the user typed it
+    sa.Column("phrase_key", sa.Text, nullable=False),  # core.normalize.norm_phrase(phrase)
+    sa.Column("region", sa.Integer, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    sa.UniqueConstraint("phrase_key", "region"),  # the natural key
+    info={"kind": "data", "push": {"since": "created_at"}},
+)
+
+responses = sa.Table(
+    f"{tables.PREFIX}responses",
+    EXAMPLE,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("phrase_key", sa.Text, nullable=False),
+    sa.Column("region", sa.Integer, nullable=False),
+    sa.Column("body", sa.Text, nullable=False),
+    sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    sa.UniqueConstraint("phrase_key", "region"),
+    schema=tables.CACHE_SCHEMA,  # kind="cache" lives in its own schema (the Standard, Database)
+    info={"kind": "cache"},
+)
+
+VIEWS = sa.MetaData()
+
+v1_items = sa.Table(
+    f"{tables.PREFIX}v1_items",
+    VIEWS,
+    sa.Column("phrase", sa.Text),
+    sa.Column("phrase_key", sa.Text),
+    sa.Column("region", sa.Integer),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+v1_responses = sa.Table(
+    f"{tables.PREFIX}v1_responses",
+    VIEWS,
+    sa.Column("phrase_key", sa.Text),
+    sa.Column("region", sa.Integer),
+    sa.Column("body", sa.Text),
+    sa.Column("fetched_at", sa.DateTime(timezone=True)),
+)
+
+
+def example_schema(engine: sa.Engine) -> None:
+    """The example tables and their views, as a package's migration creates them."""
+    EXAMPLE.create_all(engine)
+    sources = {v1_items.name: items, v1_responses.name: responses}
+    with engine.begin() as conn:
+        for view in VIEWS.sorted_tables:
+            table = sources[view.name]
+            # A raw statement ignores SQLite's schema_translate_map: name the table as this engine has it.
+            relation = table.fullname if db.is_postgres(conn) else table.name
+            listed = ", ".join(column.name for column in view.columns)
+            conn.execute(sa.text(f"DROP VIEW IF EXISTS {view.name}"))  # an older migration may have made it
+            conn.execute(sa.text(f"CREATE VIEW {view.name} AS SELECT {listed} FROM {relation}"))  # noqa: S608
+
+
+@pytest.fixture
+def example(monkeypatch: pytest.MonkeyPatch) -> sa.Engine:
+    """The layer over the example schema, in this test's own SQLite file."""
+    engine = db.open_db()
+    example_schema(engine)
+    monkeypatch.setattr(db, "metadata", EXAMPLE)  # the layer works on the package's tables, here the example
+    return engine
+
 
 def invoke_json(*args: str) -> tuple[int, dict]:
     result = runner.invoke(app, [*args, "--json"])
@@ -32,11 +105,11 @@ def invoke_json(*args: str) -> tuple[int, dict]:
 
 def _add_item(engine: sa.Engine, phrase: str = "Купить ёлку") -> None:
     with engine.begin() as conn:
-        conn.execute(sa.insert(tables.items).values(phrase=phrase, phrase_key=phrase.lower(), region=213))
+        conn.execute(sa.insert(items).values(phrase=phrase, phrase_key=phrase.lower(), region=213))
 
 
 def test_names_are_namespaced() -> None:
-    assert all(table.name.startswith(db.PREFIX) for table in tables.metadata.sorted_tables)
+    assert all(table.name.startswith(db.PREFIX) for table in EXAMPLE.sorted_tables)
     tool = db.PREFIX.removesuffix("_")
     assert db.VERSION_TABLE.endswith(f"_{tool}")
     assert db.ENV_VAR.startswith(f"{tool.upper()}_")
@@ -46,7 +119,6 @@ def test_sqlite_is_created_and_migrated_on_open(_local_database: Path) -> None:
     engine = db.open_db()
     names = sa.inspect(engine).get_table_names()
     assert db.VERSION_TABLE in names and "alembic_version" not in names
-    assert f"{db.PREFIX}v1_items" in sa.inspect(engine).get_view_names()
     assert db.schema_state(engine).up_to_date
     assert _local_database.is_file()
 
@@ -59,48 +131,43 @@ def test_sqlite_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert db.sqlite_path().name == f"{db.PREFIX.removesuffix('_')}.db"
 
 
-def test_every_table_has_a_single_column_primary_key() -> None:
+def test_every_table_has_a_single_column_primary_key(example: sa.Engine) -> None:
     """Directus can't show or edit a table without one, and doesn't support a composite one.
 
     A surrogate `id` is the key; the natural key is a UNIQUE constraint. Checked on
     the declared tables and the migrated database alike.
     """
-    for table in tables.metadata.sorted_tables:
+    for table in EXAMPLE.sorted_tables:
         assert len(table.primary_key.columns) == 1, f"{table.name}: PRIMARY KEY must be one column"
-    inspector = sa.inspect(db.open_db())
-    for name in inspector.get_table_names():
-        columns = inspector.get_pk_constraint(name)["constrained_columns"]
+    for name in sa.inspect(example).get_table_names():
+        columns = sa.inspect(example).get_pk_constraint(name)["constrained_columns"]
         assert len(columns) == 1, f"{name}: PRIMARY KEY must be one column, is {columns}"
 
 
 def test_every_table_says_whether_it_is_data_or_cache() -> None:
-    for table in tables.metadata.sorted_tables:
+    for table in EXAMPLE.sorted_tables:
         assert table.info.get("kind") in ("data", "cache"), (
             f'{table.name}: info={{ '{{' }}"kind": "data" | "cache"}} is required'
         )
 
 
-def test_declared_views_exist_with_their_columns() -> None:
-    """Every view in tables.views is created by the migrations, with exactly the declared columns."""
-    _assert_views_match(db.open_db())
-
-
-def _assert_views_match(engine: sa.Engine) -> None:
-    inspector = sa.inspect(engine)
-    existing = set(inspector.get_view_names())
-    for view in tables.views.sorted_tables:
-        assert view.name.startswith(f"{db.PREFIX}v"), f"{view.name}: a view's name is <tool>_v<N>_<name>"
-        assert view.name in existing, f"{view.name} is declared in tables.views but no migration creates it"
-        columns = [column["name"] for column in inspector.get_columns(view.name)]
-        assert columns == [column.name for column in view.columns], f"{view.name}: columns differ from tables.views"
+def test_declared_views_exist_with_their_columns(example: sa.Engine) -> None:
+    """Every view in `views` is created by a migration, with exactly the declared columns."""
+    _assert_views_match(example)
 
 
 def test_tables_match_the_migrations() -> None:
-    """tables.py and migrations/versions/ describe the same schema."""
+    """Every table tables.py declares is in the migrated database, with the declared columns.
+
+    A table the database holds and tables.py does not is history — an older migration made it, and
+    the package drops it in its own next migration. A declared table the database lacks is a
+    missing migration.
+    """
     engine = db.open_db()
+    declared = set(tables.metadata.tables)
     with engine.connect() as conn:
         context = MigrationContext.configure(
-            conn, opts={"include_name": lambda name, type_, *_: type_ != "table" or name.startswith(db.PREFIX)}
+            conn, opts={"include_name": lambda name, type_, *_: type_ != "table" or name in declared}
         )
         assert compare_metadata(context, db.metadata_for(engine)) == []
 
@@ -188,24 +255,26 @@ def test_status(_local_database: Path) -> None:
     assert str(_local_database) in payload["database"]
 
 
-def test_import_sqlite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_import_sqlite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, example: sa.Engine) -> None:
     source = db.sqlite_engine(tmp_path / "old.db")
     db.upgrade(source)
+    example_schema(source)
     _add_item(source)
     _add_item(source, "вторая")
     target = db.sqlite_engine(tmp_path / "shared.db")
     db.upgrade(target)
+    example_schema(target)
     _as_postgres(monkeypatch, target)
 
     code, payload = invoke_json("db", "import-sqlite", str(tmp_path / "old.db"), "--dry-run")
-    assert code == 0 and payload["rows"] == {tables.items.name: 2, tables.responses.name: 0}
+    assert code == 0 and payload["rows"] == {items.name: 2, responses.name: 0}
     with target.connect() as conn:
-        assert conn.execute(sa.select(sa.func.count()).select_from(tables.items)).scalar_one() == 0
+        assert conn.execute(sa.select(sa.func.count()).select_from(items)).scalar_one() == 0
 
     code, payload = invoke_json("db", "import-sqlite", str(tmp_path / "old.db"))
-    assert code == 0 and payload["rows"] == {tables.items.name: 2, tables.responses.name: 0}
+    assert code == 0 and payload["rows"] == {items.name: 2, responses.name: 0}
     with target.connect() as conn:
-        assert {row.phrase for row in conn.execute(sa.select(tables.items))} == {"Купить ёлку", "вторая"}
+        assert {row.phrase for row in conn.execute(sa.select(items))} == {"Купить ёлку", "вторая"}
 
     code, payload = invoke_json("db", "import-sqlite", str(tmp_path / "old.db"))
     assert code == 2 and "not empty" in payload["error"]["message"]
@@ -224,6 +293,7 @@ def _prod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> sa.Engine:
     """A migrated stand-in for production, behind <TOOL>_PROD_DATABASE_URL."""
     prod = db.sqlite_engine(tmp_path / "prod.db")
     db.upgrade(prod)
+    example_schema(prod)
     monkeypatch.setenv(db.PROD_ENV_VAR, "postgresql://prod")
     monkeypatch.setattr(db, "postgres_engine", lambda *_args, **_kwargs: prod)
     return prod
@@ -231,10 +301,10 @@ def _prod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> sa.Engine:
 
 def _phrases(engine: sa.Engine) -> list[tuple[int, str]]:
     with engine.connect() as conn:
-        return [tuple(row) for row in conn.execute(sa.select(tables.items.c.id, tables.items.c.phrase).order_by("id"))]
+        return [tuple(row) for row in conn.execute(sa.select(items.c.id, items.c.phrase).order_by("id"))]
 
 
-def test_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, example: sa.Engine) -> None:
     local = db.open_db()
     for phrase in ("один", "два", "три"):
         _add_item(local, phrase)
@@ -244,28 +314,28 @@ def test_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     code, payload = invoke_json("db", "push", "--dry-run")
     assert code == 0, payload
-    assert payload["tables"] == {tables.items.name: {"selected": 3, "sent": 2, "skipped": 1}}
+    assert payload["tables"] == {items.name: {"selected": 3, "sent": 2, "skipped": 1}}
     assert len(_phrases(prod)) == 2
 
     code, payload = invoke_json("db", "push")
-    assert payload["tables"][tables.items.name]["sent"] == 2
+    assert payload["tables"][items.name]["sent"] == 2
     assert [phrase for _id, phrase in _phrases(prod)] == ["два", "четыре", "один", "три"]  # prod's own ids
 
     code, payload = invoke_json("db", "push")
-    assert payload["tables"][tables.items.name] == {"selected": 3, "sent": 0, "skipped": 3}
+    assert payload["tables"][items.name] == {"selected": 3, "sent": 0, "skipped": 3}
 
 
-def test_push_filters(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_push_filters(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, example: sa.Engine) -> None:
     local = db.open_db()
     _add_item(local, "старая")
     with local.begin() as conn:
-        conn.execute(sa.update(tables.items).values(created_at=datetime(2020, 1, 1)))
+        conn.execute(sa.update(items).values(created_at=datetime(2020, 1, 1)))
     _add_item(local, "новая")
     _prod(monkeypatch, tmp_path)
     _code, payload = invoke_json("db", "push", "--since", "2026-01-01", "--dry-run")
-    assert payload["tables"][tables.items.name]["selected"] == 1
+    assert payload["tables"][items.name]["selected"] == 1
     _code, payload = invoke_json("db", "push", "--where", "phrase = 'старая'", "--dry-run")
-    assert payload["tables"][tables.items.name]["selected"] == 1
+    assert payload["tables"][items.name]["selected"] == 1
     code, payload = invoke_json("db", "push", "--table", "nope")
     assert code == 2 and "Not a push table" in payload["error"]["message"]
 
@@ -290,118 +360,29 @@ def test_push_table_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db, "push_tables", lambda: [keyless])
     with pytest.raises(InvalidArguments, match="natural key"):
         db.push(db.open_db(), db.open_db())
-    no_since = tables.items.to_metadata(sa.MetaData())
+    no_since = items.to_metadata(sa.MetaData())
     no_since.info["push"] = {}
     monkeypatch.setattr(db, "push_tables", lambda: [no_since])
     with pytest.raises(InvalidArguments, match="since"):
         db.push(db.open_db(), db.open_db(), since=datetime(2026, 1, 1))
 
 
-@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
-def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    assert PG_URL
-    # It drops this tool's tables: never anything but a throwaway local server.
-    assert sa.make_url(PG_URL).host in ("127.0.0.1", "localhost"), "TEST_DATABASE_URL must be scripts/pg_test.sh's"
-    monkeypatch.setenv(db.ENV_VAR, PG_URL)
-    engine = db.open_db(check=False)
-    with engine.begin() as conn:  # a clean slate: only this tool's objects
-        _pg_clean_slate(conn)
-        conn.execute(sa.text("CREATE TABLE IF NOT EXISTS directus_users (id int)"))  # someone else's table
-    with pytest.raises(DatabaseNotMigrated):
-        db.open_db()
-    assert db.upgrade(engine).up_to_date
-    db.check_schema(engine)
-    _assert_views_match(engine)
-
-    source = db.sqlite_engine(tmp_path / "old.db")
-    db.upgrade(source)
-    _add_item(source)
-    assert db.import_sqlite(tmp_path / "old.db", engine) == {tables.items.name: 1, tables.responses.name: 0}
-    _add_item(engine, "вторая")  # the sequence moved past the imported ids
-    with engine.connect() as conn:
-        assert conn.execute(sa.text(f"SELECT count(*) FROM {db.PREFIX}v1_items")).scalar_one() == 2  # noqa: S608
-        assert sa.inspect(conn).has_table("directus_users")
-
-    monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL)  # db push into real PostgreSQL: ON CONFLICT, RETURNING
-    local = db.sqlite_engine(tmp_path / "local.db")
-    db.upgrade(local)
-    _add_item(local)  # "Купить ёлку" is already there
-    _add_item(local, "третья")
-    prod = db.prod_engine()
-    assert db.push(local, prod, dry_run=True) == {tables.items.name: {"selected": 2, "sent": 1, "skipped": 1}}
-    assert db.push(local, prod)[tables.items.name]["sent"] == 1
-    assert db.push(local, prod)[tables.items.name]["sent"] == 0
-    prod.dispose()
-    engine.dispose()
-
-
-# --- The cache schema: kind="cache" tables live in PostgreSQL schema `cache` ------------
-# (public holds the data).
-
-RESPONSE = {"phrase_key": "купить елку", "region": 213, "body": '{"top": []}'}
-
-
-def _old_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Make this CLI the previous release: its migrations stop at 0001 (before the move to `cache`)."""
-    source = Path(db.__file__).parent.parent / "migrations"
-    (tmp_path / "old" / "versions").mkdir(parents=True)
-    for name in ("env.py", "script.py.mako"):
-        (tmp_path / "old" / name).write_text((source / name).read_text())
-    for path in (source / "versions").glob("0001_*.py"):
-        (tmp_path / "old" / "versions" / path.name).write_text(path.read_text())
-    new_config = db.alembic_config
-
-    def old_config(connection=None):
-        config = new_config(connection)
-        config.set_main_option("script_location", str(tmp_path / "old"))
-        return config
-
-    monkeypatch.setattr(db, "alembic_config", old_config)
-
-
-def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
-    for table in tables.metadata.sorted_tables:
-        expected = tables.CACHE_SCHEMA if table.info.get("kind") == "cache" else None
-        assert table.schema == expected, f"{table.name}: kind={table.info.get('kind')} needs schema={expected!r}"
-    assert any(table.schema == tables.CACHE_SCHEMA for table in tables.metadata.sorted_tables)  # the example
-
-
-def test_sqlite_ignores_the_cache_schema() -> None:
-    """Case 5: on SQLite the cache table is in the same file, read and written as before."""
-    engine = db.open_db()
-    with engine.begin() as conn:
-        conn.execute(sa.insert(tables.responses).values(**RESPONSE))
-    with engine.connect() as conn:
-        assert conn.execute(sa.select(tables.responses.c.body)).scalar_one() == RESPONSE["body"]
-        assert conn.execute(sa.text(f"SELECT count(*) FROM {db.PREFIX}v1_responses")).scalar_one() == 1  # noqa: S608
-    assert tables.responses.name in sa.inspect(engine).get_table_names()
-
-
-def test_old_cli_on_a_moved_sqlite_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Case 4 (SQLite): the previous release refuses a database migrated past it, touching nothing."""
-    db.open_db()  # migrated to head by this release
-    _old_cli(monkeypatch, tmp_path)
-    code, payload = invoke_json("db", "upgrade")
-    assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD"
-    with pytest.raises(DatabaseTooNew):
-        db.open_db()
-
-
 def _pg_engine(monkeypatch: pytest.MonkeyPatch) -> sa.Engine:
-    """The throwaway server, wiped of this tool's objects, with schema `cache` present."""
+    """The throwaway server, wiped of this tool's objects: schema `cache` empty, nothing migrated."""
     assert PG_URL
     assert sa.make_url(PG_URL).host in ("127.0.0.1", "localhost"), "TEST_DATABASE_URL must be scripts/pg_test.sh's"
     monkeypatch.setenv(db.ENV_VAR, PG_URL)
     engine = db.open_db(check=False)
     with engine.begin() as conn:
         _pg_clean_slate(conn)
+    monkeypatch.setattr(db, "metadata", EXAMPLE)
     return engine
 
 
 def _pg_clean_slate(conn: sa.Connection) -> None:
-    for view in tables.views.sorted_tables:
+    for view in VIEWS.sorted_tables:
         conn.execute(sa.text(f"DROP VIEW IF EXISTS {view.name}"))
-    for table in tables.metadata.sorted_tables:
+    for table in EXAMPLE.sorted_tables:
         conn.execute(sa.text(f"DROP TABLE IF EXISTS {table.name}, {tables.CACHE_SCHEMA}.{table.name} CASCADE"))
     conn.execute(sa.text(f"DROP TABLE IF EXISTS {db.VERSION_TABLE}"))
     conn.execute(sa.text(f"CREATE SCHEMA IF NOT EXISTS {tables.CACHE_SCHEMA}"))
@@ -415,54 +396,74 @@ def _where(conn: sa.Connection, name: str) -> str | None:
 
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
-def test_pg_upgrade_moves_cache_tables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Cases 1-3: db upgrade moves the cache table, rows and dates intact; it works after; so does the view."""
+def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    assert PG_URL
+    # It drops this tool's tables: never anything but a throwaway local server.
     engine = _pg_engine(monkeypatch)
-    with engine.begin() as conn:
-        command.upgrade(db.alembic_config(conn), "0001")  # the layout before: everything in public
-        fetched = datetime(2026, 9, 1, 12, 30, tzinfo=UTC)
-        conn.execute(
-            sa.text(
-                f"INSERT INTO {tables.responses.name} (phrase_key, region, body, fetched_at)"  # noqa: S608
-                " VALUES (:phrase_key, :region, :body, :fetched_at)"
-            ),
-            {**RESPONSE, "fetched_at": fetched},
-        )
-        assert _where(conn, tables.responses.name) == "public"
-    view_columns = [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")]
-
-    code, payload = invoke_json("db", "upgrade")
-    assert code == 0 and payload["up_to_date"], payload
-    with engine.connect() as conn:
-        assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA  # and no longer in public
-        row = conn.execute(sa.select(tables.responses.c.phrase_key, tables.responses.c.fetched_at)).one()
-        assert row == (RESPONSE["phrase_key"], fetched)
-    with db.connect() as conn:  # case 2: written and read through tables.py after the move
-        conn.execute(sa.insert(tables.responses).values(**{**RESPONSE, "region": 2}))
-    with engine.connect() as conn:
-        assert conn.execute(sa.select(sa.func.count()).select_from(tables.responses)).scalar_one() == 2
-        view = sa.text(f"SELECT region FROM {db.PREFIX}v1_responses ORDER BY region")  # noqa: S608
-        assert conn.execute(view).scalars().all() == [2, 213]  # case 3
-    assert [c["name"] for c in sa.inspect(engine).get_columns(f"{db.PREFIX}v1_responses")] == view_columns
-    _assert_views_match(engine)
-    engine.dispose()
-
-
-@pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
-def test_pg_old_cli_on_a_moved_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Case 4: the previous release on a moved base → CLI_TOO_OLD (exit 6), creates nothing."""
-    engine = _pg_engine(monkeypatch)
-    db.upgrade(engine)
-    _old_cli(monkeypatch, tmp_path)
-    code, payload = invoke_json("db", "upgrade")
-    assert code == 6 and payload["error"]["code"] == "CLI_TOO_OLD", payload
-    with pytest.raises(DatabaseTooNew):
+    with engine.begin() as conn:  # a clean slate: only this tool's objects
+        conn.execute(sa.text("CREATE TABLE IF NOT EXISTS directus_users (id int)"))  # someone else's table
+    with pytest.raises(DatabaseNotMigrated):
         db.open_db()
+    assert db.upgrade(engine).up_to_date
+    db.check_schema(engine)
+    example_schema(engine)
+    _assert_views_match(engine)
+
+    source = db.sqlite_engine(tmp_path / "old.db")
+    db.upgrade(source)
+    example_schema(source)
+    _add_item(source)
+    assert db.import_sqlite(tmp_path / "old.db", engine) == {items.name: 1, responses.name: 0}
+    _add_item(engine, "вторая")  # the sequence moved past the imported ids
     with engine.connect() as conn:
-        assert _where(conn, tables.responses.name) == tables.CACHE_SCHEMA
-        names = sa.inspect(conn).get_table_names()
-        assert tables.responses.name not in names  # nothing re-created in public
+        assert conn.execute(sa.text(f"SELECT count(*) FROM {v1_items.name}")).scalar_one() == 2  # noqa: S608
+        assert sa.inspect(conn).has_table("directus_users")
+
+    monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL)  # db push into real PostgreSQL: ON CONFLICT, RETURNING
+    local = db.sqlite_engine(tmp_path / "local.db")
+    db.upgrade(local)
+    example_schema(local)
+    _add_item(local)  # "Купить ёлку" is already there
+    _add_item(local, "третья")
+    prod = db.prod_engine()
+    assert db.push(local, prod, dry_run=True) == {items.name: {"selected": 2, "sent": 1, "skipped": 1}}
+    assert db.push(local, prod)[items.name]["sent"] == 1
+    assert db.push(local, prod)[items.name]["sent"] == 0
+    prod.dispose()
     engine.dispose()
+
+
+def _assert_views_match(engine: sa.Engine) -> None:
+    inspector = sa.inspect(engine)
+    existing = set(inspector.get_view_names())
+    for view in VIEWS.sorted_tables:
+        assert view.name.startswith(f"{db.PREFIX}v"), f"{view.name}: a view's name is <tool>_v<N>_<name>"
+        assert view.name in existing, f"{view.name} is declared in tables.views but no migration creates it"
+        columns = [column["name"] for column in inspector.get_columns(view.name)]
+        assert columns == [column.name for column in view.columns], f"{view.name}: columns differ from tables.views"
+
+
+# --- The cache schema: kind="cache" tables live in PostgreSQL schema `cache` ------------
+# (public holds the data).
+
+RESPONSE = {"phrase_key": "купить елку", "region": 213, "body": '{"top": []}'}
+
+
+def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
+    for table in EXAMPLE.sorted_tables:
+        expected = tables.CACHE_SCHEMA if table.info.get("kind") == "cache" else None
+        assert table.schema == expected, f"{table.name}: kind={table.info.get('kind')} needs schema={expected!r}"
+    assert any(table.schema == tables.CACHE_SCHEMA for table in EXAMPLE.sorted_tables)  # the example
+
+
+def test_sqlite_ignores_the_cache_schema(example: sa.Engine) -> None:
+    """Case 5: on SQLite the cache table is in the same file, read and written as before."""
+    with example.begin() as conn:
+        conn.execute(sa.insert(responses).values(**RESPONSE))
+    with example.connect() as conn:
+        assert conn.execute(sa.select(responses.c.body)).scalar_one() == RESPONSE["body"]
+        assert conn.execute(sa.text(f"SELECT count(*) FROM {v1_responses.name}")).scalar_one() == 1  # noqa: S608
+    assert responses.name in sa.inspect(example).get_table_names()
 
 
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set")
@@ -470,16 +471,18 @@ def test_pg_push_writes_into_the_cache_schema(monkeypatch: pytest.MonkeyPatch, t
     """Case 6: db push sends local cache rows into cache.<table> in production."""
     engine = _pg_engine(monkeypatch)
     db.upgrade(engine)
+    example_schema(engine)
     monkeypatch.setenv(db.PROD_ENV_VAR, PG_URL or "")
     local = db.sqlite_engine(tmp_path / "local.db")
     db.upgrade(local)
+    example_schema(local)
     with local.begin() as conn:
-        conn.execute(sa.insert(tables.responses).values(**RESPONSE))
-    monkeypatch.setattr(db, "push_tables", lambda: [tables.responses])  # a cache the tool chose to push
+        conn.execute(sa.insert(responses).values(**RESPONSE))
+    monkeypatch.setattr(db, "push_tables", lambda: [responses])  # a cache the tool chose to push
     prod = db.prod_engine()
-    assert db.push(local, prod)[tables.responses.name]["sent"] == 1
+    assert db.push(local, prod)[responses.name]["sent"] == 1
     with engine.connect() as conn:
-        count = sa.text(f"SELECT count(*) FROM {tables.CACHE_SCHEMA}.{tables.responses.name}")  # noqa: S608
+        count = sa.text(f"SELECT count(*) FROM {tables.CACHE_SCHEMA}.{responses.name}")  # noqa: S608
         assert conn.execute(count).scalar_one() == 1
     prod.dispose()
     engine.dispose()
@@ -490,14 +493,13 @@ def test_pg_no_cache_schema_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) ->
     """Case 7a: schema `cache` missing → a clear error, nothing migrated at all."""
     engine = _pg_engine(monkeypatch)
     with engine.begin() as conn:
-        command.upgrade(db.alembic_config(conn), "0001")
-        conn.execute(sa.text(f"DROP SCHEMA {tables.CACHE_SCHEMA}"))
+        conn.execute(sa.text(f"DROP SCHEMA {tables.CACHE_SCHEMA} CASCADE"))
     code, payload = invoke_json("db", "upgrade")
     assert code == 5 and payload["error"]["code"] == "DATABASE_UNAVAILABLE"
     assert f"schema '{tables.CACHE_SCHEMA}'" in payload["error"]["message"]
     with engine.connect() as conn:
-        assert db.current_revision(conn) == "0001"
-        assert _where(conn, tables.responses.name) == "public"
+        assert db.current_revision(conn) is None
+        assert _where(conn, db.VERSION_TABLE) is None
     engine.dispose()
 
 
@@ -515,17 +517,13 @@ def test_pg_no_rights_on_cache_schema_is_a_clear_error(monkeypatch: pytest.Monke
     limited_url = sa.make_url(PG_URL or "").set(username=role, password="limited")  # noqa: S106
     monkeypatch.setenv(db.ENV_VAR, limited_url.render_as_string(hide_password=False))
     limited = db.open_db(check=False)
-    with limited.begin() as conn:
-        command.upgrade(db.alembic_config(conn), "0001")  # its own tables, in public
     code, payload = invoke_json("db", "upgrade")
     assert code == 5 and payload["error"]["code"] == "DATABASE_UNAVAILABLE"
     assert "CREATE" in payload["error"]["message"]
     with limited.connect() as conn:
-        assert db.current_revision(conn) == "0001"
-        assert _where(conn, tables.responses.name) == "public"
+        assert db.current_revision(conn) is None
     limited.dispose()
     with engine.begin() as conn:
-        _pg_clean_slate(conn)
         conn.execute(sa.text(f"DROP OWNED BY {role}"))
         conn.execute(sa.text(f"DROP ROLE {role}"))
     engine.dispose()
