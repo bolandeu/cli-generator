@@ -2,8 +2,8 @@ schema = 1
 mode = "fast"
 prefix = "CG"
 name = "cli-generator"
-worker = "claude-code"
-checks = ["sh scripts/check_template.sh", "claude plugin validate . --strict"]
+worker = "pi"  # `claude` is not installed on this machine: the default claude-code timed out at agent start (2026-11-08)
+checks = ["sh scripts/check_template.sh", "python3 scripts/check_plugin.py"]
 # The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
 stall_minutes = 25
 # The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
@@ -12,12 +12,19 @@ heavy = ["sh scripts/check_template.sh"]
 # the workserver, 48 cores (the Human 28.10: at least four tasks at once); heavy checks queue on the machine
 parallel = 4
 
+[docs]
+# The Standard and the skill's references ship inside the plugin: product data, not project docs
+data = ["skills/cli-builder/reference/*.md"]
+# The boundary contract with sysadmin is a living doc (docs/contracts/sysadmin.md)
+living = ["docs/contracts/sysadmin.md"]
+
 [limits]
 # Mode fast: template tasks move or drop whole parts (E-006 CG-047).
 max_files = 150
 max_lines = 4000
 
 [review]
+worker = "pi-glm"  # another model than the author (the Human, 6.11)
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
 [publish]
@@ -32,3 +39,7 @@ deploy_command = "sh scripts/deploy.sh"
 
 [daemon]
 enabled = true
+
+[workers.pi-glm]  # the reviewer: kind pi, model from [model_policy.pi-glm]
+kind = "pi"
+args = []
