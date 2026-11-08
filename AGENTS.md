@@ -193,6 +193,15 @@ before (missing answers file, wrong `copier.yml` location).
   merged on `copier update` (projects rewrite it). A template change meant
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
+- `src/{{ package_name }}/migrations/versions` is in `_exclude` under
+  `_copier_operation == 'update'`: a package's migration history is its own,
+  so a change to the template's example migrations reaches only packages
+  generated after it, and a package updated from an older tag keeps the
+  objects those migrations created. For the same reason a file that must
+  reach a package on update keeps its template name: copier applies no
+  change when the template file was renamed (`.py.jinja` → `.py`) and the
+  project silently keeps the old content — `0001_initial.py.jinja` holds no
+  template expression and keeps the suffix for that reason.
 - Optional generated parts are copier questions, not deletions:
   `include_project` (`commands/project.py`, `init`, `config`, `status`,
   `core/services.py`, `core/models.py`, `--project`), `include_auth`,
