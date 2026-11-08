@@ -145,7 +145,8 @@ python3 scripts/check_plugin.py
 
 It replaced `claude plugin validate . --strict` when the `claude` binary left
 this machine (2026-11-08): the manifest's required fields, a slug name, and the
-skill's frontmatter. Nothing else of the strict validator applies here.
+skill's frontmatter. Nothing else of the strict validator applies here. It is
+also in `.agents/antagor/antagor.toml`'s `checks`, so every task runs it.
 
 For a change to the `copier update` story (versioning), verify with a
 real git-based round trip (tag v1, generate, edit a template file, tag v2,
