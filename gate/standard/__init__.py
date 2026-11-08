@@ -22,7 +22,7 @@ EXIT_CODES = frozenset(range(7))
 UNKNOWN_OPTION = "--rb-release-unknown-option"
 NO_SCRIPT = "skipped: no console script, a library"
 DOCS = ("README.md", "AGENTS.md")
-WORKFLOWS = ".gitea/workflows/"
+FORGES = (".gitea/workflows/", ".github/workflows/")
 GATE_COMMAND = "rb-release check"
 # What a CI runner sets and Typer reads at import (forcing terminal output): the pytest step runs with them,
 # every probe of the installed script runs without them.
@@ -223,12 +223,11 @@ def check_docs(package: Package) -> str:
 
 
 def check_ci(package: Package) -> str:
-    folder = package.root / WORKFLOWS
-    workflows = sorted(path for path in folder.glob("*") if path.suffix in (".yml", ".yaml"))
-    for path in workflows:
-        if GATE_COMMAND in path.read_text(errors="replace"):
-            return f"{path.relative_to(package.root)} runs {GATE_COMMAND}"
-    raise Broken(f"no workflow under {WORKFLOWS} runs `{GATE_COMMAND}`")
+    for forge in FORGES:
+        for path in sorted((package.root / forge).glob("*")):
+            if path.suffix in (".yml", ".yaml") and GATE_COMMAND in path.read_text(errors="replace"):
+                raise Broken(f"{path.relative_to(package.root)} runs `{GATE_COMMAND}`: the gate runs locally")
+    return "no workflow runs the gate: it runs locally"
 
 
 @dataclass(frozen=True)
