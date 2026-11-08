@@ -205,6 +205,13 @@ def test_parameter_shapes() -> None:
     assert _meta(options["--color"])["x-rb-default"] == "red"
     assert _meta(options["--out"])["x-rb-default"] == "out"
     assert _meta(options["--tag"])["x-rb-multiple"] is True
+    # x-rb-default is always there: the value, `null` for no default (`--name`, `typer.Option(...)`).
+    assert _meta(options["--tag"])["x-rb-default"] == []
+    assert _meta(options["--name"])["x-rb-default"] is None
+    assert _meta(options["--force"])["x-rb-default"] is False
+    assert all("x-rb-default" in _meta(entry) for entry in [*paint_cmd["options"], *paint_cmd["arguments"]])
+    # x-rb-multiple is present only where the parameter repeats.
+    assert all("x-rb-multiple" not in _meta(entry) for entry in paint_cmd["options"] if entry["name"] != "--tag")
     assert options["--color"]["arguments"][0]["arity"] == {"maximum": 1}
     assert "arity" not in options["--tag"]["arguments"][0]
     assert options["--secret"]["hidden"] is True
@@ -212,6 +219,9 @@ def test_parameter_shapes() -> None:
     assert options["--name"]["required"] is True
     [targets] = paint_cmd["arguments"]
     assert targets["required"] is True and targets["arity"] == {"minimum": 1}
+    assert _meta(targets)["x-rb-multiple"] is True  # `list[str]` is variadic
     assert internal_cmd["hidden"] is True
     [path] = internal_cmd["arguments"]
     assert path["required"] is False and path["arity"] == {"minimum": 0, "maximum": 1}
+    assert _meta(path)["x-rb-default"] is None  # `typer.Argument(None)`: no default
+    assert "x-rb-multiple" not in _meta(path)

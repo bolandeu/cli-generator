@@ -36,6 +36,7 @@ files: write the file the rule asks for.
 | `standard: health` | Standard, Health |
 | `secret scan` | Standard, Credentials |
 | `standard: docs` | Standard, Docs |
+| `standard: params` | Standard, Describe |
 | `standard: ci` | Standard, CI |
 | `vulnerability audit` | Standard, Release |
 

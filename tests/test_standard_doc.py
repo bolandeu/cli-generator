@@ -37,6 +37,7 @@ GATE_STEPS = {
     "standard: errors",
     "standard: health",
     "standard: docs",
+    "standard: params",
     "standard: ci",
     "secret scan",
     "uv lock --check",
