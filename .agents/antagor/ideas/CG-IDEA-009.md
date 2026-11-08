@@ -4,7 +4,7 @@ title: the db part ships no example table inside the package's own `core/tables.
 created: '2026-11-08T10:09:34+00:00'
 source_project: cli-generator
 source_path: /Users/bolandau/Work/tools/cli-generator
-status: new
+status: epic
 triage:
   serves: []
   risks: []
@@ -14,6 +14,8 @@ triage:
   score: 2.0
   route: task
   at: '2026-11-08T14:15:32+00:00'
+epic: E-013
+before_epic: new
 ---
 
 From the CG-082 extraction of docs/plans/freeze-list.md (F4.4 template example tables merge into `tables.py` as duplicates).
