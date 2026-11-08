@@ -73,7 +73,8 @@ def _commands(source: str) -> dict[str, tuple[str | None, str]]:
 
     The docstring is the literal one, or — when the module later sets
     `command.__doc__ = f"..."` — that expression's source, since that's what
-    `--help` renders.
+    `--help` renders. A `ctx: typer.Context` parameter is left out of the
+    signature: Typer injects it, so it changes no behaviour.
     """
     tree = ast.parse(source)
     assigned = _doc_assignments(tree)
@@ -86,8 +87,39 @@ def _commands(source: str) -> dict[str, tuple[str | None, str]]:
         literal = ast.get_docstring(node)
         docstring = assigned.get(node.name, literal)
         body = node.body[1:] if literal is not None else node.body
-        commands[node.name] = (docstring, "\n".join(ast.dump(part) for part in (node.args, *body)))
+        commands[node.name] = (docstring, "\n".join(ast.dump(part) for part in (_without_ctx(node.args), *body)))
     return commands
+
+
+def _is_ctx(param: ast.arg) -> bool:
+    """`ctx: typer.Context` (or `click.Context`) — the parameter Typer injects."""
+    return param.annotation is not None and ast.unparse(param.annotation).split(".")[-1] == "Context"
+
+
+def _without_ctx(args: ast.arguments) -> ast.arguments:
+    """The parameter list minus its context parameters, defaults still matched to their parameters."""
+    positional = [*args.posonlyargs, *args.args]
+    first_default = len(positional) - len(args.defaults)
+    kept_positional = [
+        (param, args.defaults[index - first_default] if index >= first_default else None)
+        for index, param in enumerate(positional)
+        if not _is_ctx(param)
+    ]
+    posonly = sum(not _is_ctx(param) for param in args.posonlyargs)
+    kept_keyword = [
+        (param, default) for param, default in zip(args.kwonlyargs, args.kw_defaults, strict=True) if not _is_ctx(param)
+    ]
+    # Defaults cover a trailing slice of the positional parameters, so the `None` placeholders lead.
+    defaults = [default for _, default in kept_positional if default is not None]
+    return ast.arguments(
+        posonlyargs=[param for param, _ in kept_positional[:posonly]],
+        args=[param for param, _ in kept_positional[posonly:]],
+        vararg=args.vararg,
+        kwonlyargs=[param for param, _ in kept_keyword],
+        kw_defaults=[default for _, default in kept_keyword],
+        kwarg=args.kwarg,
+        defaults=defaults,
+    )
 
 
 def stale_commands(paths: list[str]) -> list[str]:
