@@ -8,6 +8,9 @@ worker = "pi"  # `claude` is not installed on this machine: the default claude-c
 checks = ["sh scripts/check_template.sh"]
 # The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
 stall_minutes = 25
+# Reminders off while six tasks wait for the Human's release: the blocker is known and repeated every 3 min.
+# Back to 3 when they are published.
+notify_remind_min = 0
 # The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
 heavy = ["sh scripts/check_template.sh"]
 
@@ -45,3 +48,6 @@ enabled = true
 [workers.pi-glm]  # the reviewer: kind pi, model from [model_policy.pi-glm]
 kind = "pi"
 args = []
+
+[architect.order]
+pi = ["deepseek-4.1-flash", "deepseek-v4.1-flash"]  # matched inside the declared name (`9router/...`, `ocg/...`)
