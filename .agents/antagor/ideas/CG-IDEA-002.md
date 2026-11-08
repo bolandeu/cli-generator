@@ -8,6 +8,14 @@ status: new
 benefit: 'rb-mcp serves each CLI''s skill text as an MCP resource without a second
   process: resource://<cli>/skill/<name> reads the path straight from the describe
   document it already has. Every MCP client gets the guidance the CLI wrote.'
+triage:
+  serves: []
+  risks: []
+  why: rb-mcp serves a CLI's skill text as an MCP resource without a second process
+    once the describe document carries the installed path.
+  score: 2.0
+  route: task
+  at: '2026-11-08T09:24:54+00:00'
 ---
 
 In x-rb-skills[] each entry carries name and description today. Add path: the absolute path of the installed skill directory (or the SKILL.md file), resolved the same way 'skill install' resolves it. The consumer then needs no '<cli> skill path' call and no second process.
