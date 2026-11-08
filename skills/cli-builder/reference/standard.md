@@ -40,6 +40,11 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** Commands use Typer. Why: the template's output and error layer is built on it.
 - **Recommended.** Three names: the distribution `rb-<slug>`, the command `<slug>`, the import package `rb_<slug>`.
   Why: a generic distribution name collides with someone else's PyPI package.
+- **Recommended.** The three names are separate, and nothing derives one from another: a package belongs to the family
+  (the packages built to this Standard) by its distribution name `rb-*`, never by its command, and a package whose
+  command differs from its slug is legal (`rb-llmkit` runs `llm`). A document names the tool by `x-rb-tool.tool`, a
+  shell by that command; `dist` and `package` sit next to it in `x-rb-tool`. Why: a consumer that reads the command
+  prefix for membership loses such a package.
 - **Recommended.** The package runs on any machine without an agent, this plugin or our servers; the gate is a
   development tool, never a runtime dependency.
 - **Recommended.** Use Python APIs (`pathlib`, `shutil`, `platformdirs`), never `os.system`, `shell=True` or a fixed
