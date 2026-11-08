@@ -4,7 +4,7 @@ title: 'describe: x-rb-type/default/multiple and hidden in the Standard'
 created: '2026-11-08T09:21:24+00:00'
 source_project: llmkit
 source_path: /Users/bolandau/Work/tools/llmkit
-status: new
+status: epic
 benefit: the template and the Standard agree, consumers stop guessing
 triage:
   serves: []
@@ -15,6 +15,8 @@ triage:
   score: 3.0
   route: task
   at: '2026-11-08T09:23:01+00:00'
+epic: E-008
+before_epic: new
 ---
 
 From the llmkit architect, after comparing live describe --json across llm, hostme, serp, context and reading the template at v1.27.3.
