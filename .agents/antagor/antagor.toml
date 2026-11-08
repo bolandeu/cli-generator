@@ -3,7 +3,9 @@ mode = "fast"
 prefix = "CG"
 name = "cli-generator"
 worker = "pi"  # `claude` is not installed on this machine: the default claude-code timed out at agent start (2026-11-08)
-checks = ["sh scripts/check_template.sh", "python3 scripts/check_plugin.py"]
+# The plugin manifest check is parked: `claude plugin validate . --strict` needed a binary this machine no longer
+# has (2026-11-08); scripts/check_plugin.py replaces it once E-011 lands. Until then the manifest is unguarded.
+checks = ["sh scripts/check_template.sh"]
 # The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
 stall_minutes = 25
 # The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
