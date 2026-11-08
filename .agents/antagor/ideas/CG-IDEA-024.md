@@ -4,7 +4,7 @@ title: 'ci.yml: pin actions/checkout to a SHA, not a mutable tag'
 created: '2026-11-08T10:39:10+00:00'
 source_project: mcp
 source_path: /Users/bolandau/Work/tools/mcp
-status: new
+status: dropped
 benefit: Every generated package inherits the same CI step; a mutable tag means a
   compromised or moved upstream tag runs in all of them. A SHA pin closes it once,
   in the template.
@@ -17,6 +17,8 @@ triage:
   score: 2.0
   route: task
   at: '2026-11-08T10:43:01+00:00'
+reason: Циай должен быть либо удаленный, либо локальный
+confirmed: Циай должен быть либо удаленный, либо локальный
 ---
 
 Advisory from rb-mcp's first publish (v0.1.0, 2026-11-08):
