@@ -1,7 +1,7 @@
 """Fixture packages for the gate's tests (tests/ and standard/tests/), built in tmp_path.
 
 A package: git, a pyproject.toml, uv.lock, a module, a test, and the files the Standard asks for (README.md,
-AGENTS.md, a Gitea workflow that runs the gate). Its ruff, ty and pytest are this repo's own, found on PATH
+AGENTS.md, no workflow). Its ruff, ty and pytest are this repo's own, found on PATH
 (`uv run` in a package without them falls back to PATH).
 """
 
@@ -28,13 +28,6 @@ build-backend = "hatchling.build"
 homeserver = []
 mac = false
 """
-WORKFLOW = """on: push
-jobs:
-  gate:
-    runs-on: ubuntu-latest
-    steps:
-      - run: uvx --from rb-release rb-release check
-"""
 
 
 def git(root: Path, *args: str) -> None:
@@ -49,12 +42,10 @@ def git(root: Path, *args: str) -> None:
 def _package(root: Path, module: str, pyproject: str) -> Path:
     (root / "src" / "demo").mkdir(parents=True)
     (root / "tests").mkdir()
-    (root / ".gitea" / "workflows").mkdir(parents=True)
     (root / "pyproject.toml").write_text(pyproject)
     (root / ".gitignore").write_text(".venv/\n__pycache__/\n")
     (root / "README.md").write_text("# demo\n")
     (root / "AGENTS.md").write_text("# demo\n")
-    (root / ".gitea" / "workflows" / "ci.yml").write_text(WORKFLOW)
     (root / "src" / "demo" / "__init__.py").write_text(module)
     (root / "tests" / "test_demo.py").write_text("def test_demo() -> None:\n    assert True\n")
     subprocess.run(["uv", "lock", "--offline", "--quiet"], cwd=root, check=True)  # noqa: S607

@@ -191,7 +191,9 @@ include_contracts:
   when: "{{ include_describe }}"
 
 # Not a question: the release gate, pinned to the template tag of the project (`_commit`). A package runs it
-# through uvx — never a copy in the project, never a dependency. CI, antagor.toml and the docs render it.
+# through uvx — never a copy in the project, never a dependency.
+# It is the only gate, and it is local: `[publish] gate_command` in
+# `.agents/antagor/antagor.toml` and the docs render it.
 gate_command:
   type: str
   default: 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@{{ _copier_answers._commit }}#subdirectory=gate" rb-release check'

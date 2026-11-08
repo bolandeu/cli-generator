@@ -2,10 +2,10 @@
 # Template gate: run the repo tests and the tests of gate/, regenerate template/ as the minimal package
 # (default answers), a package with every optional part, credentials alone in a publish-only variant (no
 # homeserver users, no Mac) and providers without credentials, prove copier update rounds from the
-# previous release tag and from v1.20.10 (the last template that copied the gate) keep every part, check
-# the rendered [tool.rb.install] and which parts each package has, run the generated project's checks and
-# the release gate from this working tree's gate/ through uvx, and check the Antagor project name on copy and
-# on update, in place and with a destination argument. Non-zero exit on any failure.
+# previous release tag and from v1.20.10 (the last template that copied the gate) keep every part and drop the
+# Gitea workflow, check the rendered [tool.rb.install] and which parts each package has, run the generated
+# project's checks and the release gate from this working tree's gate/ through uvx, and check the Antagor project
+# name on copy and on update, in place and with a destination argument. Non-zero exit on any failure.
 # Usage: sh scripts/check_template.sh
 set -eu
 
@@ -27,19 +27,20 @@ STANDARD=https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/br
 fail() { printf '\nFAILED [%s]: %s\n' "$VARIANT" "$*" >&2; exit 1; }
 
 # check_gate_files: the project has no copy of the gate, no adopt_core answer and no rb-cli-core in any
-# tracked file; only its CI workflow writes the uvx gate command at the template tag of .copier-answers.yml;
-# Antagor's checks hold the docstring check and no gate command; AGENTS.md and CODING_STANDARDS.md name the CI
-# step; AGENTS.md and the package skill link the Standard and cite no § numbers
+# tracked file; the local gate is the only gate: `[publish] gate_command` of the Antagor config writes the uvx
+# gate command at the template tag of .copier-answers.yml and no workflow does; Antagor's checks hold the
+# docstring check and no gate command; AGENTS.md and CODING_STANDARDS.md name the gate and no workflow; AGENTS.md
+# and the package skill link the Standard and cite no § numbers
 check_gate_files() {
     run test ! -e scripts/release.py
     grep -q adopt_core .copier-answers.yml && fail "adopt_core in .copier-answers.yml"
     git grep -q rb-cli-core && fail "rb-cli-core in $(git grep -l rb-cli-core | tr '\n' ' ')"
     tag=$(sed -n 's/^_commit: //p' .copier-answers.yml)
     gate="uvx --from \"git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@$tag#subdirectory=gate\" rb-release check"
-    grep -qF "$gate" .gitea/workflows/ci.yml || fail ".gitea/workflows/ci.yml does not call: $gate"
+    grep -qF "$gate" .agents/antagor/antagor.toml || fail ".agents/antagor/antagor.toml does not call: $gate"
     # README.md is the project's own (copier skips it on update): an old one may still hold the command
     holders=$(git grep -lF 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@' -- . ':!README.md' | tr '\n' ' ')
-    [ "$holders" = ".gitea/workflows/ci.yml " ] || fail "the gate command is in: $holders"
+    [ "$holders" = ".agents/antagor/antagor.toml " ] || fail "the gate command is in: $holders"
     run python3 -c "
 import tomllib
 c = tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))
@@ -47,7 +48,8 @@ assert 'python3 scripts/check_command_docstrings.py' in c['checks'], c['checks']
 assert not any('rb-release' in check for check in c['checks']), c['checks']
 "
     for file in AGENTS.md CODING_STANDARDS.md; do
-        grep -qF '.gitea/workflows/ci.yml' "$file" || fail "$file does not name the CI workflow"
+        grep -qF 'rb-release check' "$file" || fail "$file does not name the gate"
+        grep -qF '.gitea/workflows' "$file" && fail "$file names a Gitea workflow"
     done
     for file in AGENTS.md src/demotool/data/SKILL.md; do
         [ "$file" = AGENTS.md ] || [ -e "$file" ] || continue  # the package skill is an optional part
@@ -57,16 +59,18 @@ assert not any('rb-release' in check for check in c['checks']), c['checks']
     return 0
 }
 
-# check_antagor_files <repo>: the Antagor config names the remote gate of Gitea repo bolandeu/<repo>;
+# check_antagor_files: the Antagor config runs the gate locally, with no remote gate status;
 # AGENTS.md and CODING_STANDARDS.md hold no Antagor rule, no commit-first TDD and no machine-local path
 check_antagor_files() {
     run python3 -c "
-import sys, tomllib
+import tomllib
 c = tomllib.load(open('.agents/antagor/antagor.toml', 'rb'))
-want = 'https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/$1/commits/{commit}/status'
-assert c['publish']['gate'] == 'remote' and c['publish']['gate_status_url'] == want, c['publish']
+publish = c['publish']
+assert publish.get('gate', 'local') == 'local', publish
+assert 'gate_status_url' not in publish, publish
+assert publish['gate_command'].endswith('#subdirectory=gate\" rb-release check'), publish
 assert c['heavy'] == ['rb-release check'], c.get('heavy')
-assert 'gate_command' not in c['publish'], c
+assert 'gate_command' not in c, c
 "
     for file in AGENTS.md CODING_STANDARDS.md; do
         grep -qiE 'hand.?fix|hand_fix' "$file" && fail "$file has a hand-fix line"
@@ -230,7 +234,14 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     run git -c user.name=gate -c user.email=gate@example.invalid tag -a v0.1.0 -m v0.1.0
     check_gate_files
     run_gate
-    check_antagor_files "$REPO_NAME"
+    check_antagor_files
+}
+
+# expect_no_workflow: the package in the cwd has no workflow file under any forge: its gate is local, so an
+# updated package loses the one the template rendered before (the Standard, CI)
+expect_no_workflow() {
+    found=$(find .gitea .github -type f 2>/dev/null || true)
+    [ -z "$found" ] || fail "a workflow is still there: $(echo $found)"
 }
 
 # check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]: the
@@ -239,8 +250,6 @@ check_variant() {
     VARIANT=$1
     expected_install=$2
     shift 2
-    REPO_NAME=demotool
-    case " $* " in *" repository_url=https://"*) REPO_NAME=demo ;; esac
     dest="$WORK/$VARIANT"
     run uvx copier copy "$ROOT" "$dest" \
         --data package_name=demotool --data project_name=Demo \
@@ -250,9 +259,11 @@ check_variant() {
     run git init -q
     run test -f .agents/antagor/antagor.toml
     expect_no_antagor_files
+    # A new package renders no workflow of any forge: the gate is local.
+    run test ! -e .gitea
+    run test ! -e .github
     check_module_docstrings
     verify_project "$expected_install"
-    run test -f .gitea/workflows/ci.yml
     expect_parts absent docs
 }
 
@@ -368,13 +379,13 @@ PY
     done
     expect_parts present $PARTS
     expect_parts absent docs
+    expect_no_workflow
     check_antagor_files_kept
     # The help page of the docs command is the project's own file: the update leaves it to the project.
     run rm -f tests/snapshots/help/docs.txt
     # A template release that changes a help text or `describe` changes the snapshots: the project
     # refreshes them after an update (copier's task runs on copy only).
     run uv run --quiet pytest --snapshot-update --no-cov -q -p no:cacheprovider tests/test_help.py tests/test_describe.py
-    REPO_NAME=demotool
     verify_project '(["rbtools"], True)'
     cd "$ROOT"
 }
@@ -470,7 +481,9 @@ check_name_update dataio-dest dataio with-dest hand-named --data repository_url=
 check_name_update unedited "" in-place --data repository_url=$GSC_URL
 check_name_update unedited-dest "" with-dest --data repository_url=$GSC_URL
 DOCS_FILES=$(part_files docs)
-REMOVABLE=$DOCS_FILES
+# A package from a tag that still rendered the Gitea workflow loses it on update: the gate is local now.
+WORKFLOW_FILES=".gitea/workflows/ci.yml tests/test_ci.py"
+REMOVABLE="$DOCS_FILES $WORKFLOW_FILES"
 # A tag with the part questions generates a package with every part on (its default is none); an older tag
 # had the parts without questions (ADR 0014).
 if git -C "$ROOT" show "$previous:copier.yml" | grep -q '^include_project:'; then
@@ -490,7 +503,7 @@ else
     FAST_CHECKS=
 fi
 PARTS="project auth providers http skill describe contracts"
-REMOVABLE="$DOCS_FILES scripts/release.py tests/data/index/gitea/rb_x-0.1.0-py3-none-any.whl tests/data/index/pypi/rb_x-0.9.0-py3-none-any.whl"
+REMOVABLE="$DOCS_FILES $WORKFLOW_FILES scripts/release.py tests/data/index/gitea/rb_x-0.1.0-py3-none-any.whl tests/data/index/pypi/rb_x-0.9.0-py3-none-any.whl"
 check_update_round update-from-copy "$GATE_COPY_TAG"
 
 printf '\nOK: template gate passed (repo tests, gate tests, minimal, all parts, credentials publish-only, providers without credentials, update rounds)\n'

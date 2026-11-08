@@ -11,5 +11,6 @@ required_types = ["feature", "bugfix"]  # chore and docs: the short path without
 versioning = "semver"
 changelog = "CHANGELOG.md"
 deploy_command = "sh scripts/deploy.sh"
-gate = "remote"
-gate_status_url = "https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/{{ (repository_url.rstrip('/').split('/')[-1] if repository_url else cli_name) }}/commits/{commit}/status"
+# The one gate, run on the machine that builds the package, before the tag (the Standard, CI):
+# the command of the template tag this package was generated or last updated from.
+gate_command = '{{ gate_command }}'

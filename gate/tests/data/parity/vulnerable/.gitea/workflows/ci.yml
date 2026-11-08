@@ -1,6 +1,0 @@
-on: push
-jobs:
-  gate:
-    runs-on: ubuntu-latest
-    steps:
-      - run: uvx --from rb-release rb-release check
