@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.27.6 — 2026-11-09
+
+### E-014 — The gate and the template stop failing for reasons of their own: xdist summaries and the Database errors
+
+A package's contract step reads its summary under pytest-xdist, and the Database errors ship only with the db part — so neither a green suite looks broken nor a package carries errors it cannot raise.
+Time: 2.1h since the epic was approved
+
+- Gate, consumer contracts: the summary counts the cases under pytest-xdist (CG-089)
+- The Database errors ship only with the db part (CG-090)
+
 ## v1.27.5 — 2026-11-08
 
 ### E-008 — describe: the param metadata and hidden are specified, and the gate checks them
