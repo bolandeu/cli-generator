@@ -233,6 +233,19 @@ assert (i['homeserver'], i['mac']) == $expected_install, i"
     check_antagor_files "$REPO_NAME"
 }
 
+# expect_database_errors <present|absent>: the rendered core/errors.py defines the three Database errors, or none
+# of them (the db part brings them: a package without it has nothing to raise them)
+expect_database_errors() {
+    want=$1
+    for name in DatabaseUnavailable DatabaseNotMigrated DatabaseTooNew; do
+        if grep -q "^class $name(" src/demotool/core/errors.py; then
+            [ "$want" = present ] || fail "core/errors.py defines $name without the db part"
+        else
+            [ "$want" = absent ] || fail "core/errors.py does not define $name with the db part"
+        fi
+    done
+}
+
 # check_variant <name> <expected (homeserver, mac) as a Python literal> [copier --data args...]: the
 # shell stays in the project, so the caller checks its parts, then goes back with `cd "$ROOT"`
 check_variant() {
@@ -393,12 +406,14 @@ grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is s
 check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
 run_gate_on_python_311
 expect_parts absent project auth providers db skill describe contracts
+expect_database_errors absent
 expect_commands auth auth-status doctor run
 expect_root_options absent --project --ai
 cd "$ROOT"
 check_variant all-parts '(["rbtools"], True)' --data include_project=true --data include_auth=true \
     --data include_db=true --data include_skill=true --data include_describe=true --data include_contracts=true
 expect_parts present project auth providers http db skill describe contracts
+expect_database_errors present
 expect_root_options present --project --ai
 cd "$ROOT"
 check_variant auth-publish-only '([], False)' --data include_auth=true \
