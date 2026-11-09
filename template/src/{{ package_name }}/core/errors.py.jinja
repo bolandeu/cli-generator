@@ -1,4 +1,7 @@
-"""Every error a command raises, with its exit code and error code, and the table of exit codes the Standard defines."""
+"""Every error a command raises, with its exit code and error code, and the table of exit codes the Standard defines.
+
+The Database errors come with the db part: a package without it (include_db=false) has nothing to raise them.
+"""
 
 from __future__ import annotations
 
@@ -170,6 +173,7 @@ class CliTooOld(CliError):
 class Aborted(CliError):
     def __init__(self, description: str) -> None:
         super().__init__("ABORTED", f"{description}: aborted by user.", exit_code=1)
+{%- if include_db %}
 
 
 class DatabaseUnavailable(CliError):
@@ -213,3 +217,4 @@ class DatabaseTooNew(CliError):
             action=f"Run 'uv tool upgrade {_DIST}', then retry.",
             exit_code=6,
         )
+{%- endif %}

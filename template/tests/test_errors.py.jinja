@@ -1,0 +1,36 @@
+"""The errors table of the Standard (Errors): each error's code in the envelope, its message and its exit code."""
+
+from __future__ import annotations
+
+import pytest
+
+from {{ package_name }}.core import errors
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "exit_code"),
+    [
+        (errors.InvalidArguments("bad"), "INVALID_ARGUMENTS", 2),
+        (errors.AuthRequired("demo"), "AUTH_REQUIRED", 3),
+        (errors.CredentialsUnhealthy({"demo": "invalid"}), "CREDENTIALS_UNHEALTHY", 3),
+        (errors.ProjectNotInitialized("/work"), "PROJECT_NOT_INITIALIZED", 4),
+        (errors.ProviderError("demo", "down", status=503), "PROVIDER_ERROR", 5),
+{%- if include_db %}
+        (errors.DatabaseUnavailable("down"), "DATABASE_UNAVAILABLE", 5),
+        (errors.DatabaseTooNew("0009"), "CLI_TOO_OLD", 6),
+        (errors.DatabaseNotMigrated(None, "0002"), "DATABASE_NOT_MIGRATED", 1),
+{%- endif %}
+        (errors.CliTooOld("1.0.0", "2.0.0"), "CLI_TOO_OLD", 6),
+        (errors.DependencyTooOld("serp", None, "0.3"), "DEPENDENCY_TOO_OLD", 1),
+        (errors.CredentialStoreUnavailable("demo", "locked"), "CREDENTIAL_STORE_UNAVAILABLE", 1),
+        (errors.Aborted("Delete everything"), "ABORTED", 1),
+    ],
+    ids=lambda value: type(value).__name__ if isinstance(value, errors.CliError) else None,
+)
+def test_each_error_has_the_code_and_exit_code_of_the_standard(
+    error: errors.CliError, code: str, exit_code: int
+) -> None:
+    """The error codes table of the Standard (Errors): the code in the envelope and the exit code."""
+    payload = error.to_dict()
+    assert (payload["code"], error.exit_code) == (code, exit_code)
+    assert payload["message"]

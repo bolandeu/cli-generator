@@ -199,7 +199,8 @@ before (missing answers file, wrong `copier.yml` location).
   `providers/http.py`, `tests/test_http_provider.py` and `httpx`),
   `include_db` (keeps `core/db.py`, `core/tables.py`, `core/normalize.py`,
   `migrations/`, `commands/db.py`, `tests/test_db.py`, the database fixture in
-  `tests/conftest.py` and the SQLAlchemy/Alembic/psycopg deps; its PostgreSQL
+  `tests/conftest.py`, the three Database errors in `core/errors.py.jinja`
+  (guarded by `{% if include_db %}`), and the SQLAlchemy/Alembic/psycopg deps; its PostgreSQL
   test runs only under `scripts/pg_test.sh` in the generated project — a
   throwaway container on a Docker-assigned port), `include_skill` (`data/`,
   `commands/skill.py`, `core/skills.py`, `--ai`), `include_describe`
