@@ -25,8 +25,8 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Mandatory** (gate: `build + install wheel`). The package is a Python distribution that `uv build` turns into a
   wheel; a tool has its command as the first entry of `[project.scripts]`, a library has no command and its top-level
   packages import.
-- **Recommended.** The package requires Python 3.14 or newer (`requires-python = ">=3.14"`); CI and local tests run
-  on 3.14. Why: one Python everywhere; a lower minimum nobody tests is a false promise.
+- **Recommended.** The package requires Python 3.14 or newer (`requires-python = ">=3.14"`); the gate and the local
+  tests run on 3.14. Why: one Python everywhere; a lower minimum nobody tests is a false promise.
 - **Mandatory** (gate: `uv lock --check`). `uv.lock` is committed and matches `pyproject.toml`. Why: every machine and
   the gate install the same set.
 - **Mandatory** (gate: `ruff check`). `uv run ruff check .` passes.
@@ -245,10 +245,11 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 
 ## CI
 
-- **Mandatory** (gate: `standard: ci`). A workflow under `.gitea/workflows/` runs `rb-release check`. Why: Gitea
-  Actions runs nothing from `.github/`.
-- **Recommended.** One job on the runner labelled `docker`, on the lowest supported Python, running only the gate; no
-  secret; no `.github/`. The runner and its cache are sysadmin's.
+The gate is `rb-release check`, run on the machine that builds the package: the command at the top of this Standard.
+There is no second gate and no CI file — no workflow under `.gitea/workflows/`, none under `.github/`. Gitea stores
+releases and nothing else; it runs no test. A release exists only after a green gate, a red one stops the tag. Why: a
+remote run of the same gate tells nothing the local one did not, and every copied workflow drifts from the template
+that would have to keep it.
 
 ## Release
 
@@ -260,9 +261,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
 - **Recommended.** No `version =` in `pyproject.toml` and no version literal in the code: the code reads
   `importlib.metadata.version()`.
 - **Recommended.** A version moves only through Antagor's release. Nobody pushes or tags by hand, edits
-  `CHANGELOG.md` or adds changelog fragments. The Antagor config holds the docstring check in `checks`, the gate in `heavy`, and no gate
-  command; `[publish]` has `gate = "remote"`: the CI workflow runs the full gate before the tag, and the tag waits for
-  it. The CI workflow is the only package file that writes the gate command with the template tag.
+  `CHANGELOG.md` or adds changelog fragments. The Antagor config holds the docstring check in `checks`, the gate in
+  `heavy`, and no gate command; `[publish]` has `gate = "local"` with the gate command: the gate runs on this machine
+  before the tag, and a red gate means no tag. No package file holds a gate command (Standard, CI).
 - **Recommended.** A user-visible change is a task whose title says what changed for the user.
 - **Recommended.** Versions follow SemVer over the public surface: commands, options, the `--json` shapes, exit codes,
   error codes, the `auth status` and `describe` documents, the Python API.
@@ -414,7 +415,17 @@ below.
   one `--json` output without the `{"ok": ...}` envelope.
 - **Recommended.** The document is introspected from the commands, never written by hand: commands, options,
   arguments, `arity`, `acceptedValues`, and `exitCodes` from the table in Errors. What OpenCLI has no field for goes
-  into `metadata` as `x-rb-*` (tool names, env vars, data tables and views, external programs, skills).
+  into `metadata` as `x-rb-*`: the per-parameter fields below, and on the root command the tool names, env vars, data
+  tables and views, external programs and skills.
+- **Mandatory** (gate: `standard: params`). Every option and every argument carries `x-rb-type`: a Typer type name
+  from this closed list — `boolean`, `str`, `int`, `float`, `choice`, `path`, `file`, `datetime`, `int range`,
+  `float range`. A new name in the list is an additive change.
+- **Mandatory** (gate: `standard: params`). Every option and every argument carries `x-rb-default`: the value, or
+  `null` when the parameter has no default, or its default is computed at run time.
+- **Mandatory** (gate: `standard: params`). `x-rb-multiple` is present and `true` iff the parameter is repeatable or
+  variadic; absent means single.
+- **Recommended.** A hidden command, option or argument carries `hidden: true`; absent means visible. It is an
+  OpenCLI field; the template has emitted it since v1.5.0.
 - **Recommended.** It is public API: it changes only by adding fields.
 
 ### Consumer contracts

@@ -222,6 +222,63 @@ def check_docs(package: Package) -> str:
     return ", ".join(DOCS)
 
 
+# The Standard's closed list of parameter type names (Describe). A new name in the list is an additive change.
+PARAM_TYPES = frozenset(
+    {"boolean", "str", "int", "float", "choice", "path", "file", "datetime", "int range", "float range"}
+)
+
+
+def _described_commands(command: dict, path: tuple[str, ...] = ()) -> list[tuple[str, dict]]:
+    """The document's command and every subcommand below it, each with its command line (`demo db push`)."""
+    route = (*path, command["name"])
+    return [(" ".join(route), command)] + [
+        entry for sub in command.get("commands", []) for entry in _described_commands(sub, route)
+    ]
+
+
+def _param_problems(command: str, entry: dict) -> list[str]:
+    """What breaks the Standard's rules for one parameter entry; `command` names the command the parameter is in."""
+    meta = {item["name"]: item.get("value") for item in entry.get("metadata") or []}
+    where = f"`{command} {entry['name']}`"
+    problems: list[str] = []
+    kind = meta.get("x-rb-type")
+    if kind is None:
+        problems.append(f"{where} has no x-rb-type")
+    elif kind not in PARAM_TYPES:
+        problems.append(f"{where}: x-rb-type {kind!r} is not one of: {', '.join(sorted(PARAM_TYPES))}")
+    if "x-rb-default" not in meta:
+        problems.append(f"{where} has no x-rb-default (null when the parameter has no default)")
+    if "x-rb-multiple" in meta and meta["x-rb-multiple"] is not True:
+        problems.append(f"{where}: x-rb-multiple is {meta['x-rb-multiple']!r}; it is true, or absent")
+    return problems
+
+
+def check_params(package: Package) -> str:
+    """Every option and argument of `describe --json` names its type, its default and its repeatability."""
+    if ("describe",) not in package.leaves:
+        return "none: no describe command (the Describe part is off)"
+    run = package.run("describe", "--json")
+    if run.code:
+        raise Broken(f"{run} exits {run.code}: the gate reads its option and argument entries")
+    try:
+        document = json.loads(run.stdout)
+    except ValueError:
+        raise Broken(f"{run} printed no JSON document on stdout") from None
+    command = document.get("command") if isinstance(document, dict) else None
+    if not isinstance(command, dict):
+        raise Broken(f"{run} printed no `command` object")
+    problems: list[str] = []
+    entries = 0
+    for name, described in _described_commands(command):
+        for kind in ("options", "arguments"):
+            for entry in described.get(kind, []):
+                entries += 1
+                problems += _param_problems(name, entry)
+    if problems:
+        raise Broken("the parameter entries of `describe --json` break these rules:\n  - " + "\n  - ".join(problems))
+    return f"{entries} parameter entries carry a type, a default and their repeatability"
+
+
 def check_ci(package: Package) -> str:
     for forge in FORGES:
         for path in sorted((package.root / forge).rglob("*")):
@@ -254,5 +311,6 @@ RULES = (
     Rule("errors", "Errors", check_errors),
     Rule("health", "Health", check_health),
     Rule("docs", "Docs", check_docs, probes_cli=False),
+    Rule("params", "Describe", check_params),
     Rule("ci", "CI", check_ci, probes_cli=False),
 )

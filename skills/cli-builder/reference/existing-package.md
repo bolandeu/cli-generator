@@ -35,6 +35,7 @@ files: write the file the rule asks for.
 | `standard: health` | Standard, Health |
 | `secret scan` | Standard, Credentials |
 | `standard: docs` | Standard, Docs |
+| `standard: params` | Standard, Describe |
 | `standard: ci` | Standard, CI |
 | `vulnerability audit` | Standard, Release |
 
@@ -113,7 +114,9 @@ fixes or when the package still has the old gate.
    The Antagor project name (`name` in the Antagor config) is the package's folder name. The update never changes
    that line. When the name differs from the folder, edit the line once by hand: later updates keep it.
 4. **Update.** `uvx copier update --trust --defaults`. It three-way-merges the template diff since `_commit`; business
-   logic, extra commands and tests survive. `README.md` is never touched (`_skip_if_exists`).
+   logic, extra commands and tests survive. `README.md` is never touched (`_skip_if_exists`), and neither is
+   `src/<package_name>/migrations/versions/`: the package's migration history is its own. An object an old example
+   migration created stays in the package until the package drops it in a migration of its own.
 5. **Conflicts** land as `*.rej` files or inline markers. Resolve hunk by hunk: keep the package's commands, providers
    and settings, take the template's structural changes. Never take one side wholesale (`git checkout --theirs/--ours`,
    copying the template file over). Delete each `.rej` and read `git diff` before the gate. A hunk next to a reworded template comment can carry a

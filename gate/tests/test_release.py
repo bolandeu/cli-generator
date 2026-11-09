@@ -36,6 +36,7 @@ STEPS = [
     "standard: errors",
     "standard: health",
     "standard: docs",
+    "standard: params",
     "standard: ci",
     "vulnerability audit",
 ]
@@ -269,6 +270,14 @@ tests/test_contracts.py::test_contract[windmill:old-field] SKIPPED (windmill:old
 tests/test_contracts.py::test_contract[astro:pages-view] PASSED [100%]
 """
 
+# pytest-xdist -vv writes a `[gwN] [ NN%]` prefix and the status before the node id (semkit, 2026-10-24).
+CONTRACT_RUN_XDIST = """
+[gw0] [ 25%] PASSED tests/test_contracts.py::test_contract[tools-catalog:describe-json]
+[gw0] [ 50%] FAILED tests/test_contracts.py::test_contract[windmill:search-json]
+[gw1] [ 75%] SKIPPED tests/test_contracts.py::test_contract[windmill:old-field]
+[gw1] [100%] PASSED tests/test_contracts.py::test_contract[astro:pages-view]
+"""
+
 
 # Split in two: the literal would trip gitleaks on this very file.
 FAKE_AWS_KEY = "AKIA" + "QYLPMN7RT2X4WB3K"
@@ -408,6 +417,7 @@ def test_contract_summary() -> None:
     assert contract_summary("") == "0 cases"
     passed = CONTRACT_RUN.replace("FAILED", "PASSED").replace("SKIPPED (windmill:old-field: provider <0.7)", "PASSED")
     assert contract_summary(passed) == "4 cases from 3 consumers"
+    assert contract_summary(CONTRACT_RUN_XDIST) == contract_summary(CONTRACT_RUN)
 
 
 CONTRACTS = """import pytest

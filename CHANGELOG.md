@@ -1,5 +1,61 @@
 # Changelog
 
+## v1.27.6 — 2026-11-09
+
+### E-014 — The gate and the template stop failing for reasons of their own: xdist summaries and the Database errors
+
+A package's contract step reads its summary under pytest-xdist, and the Database errors ship only with the db part — so neither a green suite looks broken nor a package carries errors it cannot raise.
+Time: 2.1h since the epic was approved
+
+- Gate, consumer contracts: the summary counts the cases under pytest-xdist (CG-089)
+- The Database errors ship only with the db part (CG-090)
+
+## v1.27.5 — 2026-11-08
+
+### E-008 — describe: the param metadata and hidden are specified, and the gate checks them
+
+A consumer reads one describe --json and knows every option and argument without guessing: a type, a default (null when there is none), repeatability. The Standard names these fields and hidden; the gate refuses a document that breaks them.
+Time: 6.5h since the epic was approved
+
+- Template emits x-rb-default always; the Standard names x-rb-type/default/multiple and hidden; the gate checks a param entry (CG-079)
+
+### E-009 — The describe document answers a consumer's two questions: where the skill text is, and which packages are the family
+
+A consumer of describe --json (rb-mcp, clidocs, Windmill) reads the skill text without a second process, and knows family membership from the distribution name instead of guessing it from a binary name.
+Time: 6.5h since the epic was approved
+
+- Standard: family membership is the distribution name rb-*, and the tool's own name is x-rb-tool.tool (CG-081)
+
+### E-010 — Two plans stop being files: their put-off items become ideas, and the freeze list is reachable
+
+docs/plans/ is empty: every put-off item of the freeze list and every gap left by the simple-standard plan is an idea in this repository's list, with a number the Human can see, and no plan file duplicates the Standard.
+Time: 6.3h since the epic was approved
+
+- Two plans become ideas: every put-off item of the freeze list and the simple-standard leftovers gets a number (CG-082)
+
+### E-011 — The plugin manifest check survives without the claude binary
+
+A change to .claude-plugin/plugin.json or to the skill frontmatter is still checked by the project checks, with no external binary: a script in the repository does the part of 'claude plugin validate --strict' that applies here.
+Time: 5.9h since the epic was approved
+
+- scripts/check_plugin.py: the plugin manifest check without the claude binary (CG-083)
+
+### E-012 — One gate, and it is the local one: the template stops generating a Gitea workflow
+
+A generated package has exactly one gate — rb-release check on the machine that builds it. No .gitea/workflows/ci.yml in a new package, none in an updated one, the Standard says so, and Gitea keeps releases only.
+Time: 4.8h since the epic was approved
+
+- Standard and SKILL: the local gate is the only gate; Update mode deletes the old workflow (CG-085)
+- This repository: template-gate.yml and its tests go, and the workflow check in AGENTS.md with them (CG-086)
+
+### E-013 — Two template edges from the plan extraction: example tables and a ctx-only signature
+
+A generated package carries no example tables inside its own core/tables.py, and the docstring checker does not treat a ctx-only signature change as a logic change.
+Time: 1.7h since the epic was approved
+
+- The db part ships no example tables inside the package own core/tables.py (CG-087)
+- The docstring checker does not count a ctx-only signature change as a logic change (CG-088)
+
 ## v1.27.4 — 2026-10-27
 
 ### Outside epics

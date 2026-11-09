@@ -126,17 +126,6 @@ plain `uv pip install <wheel>` gets PyPI's 1.x (that is the bug the step
 prevents — the step fails with "installed from a package index other than
 their explicit index" if it ever regresses).
 
-For a change to `template/.gitea/workflows/ci.yml`, check every
-`uses:` tag exists — some actions publish no floating major tag (there is
-no `astral-sh/setup-uv@v10`, only `v10.x.y`; that shipped in v1.1.0–v1.2.5
-and broke CI in every generated repo):
-
-```bash
-grep -oE 'uses: [^ ]+@[^ ]+' template/.gitea/workflows/ci.yml | sed 's/uses: //' |
-  while IFS=@ read -r action tag; do repo=$(echo "$action" | cut -d/ -f1-2)
-    gh api "repos/$repo/git/ref/tags/$tag" -q .ref >/dev/null 2>&1 && echo "ok $action@$tag" || echo "MISSING $action@$tag"; done
-```
-
 For a change touching `.claude-plugin/plugin.json`, also run:
 
 ```bash
@@ -145,7 +134,8 @@ python3 scripts/check_plugin.py
 
 It replaced `claude plugin validate . --strict` when the `claude` binary left
 this machine (2026-11-08): the manifest's required fields, a slug name, and the
-skill's frontmatter. Nothing else of the strict validator applies here.
+skill's frontmatter. Nothing else of the strict validator applies here. It is
+also in `.agents/antagor/antagor.toml`'s `checks`, so every task runs it.
 
 For a change to the `copier update` story (versioning), verify with a
 real git-based round trip (tag v1, generate, edit a template file, tag v2,
@@ -193,6 +183,15 @@ before (missing answers file, wrong `copier.yml` location).
   merged on `copier update` (projects rewrite it). A template change meant
   for existing projects' READMEs has to be described in SKILL.md's Update
   mode instead.
+- `src/{{ package_name }}/migrations/versions` is in `_exclude` under
+  `_copier_operation == 'update'`: a package's migration history is its own,
+  so a change to the template's example migrations reaches only packages
+  generated after it, and a package updated from an older tag keeps the
+  objects those migrations created. For the same reason a file that must
+  reach a package on update keeps its template name: copier applies no
+  change when the template file was renamed (`.py.jinja` → `.py`) and the
+  project silently keeps the old content — `0001_initial.py.jinja` holds no
+  template expression and keeps the suffix for that reason.
 - Optional generated parts are copier questions, not deletions:
   `include_project` (`commands/project.py`, `init`, `config`, `status`,
   `core/services.py`, `core/models.py`, `--project`), `include_auth`,
@@ -200,7 +199,8 @@ before (missing answers file, wrong `copier.yml` location).
   `providers/http.py`, `tests/test_http_provider.py` and `httpx`),
   `include_db` (keeps `core/db.py`, `core/tables.py`, `core/normalize.py`,
   `migrations/`, `commands/db.py`, `tests/test_db.py`, the database fixture in
-  `tests/conftest.py` and the SQLAlchemy/Alembic/psycopg deps; its PostgreSQL
+  `tests/conftest.py`, the three Database errors in `core/errors.py.jinja`
+  (guarded by `{% if include_db %}`), and the SQLAlchemy/Alembic/psycopg deps; its PostgreSQL
   test runs only under `scripts/pg_test.sh` in the generated project — a
   throwaway container on a Docker-assigned port), `include_skill` (`data/`,
   `commands/skill.py`, `core/skills.py`, `--ai`), `include_describe`

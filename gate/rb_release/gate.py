@@ -32,7 +32,7 @@ same verdict:
     every top-level package imports and importlib.metadata reports that
     version) · the Standard's mandatory rules (standard/: `standard: commands`,
     `json`, `errors`, `health` probe that installed console script, skipped for
-    a library; `docs`, `ci` read the package's files — a failure names the
+    a library; `params` reads its `describe --json`; `docs`, `ci` read the package's files — a failure names the
     Standard's section) · osv-scanner over uv.lock (skipped with a
     notice when osv-scanner isn't installed)
 
@@ -157,11 +157,14 @@ def changed_existing_tests(path: str, old: str, new: str | None) -> list[str]:
 
 
 _CONTRACT_RESULT = re.compile(r"::test_contract\[([^\]]+)\] (PASSED|FAILED|SKIPPED|ERROR)")
+# pytest-xdist -vv writes the status before the node id: `[gw0] [ 50%] PASSED tests/test_contracts.py::test_contract[x]`
+_CONTRACT_RESULT_XDIST = re.compile(r"(PASSED|FAILED|SKIPPED|ERROR) \S*::test_contract\[([^\]]+)\]")
 
 
 def contract_summary(output: str) -> str:
     """'N cases from K consumers' (+ failed / skipped) from a `pytest -vv` run of tests/test_contracts.py."""
-    results = {case: status for case, status in _CONTRACT_RESULT.findall(output)}
+    results = dict(_CONTRACT_RESULT.findall(output))
+    results.update({case: status for status, case in _CONTRACT_RESULT_XDIST.findall(output)})
     if not results:
         return "0 cases"
     consumers = {case.split(":", 1)[0] for case in results}
