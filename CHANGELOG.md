@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.27.8 — 2026-11-09
+
+### E-012 — One gate, and it is the local one: the template stops generating a Gitea workflow
+
+A generated package has exactly one gate — rb-release check on the machine that builds it. No .gitea/workflows/ci.yml in a new package, none in an updated one, the Standard says so, and Gitea keeps releases only.
+Time: 21.1h since the epic was approved
+
+- Template: no Gitea workflow in a generated package, and none left behind by an update (CG-084)
+
 ## v1.27.7 — 2026-11-09
 
 ### E-009 — The describe document answers a consumer's two questions: where the skill text is, and which packages are the family
