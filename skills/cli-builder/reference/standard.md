@@ -426,6 +426,8 @@ below.
   variadic; absent means single.
 - **Recommended.** A hidden command, option or argument carries `hidden: true`; absent means visible. It is an
   OpenCLI field; the template has emitted it since v1.5.0.
+- **Recommended.** Each `x-rb-skills` entry names the skill, describes it and points at its directory in the
+  installed distribution, so a consumer reads the skill text with no extra call.
 - **Recommended.** It is public API: it changes only by adding fields.
 
 ### Consumer contracts

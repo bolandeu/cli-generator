@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import resources
 from importlib.resources.abc import Traversable
+from pathlib import Path
 
 from .version import cli_name
 
@@ -23,10 +24,16 @@ class Skill:
     short_name: str  # what `skill install --skill` takes: the directory name of an extra skill
     description: str
     text: str
+    path: str | None  # the directory that holds its SKILL.md; None when a zip import has none on disk
 
 
 def _data() -> Traversable:
     return resources.files(f"{_PACKAGE_NAME}.data")
+
+
+def _path(entry: Traversable) -> str | None:
+    """The directory of a package-data entry; None for a zip import, which has no directory on disk."""
+    return str(entry) if isinstance(entry, Path) else None
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -44,13 +51,13 @@ def frontmatter(text: str) -> dict[str, str]:
     return {}  # never closed
 
 
-def _skill(text: str, short_name: str) -> Skill:
+def _skill(text: str, short_name: str, directory: Traversable) -> Skill:
     meta = frontmatter(text)
-    return Skill(meta["name"], short_name, meta.get("description", ""), text)
+    return Skill(meta["name"], short_name, meta.get("description", ""), text, _path(directory))
 
 
 def conventions() -> Skill:
-    return _skill(_data().joinpath("SKILL.md").read_text(), cli_name())
+    return _skill(_data().joinpath("SKILL.md").read_text(), cli_name(), _data())
 
 
 def bundled() -> list[Skill]:
@@ -60,5 +67,5 @@ def bundled() -> list[Skill]:
     if extras.is_dir():
         for entry in sorted(extras.iterdir(), key=lambda e: e.name):
             if entry.joinpath("SKILL.md").is_file():
-                found.append(_skill(entry.joinpath("SKILL.md").read_text(), entry.name))
+                found.append(_skill(entry.joinpath("SKILL.md").read_text(), entry.name, entry))
     return found
