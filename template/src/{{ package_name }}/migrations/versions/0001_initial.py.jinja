@@ -1,18 +1,17 @@
-"""items and responses, and the v1 views other tools read them through
+"""The tool's first migration: an empty revision, so the chain and `alembic_version_<tool>` exist.
 
-Revision ID: 0001
-Revises:
+Replace the body of `upgrade` with the tool's first schema change — literal `op.create_table`
+and `op.execute("CREATE VIEW ...")` calls, names written out: a migration is history and must
+not change when the code it would import does. `core/tables.py` declares the same objects;
+`tests/test_db.py` fails when the two disagree.
 
-The template's example — replace it with the tool's first real migration (keep
-the revision id "0001"), or, for a tool that already had a database, with one that
-renames its tables to the `{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_` prefix.
+A table of kind "cache" goes into the PostgreSQL schema `cache` from the start
+(`schema="cache"` in `op.create_table`). Moving an existing table there is PostgreSQL-only
+and takes its rows as they are, so guard it (SQLite has no schemas):
 
-Names are literal on purpose: a migration is history and must not change when
-code it would import does.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("ALTER TABLE public.<tool>_<name> SET SCHEMA cache")
 """
-
-import sqlalchemy as sa
-from alembic import op
 
 revision = "0001"
 down_revision = None
@@ -21,45 +20,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items",
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("phrase", sa.Text, nullable=False),
-        sa.Column("phrase_key", sa.Text, nullable=False),
-        sa.Column("region", sa.Integer, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.UniqueConstraint("phrase_key", "region", name="{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items_phrase_key_region_uq"),
-    )
-    # The contract with other tools: they read this view, never the table. Its
-    # columns don't change — a different shape is a new `_v2_` view next to it.
-    op.execute(
-        """
-        CREATE VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_items AS
-        SELECT phrase, phrase_key, region, created_at FROM {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items
-        """
-    )
-    # The template's example cache table, created in public as tools did before schema
-    # `cache` existed — 0002 shows moving it. A new tool creates its cache tables in
-    # `cache` right away (schema="cache"; on SQLite core/db.py maps it away) and drops 0002.
-    op.create_table(
-        "{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses",
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("phrase_key", sa.Text, nullable=False),
-        sa.Column("region", sa.Integer, nullable=False),
-        sa.Column("body", sa.Text, nullable=False),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.UniqueConstraint("phrase_key", "region", name="{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses_phrase_key_region_uq"),
-    )
-    op.execute(
-        """
-        CREATE VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_responses AS
-        SELECT phrase_key, region, body, fetched_at FROM {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses
-        """
-    )
+    """The tool's first schema change goes here."""
 
 
 def downgrade() -> None:
-    op.execute("DROP VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_responses")
-    op.drop_table("{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_responses")
-    op.execute("DROP VIEW {{ cli_name | regex_replace('[^a-z0-9]', '_') }}_v1_items")
-    op.drop_table("{{ cli_name | regex_replace('[^a-z0-9]', '_') }}_items")
+    """Undo `upgrade`, in the reverse order."""

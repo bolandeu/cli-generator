@@ -4,10 +4,20 @@ title: 'MCP example in the Standard: log_file needs a real file, not StringIO'
 created: '2026-11-08T09:58:26+00:00'
 source_project: mcp
 source_path: /Users/bolandau/Work/tools/mcp
-status: new
+status: dropped
 benefit: 'Anyone copying an MCP server snippet from the Standard gets a spawn failure
   at the first call: fastmcp passes StdioTransport(log_file=...) straight to subprocess
   as stderr, and io.StringIO has no fileno.'
+triage:
+  serves: []
+  risks: []
+  why: 'This repo mentions MCP nowhere: no Standard chapter, no log_file example,
+    no StringIO; the premise points at another document.'
+  score: 0.0
+  route: task
+  at: '2026-11-08T10:09:01+00:00'
+reason: делай как правильно
+confirmed: делай как правильно
 ---
 
 Finding from rb-mcp MCP-001 (2026-11-08):

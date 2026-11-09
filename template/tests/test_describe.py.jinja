@@ -118,6 +118,7 @@ def test_root_metadata() -> None:
     names = [entry["name"] for entry in meta["x-rb-env"]]
     assert len(names) == len(set(names))
 
+
 def test_bundled_skills_point_at_the_directory_that_holds_them() -> None:
     """Each entry carries the directory that holds its SKILL.md; with no skill part the list is empty."""
     entries = _meta(DOCUMENT["command"])["x-rb-skills"]
@@ -176,11 +177,13 @@ def test_database_file_is_where_sqlite_path_puts_it(monkeypatch: pytest.MonkeyPa
     assert os.environ[db.PATH_ENV_VAR] == str(tmp_path / "elsewhere.db")
 
 
-def test_tables_name_their_schema() -> None:
-    """PostgreSQL schema per table: `cache` for kind="cache" (T30), `public` for the data."""
-    found = {t["name"]: t["schema"] for t in _meta(DOCUMENT["command"])["x-rb-data"]["tables"]}
-    assert found == {t.name: t.schema or "public" for t in tables.metadata.sorted_tables}
-    assert "cache" in found.values() and "public" in found.values()
+def test_data_lists_the_package_own_tables() -> None:
+    """x-rb-data lists the tables and views core/tables.py declares — the package's own, never an example."""
+    data = _meta(DOCUMENT["command"])["x-rb-data"]
+    assert {t["name"]: t["schema"] for t in data["tables"]} == {
+        table.name: table.schema or "public" for table in tables.metadata.sorted_tables
+    }
+    assert [view["name"] for view in data["views"]] == [view.name for view in tables.views.sorted_tables]
 {%- endif %}
 
 
@@ -219,6 +222,13 @@ def test_parameter_shapes() -> None:
     assert _meta(options["--color"])["x-rb-default"] == "red"
     assert _meta(options["--out"])["x-rb-default"] == "out"
     assert _meta(options["--tag"])["x-rb-multiple"] is True
+    # x-rb-default is always there: the value, `null` for no default (`--name`, `typer.Option(...)`).
+    assert _meta(options["--tag"])["x-rb-default"] == []
+    assert _meta(options["--name"])["x-rb-default"] is None
+    assert _meta(options["--force"])["x-rb-default"] is False
+    assert all("x-rb-default" in _meta(entry) for entry in [*paint_cmd["options"], *paint_cmd["arguments"]])
+    # x-rb-multiple is present only where the parameter repeats.
+    assert all("x-rb-multiple" not in _meta(entry) for entry in paint_cmd["options"] if entry["name"] != "--tag")
     assert options["--color"]["arguments"][0]["arity"] == {"maximum": 1}
     assert "arity" not in options["--tag"]["arguments"][0]
     assert options["--secret"]["hidden"] is True
@@ -226,6 +236,9 @@ def test_parameter_shapes() -> None:
     assert options["--name"]["required"] is True
     [targets] = paint_cmd["arguments"]
     assert targets["required"] is True and targets["arity"] == {"minimum": 1}
+    assert _meta(targets)["x-rb-multiple"] is True  # `list[str]` is variadic
     assert internal_cmd["hidden"] is True
     [path] = internal_cmd["arguments"]
     assert path["required"] is False and path["arity"] == {"minimum": 0, "maximum": 1}
+    assert _meta(path)["x-rb-default"] is None  # `typer.Argument(None)`: no default
+    assert "x-rb-multiple" not in _meta(path)

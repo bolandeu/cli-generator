@@ -3,11 +3,12 @@ mode = "fast"
 prefix = "CG"
 name = "cli-generator"
 worker = "pi"  # `claude` is not installed on this machine: the default claude-code timed out at agent start (2026-11-08)
-# The plugin manifest check is parked: `claude plugin validate . --strict` needed a binary this machine no longer
-# has (2026-11-08); scripts/check_plugin.py replaces it once E-011 lands. Until then the manifest is unguarded.
-checks = ["sh scripts/check_template.sh"]
+# The plugin manifest check, without the claude binary this machine lost on 2026-11-08 (CG-083, E-011).
+checks = ["sh scripts/check_template.sh", "python3 scripts/check_plugin.py"]
 # The template gate renders several packages; with the machine queue a worker's run can be silent > 10 min.
 stall_minutes = 25
+# Reminders while something waits for a decision (Antagor's default is 3).
+notify_remind_min = 3
 # The template gate (~5 min): a worker's green run of it is remembered, not run again after submit.
 heavy = ["sh scripts/check_template.sh"]
 
@@ -45,3 +46,6 @@ enabled = true
 [workers.pi-glm]  # the reviewer: kind pi, model from [model_policy.pi-glm]
 kind = "pi"
 args = []
+
+[architect.order]
+pi = ["deepseek-4.1-flash", "deepseek-v4.1-flash"]  # matched inside the declared name (`9router/...`, `ocg/...`)

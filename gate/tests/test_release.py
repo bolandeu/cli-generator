@@ -36,6 +36,7 @@ STEPS = [
     "standard: errors",
     "standard: health",
     "standard: docs",
+    "standard: params",
     "standard: ci",
     "vulnerability audit",
 ]

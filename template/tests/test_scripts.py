@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -60,6 +61,46 @@ def _git(repo: Path, *args: str) -> str:
         check=True,
     )
     return result.stdout
+
+
+COMMAND = "src/demo/commands/greet.py"
+GREET = '''import typer
+from demo import output
+
+@output.guard
+def greet(name: str) -> None:
+    """Say hello to NAME.
+
+    Example: {cli} greet bob
+    """
+    print(f"hello {name}")
+'''
+
+
+def _docstring_check(tmp_path: Path, edited: str) -> int:
+    """Run the checker on a repo whose only command is committed, then edited: its exit code."""
+    _git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / COMMAND).parent.mkdir(parents=True)
+    (tmp_path / COMMAND).write_text(GREET)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "add greet")
+    (tmp_path / COMMAND).write_text(edited)
+    cwd = Path.cwd()
+    try:
+        os.chdir(tmp_path)
+        return _load("check_command_docstrings").main([])
+    finally:
+        os.chdir(cwd)
+
+
+def test_docstring_check_ignores_a_ctx_only_signature_change(tmp_path: Path) -> None:
+    edited = GREET.replace("def greet(name: str)", "def greet(ctx: typer.Context, name: str)")
+    assert _docstring_check(tmp_path, edited) == 0
+
+
+def test_docstring_check_catches_a_real_argument_change(tmp_path: Path) -> None:
+    edited = GREET.replace("def greet(name: str)", "def greet(name: str, times: int)")
+    assert _docstring_check(tmp_path, edited) == 1
 
 
 def test_env_files_are_ignored(tmp_path: Path) -> None:
