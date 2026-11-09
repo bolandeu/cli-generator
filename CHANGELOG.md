@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.27.7 — 2026-11-09
+
+### E-009 — The describe document answers a consumer's two questions: where the skill text is, and which packages are the family
+
+A consumer of describe --json (rb-mcp, clidocs, Windmill) reads the skill text without a second process, and knows family membership from the distribution name instead of guessing it from a binary name.
+Time: 22.5h since the epic was approved
+
+- describe: x-rb-skills[] carries the bundled skill path, so its text needs no second process (CG-080)
+
 ## v1.27.6 — 2026-11-09
 
 ### E-014 — The gate and the template stop failing for reasons of their own: xdist summaries and the Database errors
