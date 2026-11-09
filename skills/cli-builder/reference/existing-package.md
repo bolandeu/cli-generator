@@ -40,7 +40,8 @@ files: write the file the rule asks for.
 | `vulnerability audit` | Standard, Release |
 
 An old gate in the package is a fix like any other: remove the old release script, its tests and an old gate line in
-the Antagor `checks`. Report removed tests as removed existing tests, not as edited ones.
+the Antagor `checks` (`[publish] gate_command` holds the gate command, and nothing else does). Report removed tests as
+removed existing tests, not as edited ones.
 
 A tool the package uses beyond the Standard (a database, providers, a project config) has its rules in
 Standard, Optional parts. The gate checks them only when the package has the part.
@@ -84,7 +85,7 @@ Skip this part when the code already builds a wheel. Do these in order, one comm
 8. **Destructive commands** have `--dry-run`, and `--confirm` is required under `--non-interactive`.
 9. **Portable code.** `pathlib`, `shutil` and `platformdirs`; no `os.system`, no `shell=True`, no fixed POSIX path.
 10. **Install and release.** `[tool.rb.install]` (Standard, Install), version from the git tag (Standard, Release),
-    the README and `AGENTS.md` (Standard, Docs).
+    the README and `AGENTS.md` (Standard, Docs), the local gate in `[publish] gate_command` and no workflow (Standard, CI).
 11. **Dependencies on our packages** by a compatible range from the Gitea registry, not by a git tag, a branch or a
     `path =` (Standard, Install).
 
@@ -122,16 +123,14 @@ fixes or when the package still has the old gate.
    package block (e.g. `[[tool.rb.external]]`): read the diff of the package's `pyproject.toml` line by line.
 6. **The old gate gone.** `git ls-files scripts/release.py` prints nothing, and
    `grep -n 'cli-core' pyproject.toml uv.lock` finds nothing. Remove what is left by hand. Edit the gate command in
-   `README.md` by hand. The update also deletes `.gitea/workflows/ci.yml`, since the template renders no workflow: if
-   the file is still there, `git rm -r .gitea/workflows`. Delete the old GitHub workflow the same way
-   (`git rm -r .github/workflows`, and `.github/` if nothing else is in it). Port nothing: the gate runs on this
-   machine (Standard, CI).
-7. **No gate line in the Antagor config.** `.agents/antagor/antagor.toml` keeps the docstring check in `checks`, the
-   remote gate in `[publish]` and `heavy = ["rb-release check"]`. It has no gate command and no `gate_command` in
-   `[publish]` (Standard, Release). The update drops the gate line from an unchanged `checks`. A package of mode fast wrote its own
+   `README.md` by hand.
+7. **The gate line of the Antagor config.** `.agents/antagor/antagor.toml` keeps the docstring check in `checks`,
+   `heavy = ["rb-release check"]`, and the local gate: `[publish] gate_command` holds the command with the template tag,
+   and `[publish]` names no `gate` and no `gate_status_url` (Standard, CI). The update writes that line, drops the gate
+   line from an unchanged `checks` and deletes the workflow. A package of mode fast wrote its own
    `checks`: this update, once, conflicts on that one line. Resolve it: keep the package's own `checks`, with no gate
-   command, and delete the conflict markers. No package file holds a gate command: the gate is the `uvx … rb-release check`
-   line of step 9, run on this machine. `AGENTS.md` and `CODING_STANDARDS.md` name that command. A task for a worker: the
+   command, and delete the conflict markers. `AGENTS.md` and `CODING_STANDARDS.md` name `rb-release check` and no
+   workflow. A task for a worker: the
    Architect puts `.agents/antagor/antagor.toml` in `owns_paths` of the task.
 8. **Lock and snapshots.** `uv lock`, then `uv run pytest --snapshot-update`. Help snapshots are rendered only on
    `copier copy` and when a template release changes a command's help: read the diff in `tests/snapshots/help/`.
@@ -156,6 +155,9 @@ Things the update does not do by itself:
   a `## [Unreleased]` heading (a package never released renames it `## [X.Y.Z] - <date>`).
 - **Version from the tag.** A `version =` line in `pyproject.toml` with no tag: tag the commit first
   (`git tag -a vX.Y.Z -m vX.Y.Z <sha>`), then use `dynamic = ["version"]` (Standard, Release).
+- **No workflow.** The gate is local, so the package runs no workflow on a forge: `git rm -r .github/workflows`
+  (and `.github/` if nothing else is in it), and `git rm -r .gitea/workflows` when that folder runs the gate. The
+  command stays in `[publish] gate_command`.
 - **Secret scan.** `brew install gitleaks`. A fake test value of the package's own goes in the root `.gitleaks.toml`
   `regexes` as one exact string (`'''^<value>$'''`), never a path or a rule disable. Any other finding is a leaked
   key (loop, rule 5). A real key leaked in history and revoked by the Human: one line per finding in

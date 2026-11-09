@@ -76,8 +76,9 @@ the task needs, and nothing else. The Standard, Optional parts, holds each part'
 cd <dest-dir> && uv sync && uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@<template tag>#subdirectory=gate" rb-release check && uv run <package_name> doctor
 ```
 
-`<template tag>` is `_commit` in `.copier-answers.yml`. The package has no CI file: the gate runs on this machine, and
-no package file writes the command (Standard, CI). The gate names the first failing step with its output.
+`<template tag>` is `_commit` in `.copier-answers.yml`. In the package the command is `[publish] gate_command` of
+`.agents/antagor/antagor.toml`; that setting alone writes it, and no workflow runs it. The gate names the first failing
+step with its output.
 `uv sync` writes `uv.lock`; commit it. Run the gate before every commit, not only at the end.
 
 Then publish: see "Publish" in `SKILL.md`.

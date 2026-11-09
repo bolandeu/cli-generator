@@ -69,7 +69,7 @@ uv run pytest
 With default answers the package is minimal: what the Standard makes mandatory
 (the bare command lists the commands, `--version`, global `--json` and the error
 envelope, `doctor`, `auth status` with empty credentials, one example command, its
-tests, `README.md`, `AGENTS.md`, the Gitea CI workflow, `[tool.rb.install]`).
+tests, `README.md`, `AGENTS.md`, `[tool.rb.install]`).
 Each optional part is a copier question, off in a new package; a package made
 before a question existed keeps that part on `copier update`:
 

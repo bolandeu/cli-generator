@@ -323,6 +323,17 @@ def test_a_package_without_its_docs_fails_at_docs(in_package, missing: str) -> N
     assert missing in _failed_at(_check(in_package, remove=missing), "docs", "Docs")
 
 
+def test_a_workflow_that_runs_the_gate_fails_at_ci(in_package) -> None:
+    root = in_package(COMPLIANT, pyproject=PYPROJECT + SCRIPT)
+    workflow = root / ".gitea" / "workflows" / "ci.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "on: push\njobs:\n  gate:\n    steps:\n      - run: uvx --from git+https://example.invalid/x.git rb-release check\n"
+    )
+
+    assert "the gate runs locally" in _failed_at(CliRunner().invoke(app, ["check"]), "ci", "CI")
+
+
 def _meta(*pairs: tuple[str, object]) -> list[dict]:
     return [{"name": name, "value": value} for name, value in pairs]
 
@@ -417,10 +428,27 @@ def test_a_single_parameter_marked_multiple_fails_at_params(in_package) -> None:
     assert "`demo --json`: x-rb-multiple is False" in _failed_at(_describe(in_package, document), "params", "Describe")
 
 
-def test_a_package_without_a_gitea_workflow_fails_at_ci(in_package) -> None:
-    result = _check(in_package, remove=".gitea/workflows/ci.yml")
+def test_an_unrelated_workflow_that_only_mentions_the_gate_in_a_comment_passes(in_package) -> None:
+    root = in_package(COMPLIANT, pyproject=PYPROJECT + SCRIPT)
+    workflow = root / ".github" / "workflows" / "release.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "on: push\n# never run rb-release check here\njobs:\n  release:\n    steps:\n      - run: echo release\n"
+    )
 
-    assert ".gitea/workflows/" in _failed_at(result, "ci", "CI")
+    result = CliRunner().invoke(app, ["check"])
+
+    assert result.exit_code == 0, result.output
+    assert "release: standard: ci ... ok" in result.stdout
+
+
+def test_a_workflow_one_level_deep_that_runs_the_gate_fails_at_ci(in_package) -> None:
+    root = in_package(COMPLIANT, pyproject=PYPROJECT + SCRIPT)
+    workflow = root / ".gitea" / "workflows" / "skip" / "ci.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("on: push\njobs:\n  gate:\n    steps:\n      - run: rb-release check\n")
+
+    assert "the gate runs locally" in _failed_at(CliRunner().invoke(app, ["check"]), "ci", "CI")
 
 
 def test_a_library_without_a_console_script_skips_the_cli_rules(in_package) -> None:
