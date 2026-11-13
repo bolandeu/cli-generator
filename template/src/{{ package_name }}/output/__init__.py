@@ -13,7 +13,7 @@ from typing import ClassVar, NoReturn, cast
 
 import typer
 from rich.markup import escape
-from typer.core import TyperGroup, TyperOption
+from typer.main import TyperGroup, get_command
 
 from ..core.errors import Aborted, CliError, InvalidArguments
 from ..core.version import cli_name
@@ -115,10 +115,13 @@ class RootGroup(TyperGroup):
     when it registers; they reach no callback argument (`expose_value=False`).
     """
 
-    part_options: ClassVar[list[TyperOption]] = []
+    # Declaration functions (`def _global_options(x: T = typer.Option(...))`), never parameters: Typer builds a
+    # parameter from a callback signature, so the declaration is the only public way to make one.
+    part_options: ClassVar[list[Callable[[], None]]] = []
 
     def __init__(self, *, params=None, **kwargs):
-        super().__init__(params=[*(params or []), *self.part_options], **kwargs)
+        part_params = [param for decl in self.part_options for param in _root_params(decl)]
+        super().__init__(params=[*(params or []), *part_params], **kwargs)
 
     def make_context(self, info_name, args, parent=None, **extra):
         argv = list(args)  # Click consumes `args` while it parses
@@ -134,6 +137,13 @@ class RootGroup(TyperGroup):
             return super().invoke(ctx)
         except _UsageError as exc:
             _usage_error(exc, ctx.meta["argv"])
+
+
+def _root_params(decl: Callable[[], None]) -> list:
+    """The parameters Typer builds from a declared signature: it is mounted on a throwaway app and read back."""
+    spec = typer.Typer(add_completion=False)
+    spec.callback()(decl)
+    return list(get_command(spec).params)
 
 
 def _usage_error(exc: Exception, argv: list[str]) -> NoReturn:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from typer.core import TyperOption
 
 from .. import output
 from ..core import services
@@ -17,20 +16,25 @@ def _remember_project(ctx: typer.Context, _param: object, value: str | None) -> 
     ctx.ensure_object(dict)["project"] = value
 
 
+def _global_options(
+    project: str | None = typer.Option(
+        None,
+        "--project",
+        metavar="TEXT",
+        help="Path to the project root.",
+        expose_value=False,
+        callback=_remember_project,
+    ),
+) -> None:
+    """The global options this part adds to the CLI's root: a declaration only (`output.RootGroup` reads the signature)."""
+
+
 def register(app: typer.Typer) -> None:
     """Add the project commands and the global --project to the CLI's root."""
     app.add_typer(config.app, name="config")
     app.command(name="init")(init.init)
     app.command(name="status")(status.status)
-    output.RootGroup.part_options.append(
-        TyperOption(
-            param_decls=["--project"],
-            metavar="TEXT",
-            help="Path to the project root.",
-            expose_value=False,
-            callback=_remember_project,
-        )
-    )
+    output.RootGroup.part_options.append(_global_options)
 
 
 def doctor_checks(ctx: typer.Context) -> list[dict]:

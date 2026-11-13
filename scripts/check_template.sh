@@ -411,6 +411,7 @@ run uv run --directory "$ROOT/gate" pytest -q
 
 VARIANT=template
 grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is still in the template"
+grep -rq 'typer\.core' "$ROOT/template" && fail "template code names typer.core: a part declares its global option"
 
 check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
 run_gate_on_python_311

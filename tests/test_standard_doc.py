@@ -49,6 +49,7 @@ GATE_STEPS = {
     "install section",
     "external dependencies",
     "build + install wheel",
+    "fresh install",
     "vulnerability audit",
 }
 MANDATORY = re.compile(r"^- \*\*Mandatory\*\* \(gate: (?P<steps>`[^`]+`(?:, `[^`]+`)*)\)\. \S")

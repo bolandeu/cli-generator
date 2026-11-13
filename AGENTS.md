@@ -242,6 +242,16 @@ before (missing answers file, wrong `copier.yml` location).
   (`tests/test_auth.py`), not the template file name
   (`tests/test_auth.py.jinja`) — a pattern with `.jinja` matches nothing
   and the file is silently generated anyway.
+- Typer is capped and used through its public API only (ADR 0016). Never
+  `typer.core` in template code: a part's global option (`--project`, `--ai`)
+  is a declaration function — `def _global_options(x: T = typer.Option(...))`
+  — appended to `output.RootGroup.part_options`, and `RootGroup` turns it
+  into a parameter with `typer.main.get_command`; typer 0.29 changed the
+  `TyperOption` constructor and that broke every generated CLI on install.
+  The dependency is `typer>=0.27,<0.29`: 0.29 stays out until the template's
+  own `tests/test_help.py` stops calling click's `param.type_cast_value` and
+  `param.get_error_hint`, whose arity 0.29's bundled click changed. Raise the
+  cap only with a green `fresh install` gate step.
 - Typer ≥ 0.27 no longer depends on `click` (it ships its own parser and
   `typer.Exit`/`typer.Abort` in `typer.exceptions`). Don't `import click`
   in template code — it isn't installed in generated projects. Related:

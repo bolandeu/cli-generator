@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,7 @@ STEPS = [
     "install section",
     "external dependencies",
     "build + install wheel",
+    "fresh install",
     "standard: commands",
     "standard: json",
     "standard: errors",
@@ -561,6 +563,81 @@ def test_the_built_wheel_runs_its_console_script(in_package) -> None:
     )
     with pytest.raises(StepFailed, match=re.escape("`demo --version` printed '9.9', but the wheel is version 0.1.0")):
         Gate(root).check_installed_wheel()
+
+
+# --- fresh install: a new host resolves the dependencies from an index, never from uv.lock ------------------------
+
+# Hand-built wheels: `uv tool install .` takes a dependency from a flat, explicit index offline (checked against
+# uv 0.10), so the test needs neither the network nor a registry.
+FAKEDEP_PYPROJECT = """[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["fakedep>=1.0"]
+
+[project.scripts]
+demo = "demo:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[[tool.uv.index]]
+name = "local"
+url = "{index}"
+format = "flat"
+explicit = true
+
+[tool.uv.sources]
+fakedep = {{ index = "local" }}
+
+[tool.rb.install]
+homeserver = []
+mac = false
+"""
+FAKEDEP_MODULE = '''"""A demo CLI that imports its dependency when it loads."""
+
+import importlib.metadata
+import sys
+
+from fakedep import kept
+
+def main() -> None:
+    sys.stdout.write(importlib.metadata.version("demo") if "--version" in sys.argv else kept())
+'''
+
+
+def _fake_dependency(index: Path, version: str, keeps_the_name: bool) -> None:
+    """A fakedep wheel in the flat index `index`; 2.0.0 drops `kept`, which the demo CLI imports."""
+    body = "def kept() -> str:\n    return 'kept'\n" if keeps_the_name else "VALUE = 2\n"
+    with zipfile.ZipFile(index / f"fakedep-{version}-py3-none-any.whl", "w") as archive:
+        archive.writestr("fakedep/__init__.py", body)
+        metadata = f"Metadata-Version: 2.1\nName: fakedep\nVersion: {version}\n"
+        archive.writestr(f"fakedep-{version}.dist-info/METADATA", metadata)
+        wheel = "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+        archive.writestr(f"fakedep-{version}.dist-info/WHEEL", wheel)
+        archive.writestr(f"fakedep-{version}.dist-info/RECORD", "")
+
+
+def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install(
+    in_package, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "index"
+    index.mkdir()
+    _fake_dependency(index, "1.0.0", keeps_the_name=True)
+    root = in_package(FAKEDEP_MODULE, pyproject=FAKEDEP_PYPROJECT.format(index=index))
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    gate = Gate(root)
+    assert gate.check_installed_wheel().startswith("demo-0.1.0-py3-none-any.whl; `demo --version` = 0.1.0")
+    assert gate.check_fresh_install() == "resolved from the index; `demo --version` = 0.1.0; `demo --help` ok"
+
+    _fake_dependency(index, "2.0.0", keeps_the_name=False)  # the next minor drops what the CLI imports
+
+    next_release = Gate(root)  # its own scratch: the locked wheel step still installs fakedep 1.0.0
+    assert next_release.check_installed_wheel().startswith("demo-0.1.0-")
+    with pytest.raises(StepFailed) as raised:
+        next_release.check_fresh_install()
+    assert "ImportError: cannot import name 'kept'" in raised.value.output
 
 
 def test_our_package_installs_only_from_its_explicit_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
