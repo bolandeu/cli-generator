@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import typer.main
+from typer.core import TyperGroup
 
 from {{ package_name }}.cli import app
 from {{ package_name }}.core import skills
@@ -20,7 +21,9 @@ DATA = Path(skills.__file__).resolve().parents[1] / "data"
 
 
 def _command_names() -> list[str]:
-    return sorted(typer.main.get_command(app).commands)
+    root = typer.main.get_command(app)
+    assert isinstance(root, TyperGroup)
+    return sorted(root.commands)
 
 
 def _problems(data: Path) -> list[str]:
