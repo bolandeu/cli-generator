@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.27.9 — 2026-11-13
+
+### Outside epics
+
+- Template: public API only for global part options, a typer cap, and a fresh-install gate step (CG-091)
+- tests/test_skills.py.jinja: get_command returns a Command to ty, so the all-parts variant fails ty check (CG-092)
+
 ## v1.27.8 — 2026-11-09
 
 ### E-012 — One gate, and it is the local one: the template stops generating a Gitea workflow
