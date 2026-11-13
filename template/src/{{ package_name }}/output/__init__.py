@@ -13,7 +13,8 @@ from typing import ClassVar, NoReturn, cast
 
 import typer
 from rich.markup import escape
-from typer.main import TyperGroup, get_command
+from typer.core import TyperGroup
+from typer.main import get_command
 
 from ..core.errors import Aborted, CliError, InvalidArguments
 from ..core.version import cli_name

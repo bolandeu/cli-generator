@@ -29,7 +29,6 @@ def _global_options(
     ai: bool = typer.Option(
         False,
         "--ai",
-        is_flag=True,
         is_eager=True,
         expose_value=False,
         callback=_print_skill,

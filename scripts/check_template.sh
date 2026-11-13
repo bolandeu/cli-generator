@@ -279,13 +279,15 @@ check_variant() {
 }
 
 # generate_at <name> <template tag> [copier copy --data args...]: a committed project generated from
-# that tag in $WORK/<name>; the shell stays in it
+# that tag in $WORK/<name>; the shell stays in it. The copy resolves as on that tag's release day
+# (UV_EXCLUDE_NEWER): its own task (pytest --snapshot-update of tests/test_help.py) must run on the typer it was
+# released with — a tag before the typer cap resolves 0.29, whose bundled click breaks that test.
 generate_at() {
     VARIANT=$1
     from=$2
     shift 2
     dest="$WORK/$VARIANT"
-    run uvx copier copy "$ROOT" "$dest" \
+    run env "UV_EXCLUDE_NEWER=$(git -C "$ROOT" log -1 --format=%cI "$from")" uvx copier copy "$ROOT" "$dest" \
         --data package_name=demotool --data project_name=Demo \
         --data description=d --data author_name=A "$@" \
         --defaults --trust -q --vcs-ref "$from"
@@ -411,7 +413,7 @@ run uv run --directory "$ROOT/gate" pytest -q
 
 VARIANT=template
 grep -rq include_ci "$ROOT/copier.yml" "$ROOT/template" && fail "include_ci is still in the template"
-grep -rq 'typer\.core' "$ROOT/template" && fail "template code names typer.core: a part declares its global option"
+grep -rq 'TyperOption' "$ROOT/template" && fail "template code builds a TyperOption: a part declares its global option in a signature"
 
 check_variant minimal '(["rbtools"], True)' --data repository_url=https://homeserver.tailee01ab.ts.net:3000/bolandeu/demo
 run_gate_on_python_311

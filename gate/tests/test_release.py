@@ -606,6 +606,20 @@ def main() -> None:
     sys.stdout.write(importlib.metadata.version("demo") if "--version" in sys.argv else kept())
 '''
 
+# The same package as a library: no console script, so the fresh install has no tool to run.
+FAKEDEP_LIBRARY_PYPROJECT = FAKEDEP_PYPROJECT.replace('[project.scripts]\ndemo = "demo:main"\n\n', "")
+FAKEDEP_LIBRARY_MODULE = '''"""A demo library that imports its dependency when it loads."""
+
+from fakedep import kept
+
+VALUE = kept()
+'''
+# The library without an explicit index: a plain flat index keeps `uv lock` offline, and the library branch takes
+# the dependency from UV_FIND_LINKS — `uv pip` reads none of the pyproject's index tables.
+FAKEDEP_LIBRARY_PLAIN_PYPROJECT = FAKEDEP_LIBRARY_PYPROJECT.replace(
+    'explicit = true\n\n[tool.uv.sources]\nfakedep = {{ index = "local" }}\n\n', ""
+)
+
 
 def _fake_dependency(index: Path, version: str, keeps_the_name: bool) -> None:
     """A fakedep wheel in the flat index `index`; 2.0.0 drops `kept`, which the demo CLI imports."""
@@ -638,6 +652,44 @@ def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install(
     with pytest.raises(StepFailed) as raised:
         next_release.check_fresh_install()
     assert "ImportError: cannot import name 'kept'" in raised.value.output
+
+
+def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install_of_a_library(
+    in_package, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "index"
+    index.mkdir()
+    _fake_dependency(index, "1.0.0", keeps_the_name=True)
+    root = in_package(FAKEDEP_LIBRARY_MODULE, pyproject=FAKEDEP_LIBRARY_PLAIN_PYPROJECT.format(index=index))
+    # `uv pip install .` ignores the pyproject's index tables: this branch takes the dependency from find-links.
+    monkeypatch.setenv("UV_FIND_LINKS", str(index))
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    gate = Gate(root)
+    assert gate.check_installed_wheel().startswith("demo-0.1.0-py3-none-any.whl; imports demo")
+    assert gate.check_fresh_install().startswith("resolved from the index; imports demo")
+
+    _fake_dependency(index, "2.0.0", keeps_the_name=False)
+
+    next_release = Gate(root)
+    assert next_release.check_installed_wheel().startswith("demo-0.1.0-")  # the lock still gives fakedep 1.0.0
+    with pytest.raises(StepFailed) as raised:
+        next_release.check_fresh_install()
+    assert "ImportError: cannot import name 'kept'" in raised.value.output
+
+
+def test_the_fresh_install_of_a_library_from_an_explicit_index_is_skipped_with_a_notice(
+    in_package, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "index"
+    index.mkdir()
+    _fake_dependency(index, "1.0.0", keeps_the_name=True)
+    root = in_package(FAKEDEP_LIBRARY_MODULE, pyproject=FAKEDEP_LIBRARY_PYPROJECT.format(index=index))
+    monkeypatch.setenv("UV_OFFLINE", "1")  # uv pip would reach PyPI, where a same-named package may live
+    gate = Gate(root)
+    gate.check_installed_wheel()
+    assert gate.check_fresh_install() == (
+        "skipped: `uv pip install .` cannot honour [tool.uv.sources] for fakedep from `local`"
+    )
 
 
 def test_our_package_installs_only_from_its_explicit_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

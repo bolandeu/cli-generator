@@ -36,7 +36,8 @@ same verdict:
     from the package index and never from uv.lock — `<cli> --version` must print
     the version being released and `<cli> --help` must work; a library without a
     console script: `uv pip install .` into an empty venv, every top-level
-    package must import) · the Standard's mandatory rules (standard/: `standard: commands`,
+    package must import — skipped with a notice when a dependency comes from an
+    explicit index, which `uv pip` does not read from [tool.uv.sources]) · the Standard's mandatory rules (standard/: `standard: commands`,
     `json`, `errors`, `health` probe that installed console script, skipped for
     a library; `params` reads its `describe --json`; `docs`, `ci` read the package's files — a failure names the
     Standard's section) · osv-scanner over uv.lock (skipped with a
@@ -417,15 +418,19 @@ class Gate:
         printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
         return printed[-1].strip() if printed else ""
 
-    def check_index_sources(self, python: Path) -> None:
-        """Every dependency [tool.uv.sources] takes from an explicit index is installed as uv.lock locked it from there."""
+    def _explicit_sources(self) -> dict[str, str]:
+        """The dependencies [tool.uv.sources] takes from an index marked explicit, by name, with that index."""
         uv = self._tool("uv")
         explicit = {index["name"] for index in uv.get("index", []) if index.get("explicit")}
-        pinned = {
+        return {
             _normalized(name): source["index"]
             for name, source in uv.get("sources", {}).items()
             if isinstance(source, dict) and source.get("index") in explicit
         }
+
+    def check_index_sources(self, python: Path) -> None:
+        """Every dependency [tool.uv.sources] takes from an explicit index is installed as uv.lock locked it from there."""
+        pinned = self._explicit_sources()
         if not pinned:
             return
         lock = tomllib.loads((self.root / "uv.lock").read_text())
@@ -492,6 +497,10 @@ class Gate:
         The wheel step installs exactly uv.lock's set and never resolves, so it stays green while a
         dependency's next minor release breaks every fresh install of a released package. This step
         resolves as that install does, in the gate's own scratch: the user's tools stay untouched.
+        What it guarantees: the package as a new host would resolve it imports and reports its version, with
+        `[tool.uv.sources]` honoured (a tool) or not (a library). A library's dependencies come from the index
+        list of the machine, which `uv pip install .` cannot take from [tool.uv.sources]: a library that takes
+        a dependency from an explicit index is skipped with a notice, never reported as resolved from there.
         """
         if self.wheel is None or self.release_version is None:
             raise StepFailed(f"the fresh install needs the version '{WHEEL_STEP}' built")
@@ -499,6 +508,10 @@ class Gate:
         script = next(iter(project.get("scripts", {})), None)
         scratch = Path(self._scratch.name)
         if script is None:  # a library: no tool to install, a venv of its own
+            pinned = self._explicit_sources()
+            if pinned:  # `uv pip install .` ignores [tool.uv.sources], and PyPI may hold a same-named package
+                sources = ", ".join(f"{name} from `{index}`" for name, index in sorted(pinned.items()))
+                return f"skipped: `uv pip install .` cannot honour [tool.uv.sources] for {sources}"
             venv = scratch / "fresh-venv"
             self.step_output("uv", "venv", "--quiet", str(venv))
             python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
