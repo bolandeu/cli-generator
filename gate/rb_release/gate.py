@@ -30,7 +30,14 @@ same verdict:
     `<cli> --version` must print the version being
     built, `<cli> --help` must work (a library without a console script:
     every top-level package imports and importlib.metadata reports that
-    version) · the Standard's mandatory rules (standard/: `standard: commands`,
+    version) ·
+    fresh install (what a new host does tomorrow: `uv tool install .` into an
+    empty tool directory of the gate's own, so the dependencies are resolved
+    from the package index and never from uv.lock — `<cli> --version` must print
+    the version being released and `<cli> --help` must work; a library without a
+    console script: `uv pip install .` into an empty venv, every top-level
+    package must import — skipped with a notice when a dependency comes from an
+    explicit index, which `uv pip` does not read from [tool.uv.sources]) · the Standard's mandatory rules (standard/: `standard: commands`,
     `json`, `errors`, `health` probe that installed console script, skipped for
     a library; `params` reads its `describe --json`; `docs`, `ci` read the package's files — a failure names the
     Standard's section) · osv-scanner over uv.lock (skipped with a
@@ -68,6 +75,7 @@ COMMANDS = (
 )
 AUDIT_STEP = "vulnerability audit"
 WHEEL_STEP = "build + install wheel"  # the Standard's steps that probe the CLI run its installed script
+FRESH_INSTALL_STEP = "fresh install"  # the dependencies come from the index, as on a new host
 EXIT_PASSED = 0
 EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
 EXIT_AUDIT_FAILED = 3  # only the osv-scanner audit: the code is fine, a dependency has a known vulnerability
@@ -209,6 +217,9 @@ class Gate:
         # The built wheel and its venv, kept for the whole run: the Standard's steps run the installed script.
         self._scratch = tempfile.TemporaryDirectory(prefix="rb-release-")
         self.console_script: Path | None = None
+        # What the wheel step built: the fresh install asks a new host's environment for the same version.
+        self.wheel: Path | None = None
+        self.release_version: str | None = None
 
     @classmethod
     def at(cls, root: Path) -> Gate:
@@ -378,10 +389,10 @@ class Gate:
         self.step_output(scanner, "--lockfile=uv.lock")
         return "no known vulnerabilities in uv.lock"
 
-    def _check_library(self, python: Path, wheel: Path, dist: str, built: str) -> str:
-        """No console script (a library): import every top-level package, compare importlib.metadata's version."""
+    def _wheel_tops(self, wheel: Path) -> list[str]:
+        """The top-level packages a wheel carries: one per module or package directory."""
         with zipfile.ZipFile(wheel) as archive:
-            tops = sorted(
+            return sorted(
                 {
                     name.split("/")[0].removesuffix(".py")
                     for name in archive.namelist()
@@ -389,6 +400,9 @@ class Gate:
                     and (name.endswith(".py") or "/" in name)
                 }
             )
+
+    def _check_library(self, python: Path, tops: list[str], dist: str, built: str) -> str:
+        """No console script (a library): import every top-level package, compare importlib.metadata's version."""
         code = (
             "import importlib, importlib.metadata as m\n"
             f"for name in {tops!r}: importlib.import_module(name)\n"
@@ -397,17 +411,26 @@ class Gate:
         reported = self.step_output(str(python), "-c", code).splitlines()[-1].strip()
         if reported != built:
             raise StepFailed(f"importlib.metadata.version({dist!r}) is {reported!r}, but the wheel is version {built}")
-        return f"{wheel.name}; imports {', '.join(tops)}; importlib.metadata version = {reported}"
+        return f"imports {', '.join(tops)}; importlib.metadata version = {reported}"
 
-    def check_index_sources(self, python: Path) -> None:
-        """Every dependency [tool.uv.sources] takes from an explicit index is installed as uv.lock locked it from there."""
+    def _printed_version(self, exe: Path) -> str:
+        """What a console script prints for `--version`: its last line, as Typer prints a bare version there."""
+        printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
+        return printed[-1].strip() if printed else ""
+
+    def _explicit_sources(self) -> dict[str, str]:
+        """The dependencies [tool.uv.sources] takes from an index marked explicit, by name, with that index."""
         uv = self._tool("uv")
         explicit = {index["name"] for index in uv.get("index", []) if index.get("explicit")}
-        pinned = {
+        return {
             _normalized(name): source["index"]
             for name, source in uv.get("sources", {}).items()
             if isinstance(source, dict) and source.get("index") in explicit
         }
+
+    def check_index_sources(self, python: Path) -> None:
+        """Every dependency [tool.uv.sources] takes from an explicit index is installed as uv.lock locked it from there."""
+        pinned = self._explicit_sources()
         if not pinned:
             return
         lock = tomllib.loads((self.root / "uv.lock").read_text())
@@ -449,6 +472,7 @@ class Gate:
         built = _wheel_version(wheel)
         if self.tags() and built.startswith("0.0.0"):
             raise StepFailed(f"built version {built}: the build saw no v* tag (uv-dynamic-versioning fell back)")
+        self.wheel, self.release_version = wheel, built
         self.step_output("uv", "venv", "--quiet", str(venv))
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         # The locked set, then the wheel without resolving anything, then
@@ -457,15 +481,54 @@ class Gate:
         self.step_output("uv", "pip", "install", "--quiet", "--no-deps", "--python", str(python), str(wheel))
         self.step_output("uv", "pip", "check", "--python", str(python))
         if script is None:
-            return self._check_library(python, wheel, project["name"], built)
+            tops = self._wheel_tops(wheel)
+            return f"{wheel.name}; {self._check_library(python, tops, project['name'], built)}"
         exe = python.parent / (f"{script}.exe" if os.name == "nt" else script)
-        printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
-        reported = printed[-1].strip() if printed else ""
+        reported = self._printed_version(exe)
         if reported != built:
             raise StepFailed(f"`{script} --version` printed {reported!r}, but the wheel is version {built}")
         self.step_output(str(exe), "--help", env=probe_env())
         self.console_script = exe
         return f"{wheel.name}; `{script} --version` = {reported}; `{script} --help` ok"
+
+    def check_fresh_install(self) -> str:
+        """Install the package the way a new host does: an empty environment, the dependencies resolved from the index.
+
+        The wheel step installs exactly uv.lock's set and never resolves, so it stays green while a
+        dependency's next minor release breaks every fresh install of a released package. This step
+        resolves as that install does, in the gate's own scratch: the user's tools stay untouched.
+        What it guarantees: the package as a new host would resolve it imports and reports its version, with
+        `[tool.uv.sources]` honoured (a tool) or not (a library). A library's dependencies come from the index
+        list of the machine, which `uv pip install .` cannot take from [tool.uv.sources]: a library that takes
+        a dependency from an explicit index is skipped with a notice, never reported as resolved from there.
+        """
+        if self.wheel is None or self.release_version is None:
+            raise StepFailed(f"the fresh install needs the version '{WHEEL_STEP}' built")
+        project = self._pyproject()["project"]
+        script = next(iter(project.get("scripts", {})), None)
+        scratch = Path(self._scratch.name)
+        if script is None:  # a library: no tool to install, a venv of its own
+            pinned = self._explicit_sources()
+            if pinned:  # `uv pip install .` ignores [tool.uv.sources], and PyPI may hold a same-named package
+                sources = ", ".join(f"{name} from `{index}`" for name, index in sorted(pinned.items()))
+                return f"skipped: `uv pip install .` cannot honour [tool.uv.sources] for {sources}"
+            venv = scratch / "fresh-venv"
+            self.step_output("uv", "venv", "--quiet", str(venv))
+            python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+            self.step_output("uv", "pip", "install", "--quiet", "--python", str(python), str(self.root))
+            detail = self._check_library(python, self._wheel_tops(self.wheel), project["name"], self.release_version)
+            return f"resolved from the index; {detail}"
+        tool_dir = scratch / "tools"
+        env = {**os.environ, "UV_TOOL_DIR": str(tool_dir), "UV_TOOL_BIN_DIR": str(scratch / "tools-bin")}
+        self.step_output("uv", "tool", "install", "--quiet", str(self.root), env=env)
+        exe = Path(env["UV_TOOL_BIN_DIR"]) / (f"{script}.exe" if os.name == "nt" else script)
+        reported = self._printed_version(exe)
+        if reported != self.release_version:
+            raise StepFailed(
+                f"`{script} --version` printed {reported!r}, but the release is version {self.release_version}"
+            )
+        self.step_output(str(exe), "--help", env=probe_env())
+        return f"resolved from the index; `{script} --version` = {reported}; `{script} --help` ok"
 
     @functools.cached_property
     def _standard_package(self) -> standard.Package:
@@ -487,6 +550,7 @@ class Gate:
             Step("install section", self.check_install_section),
             Step("external dependencies", self.check_external_deps),
             Step(WHEEL_STEP, self.check_installed_wheel),
+            Step(FRESH_INSTALL_STEP, self.check_fresh_install, WHEEL_STEP),
             *(
                 Step(
                     f"standard: {rule.step}",

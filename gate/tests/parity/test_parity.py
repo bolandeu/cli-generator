@@ -1,8 +1,8 @@
 """`rb-release check` is the same gate as the template's scripts/release.py (its last copy: template v1.20.10).
 
 Both run in tmp_path copies of the fixture projects in tests/data/parity, with the same git state. Compared: the lines
-that start with `release:` (stdout, then stderr) and the exit code; the Standard's steps (`release: standard: …`) are
-new in rb-release and left out. The ruff-error and secret cases are the passing fixture plus one file written here, so
+that start with `release:` (stdout, then stderr) and the exit code; the steps rb-release added after that copy — the
+Standard's (`release: standard: …`) and `fresh install` — are left out. The ruff-error and secret cases are the passing fixture plus one file written here, so
 the fake token is never committed.
 """
 
@@ -24,6 +24,8 @@ TEMPLATE_GATE = "v1.20.10:template/scripts/release.py"  # the template's copy of
 RB_RELEASE = (sys.executable, "-c", "from rb_release.cli import main; main()", "check")
 TEMPLATE = (sys.executable, "scripts/release.py", "--check")
 IGNORED = "scripts/\n.venv/\n__pycache__/\n"  # the copied gate is not part of the project the gate checks
+# Steps rb-release added after the template's last copy (v1.20.10): the copied gate has no such lines.
+NEW_STEPS = ("release: standard: ", "release: fresh install ")
 
 
 def _github_token() -> str:
@@ -53,7 +55,7 @@ def _run(command: tuple[str, ...], root: Path) -> tuple[list[str], int]:
     env = {**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"}
     result = subprocess.run(command, cwd=root, env=env, text=True, capture_output=True, check=False)  # noqa: S603
     output = (result.stdout + result.stderr).splitlines()
-    lines = [line for line in output if line.startswith("release:") and not line.startswith("release: standard: ")]
+    lines = [line for line in output if line.startswith("release:") and not line.startswith(NEW_STEPS)]
     return lines, result.returncode
 
 

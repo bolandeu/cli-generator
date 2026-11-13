@@ -37,7 +37,7 @@ files: write the file the rule asks for.
 | `standard: docs` | Standard, Docs |
 | `standard: params` | Standard, Describe |
 | `standard: ci` | Standard, CI |
-| `vulnerability audit` | Standard, Release |
+| `vulnerability audit`, `fresh install` | Standard, Release |
 
 An old gate in the package is a fix like any other: remove the old release script, its tests and an old gate line in
 the Antagor `checks` (`[publish] gate_command` holds the gate command, and nothing else does). Report removed tests as

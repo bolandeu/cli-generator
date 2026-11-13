@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from typer.core import TyperOption
 
 from .. import output
 from ..core import skills
@@ -26,20 +25,23 @@ def _print_skill(ctx: typer.Context, _param: object, value: bool) -> None:
     raise typer.Exit()
 
 
+def _global_options(
+    ai: bool = typer.Option(
+        False,
+        "--ai",
+        is_eager=True,
+        expose_value=False,
+        callback=_print_skill,
+        help="Print AI-oriented usage documentation (the bundled skill doc) and exit.",
+    ),
+) -> None:
+    """The global options this part adds to the CLI's root: a declaration only (`output.RootGroup` reads the signature)."""
+
+
 def register(root: typer.Typer) -> None:
     """Add the `skill` group and the global --ai to the CLI's root (the package skill part, copier's include_skill)."""
     root.add_typer(app, name="skill")
-    output.RootGroup.part_options.append(
-        TyperOption(
-            param_decls=["--ai"],
-            is_flag=True,
-            default=False,
-            is_eager=True,
-            expose_value=False,
-            callback=_print_skill,
-            help="Print AI-oriented usage documentation (the bundled skill doc) and exit.",
-        )
-    )
+    output.RootGroup.part_options.append(_global_options)
 
 
 # Where each AI tool looks for personal (user-level) and project-level skills.

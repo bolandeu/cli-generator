@@ -38,6 +38,9 @@ character as `_` (`sitemap-xml` → `SITEMAP_XML`).
   `min_version`, `check`), and every declared program is run. A program run in a way the scan cannot see (an injected
   runner, an absolute path) sets `detect = false`.
 - **Recommended.** Commands use Typer. Why: the template's output and error layer is built on it.
+- **Recommended.** A dependency the package's code calls into is capped below the next minor version the package is
+  not verified against (`typer>=0.27,<0.29`), and the cap is raised only together with a green `fresh install` gate
+  step. Why: an uncapped dependency's next minor lands on a user's machine before anyone runs the package.
 - **Recommended.** Three names: the distribution `rb-<slug>`, the command `<slug>`, the import package `rb_<slug>`.
   Why: a generic distribution name collides with someone else's PyPI package.
 - **Recommended.** The three names are separate, and nothing derives one from another: a package belongs to the family
@@ -255,6 +258,11 @@ that would have to keep it.
 
 - **Mandatory** (gate: `build + install wheel`). The version is the latest git tag `vX.Y.Z` (a PEP 440 version), read
   at build time: with a tag in reach the wheel is never `0.0.0`. A new repo is tagged `v0.1.0` on its first commit.
+- **Mandatory** (gate: `fresh install`). The package installs into an empty environment whose dependencies come from
+  the package index, as on a new machine — not from `uv.lock`. A tool prints the version being released for
+  `<cli> --version` and `<cli> --help` works; a library imports every top-level package and `importlib.metadata`
+  reports that version. Why: the wheel step installs the locked set, so it stays green while a dependency's new minor
+  release breaks every fresh install.
 - **Mandatory** (gate: `vulnerability audit`). `osv-scanner` finds no known vulnerability in `uv.lock` (install it:
   `brew install osv-scanner`; without it the step is skipped with a notice). This failure alone ends with
   `release: audit failed`, exit 3: bump the dependency, the code is fine.
