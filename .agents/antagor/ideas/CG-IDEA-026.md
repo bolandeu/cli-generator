@@ -11,6 +11,16 @@ benefit: 'A package generated from the template and installed fresh (uv tool ins
   has no attribute type. mcp already caps typer>=0.27,<0.29; the template''s pyproject.toml.jinja
   says only typer>=0.12, so every generated package has the same trap under an unbounded
   dependency.'
+triage:
+  serves: []
+  risks: []
+  why: The cap typer>=0.27,<0.29 in v1.27.9 already keeps this door shut, but opencli.py
+    reads click attributes (param.type, secondary_opts) that typer 0.29 no longer
+    has, so this is exactly what blocks supporting 0.29 later; running describe --json
+    in the fresh-install step is what would catch it.
+  score: 3.0
+  route: task
+  at: '2026-11-16T06:41:23+00:00'
 ---
 
 A package generated from the template and installed fresh (uv tool install from a git tag) resolves typer 0.29.1 from PyPI. Typer 0.29 no longer ships click (import click fails), and core/opencli.py reads click's attributes — param.type in _param_meta, param.secondary_opts, param.nargs, param.metavar. So llm describe --json answers ok:false, UNEXPECTED, AttributeError: 'TyperOption' object has no attribute 'type'. The repo itself does not see it: uv.lock holds typer 0.27.2, and the gate's build+install step only runs llm --version and llm --help.
