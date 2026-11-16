@@ -34,10 +34,12 @@ same verdict:
     fresh install (what a new host does tomorrow: `uv tool install .` into an
     empty tool directory of the gate's own, so the dependencies are resolved
     from the package index and never from uv.lock — `<cli> --version` must print
-    the version being released and `<cli> --help` must work; a library without a
+    the version being released, `<cli> --help` must work and `<cli> describe
+    --json` must give its envelope (a package without the Describe part answers
+    "No such command", which the step names and accepts); a library without a
     console script: `uv pip install .` into an empty venv, every top-level
-    package must import — skipped with a notice when a dependency comes from an
-    explicit index, which `uv pip` does not read from [tool.uv.sources]) · the Standard's mandatory rules (standard/: `standard: commands`,
+    package must import — skipped with a notice when a dependency comes from
+    an explicit index, which `uv pip` does not read from [tool.uv.sources]) · the Standard's mandatory rules (standard/: `standard: commands`,
     `json`, `errors`, `health` probe that installed console script, skipped for
     a library; `params` reads its `describe --json`; `docs`, `ci` read the package's files — a failure names the
     Standard's section) · osv-scanner over uv.lock (skipped with a
@@ -51,6 +53,7 @@ from __future__ import annotations
 
 import ast
 import functools
+import json
 import os
 import re
 import shutil
@@ -80,6 +83,8 @@ EXIT_PASSED = 0
 EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, wheel
 EXIT_AUDIT_FAILED = 3  # only the osv-scanner audit: the code is fine, a dependency has a known vulnerability
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+DESCRIBE = ("describe", "--json")  # the consumer contract: a broken describe must not reach a tag
+NO_SUCH_COMMAND = "No such command"  # typer's usage error (exit 2) for a package without the Describe part
 
 Echo = Callable[..., None]  # typer.echo: (message, nl=True, err=False)
 
@@ -182,6 +187,25 @@ def contract_summary(output: str) -> str:
     skipped = sum(status == "SKIPPED" for status in results.values())
     notes = [f"{failed} failed"] * bool(failed) + [f"{skipped} skipped (provider version)"] * bool(skipped)
     return f"{summary}: {', '.join(notes)}" if notes else summary
+
+
+def _json_object(text: str) -> dict | None:
+    """`text` as a JSON object, or None: the envelope is an object, never a list or a bare value."""
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _names_no_such_command(output: str) -> bool:
+    """A package without the Describe part: the usage error names no such command, whatever else the CLI does.
+
+    Under `--json` the root group turns that usage error into the INVALID_ARGUMENTS envelope on stdout, so stderr
+    stays empty; without the guard the same message goes to stderr. Either way the command is absent, not broken.
+    The exit code is not read: a wrong one is the errors step's finding, not this step's.
+    """
+    return NO_SUCH_COMMAND in output
 
 
 def _wheel_version(wheel: Path) -> str:
@@ -418,6 +442,30 @@ class Gate:
         printed = self.step_output(str(exe), "--version", env=probe_env()).splitlines()
         return printed[-1].strip() if printed else ""
 
+    def _fresh_describe(self, script: str, exe: Path) -> str:
+        """`<cli> describe --json` on the installed script: its envelope, or the command being absent.
+
+        describe is the consumers' contract (they build their schemas from it), so a describe that only
+        the fresh resolution breaks fails this step. A package without the Describe part answers typer's
+        "No such command" usage error, which is not a failure: the command is absent, not broken.
+        """
+        result = subprocess.run(
+            [str(exe), *DESCRIBE],
+            env=probe_env(),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        command = f"`{script} {' '.join(DESCRIBE)}`"
+        if _names_no_such_command(result.stdout + result.stderr):
+            return f"{command} absent (the Describe part is off)"
+        payload = _json_object(result.stdout)
+        if payload is None or payload.get("ok") is False or not isinstance(payload.get("command"), dict):
+            output = (result.stdout + result.stderr).strip()
+            raise StepFailed(f"{command} gave no envelope (a JSON object with `ok` and `command`):\n{output}")
+        return f"{command} ok"
+
     def _explicit_sources(self) -> dict[str, str]:
         """The dependencies [tool.uv.sources] takes from an index marked explicit, by name, with that index."""
         uv = self._tool("uv")
@@ -528,7 +576,8 @@ class Gate:
                 f"`{script} --version` printed {reported!r}, but the release is version {self.release_version}"
             )
         self.step_output(str(exe), "--help", env=probe_env())
-        return f"resolved from the index; `{script} --version` = {reported}; `{script} --help` ok"
+        described = self._fresh_describe(script, exe)
+        return f"resolved from the index; `{script} --version` = {reported}; `{script} --help` ok; {described}"
 
     @functools.cached_property
     def _standard_package(self) -> standard.Package:
