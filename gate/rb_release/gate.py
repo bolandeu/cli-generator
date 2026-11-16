@@ -198,6 +198,16 @@ def _json_object(text: str) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _names_no_such_command(output: str) -> bool:
+    """A package without the Describe part: the usage error names no such command, whatever else the CLI does.
+
+    Under `--json` the root group turns that usage error into the INVALID_ARGUMENTS envelope on stdout, so stderr
+    stays empty; without the guard the same message goes to stderr. Either way the command is absent, not broken.
+    The exit code is not read: a wrong one is the errors step's finding, not this step's.
+    """
+    return NO_SUCH_COMMAND in output
+
+
 def _wheel_version(wheel: Path) -> str:
     """`Version:` from the wheel's METADATA — what importlib.metadata (and so `--version`) reports.
 
@@ -436,8 +446,8 @@ class Gate:
         """`<cli> describe --json` on the installed script: its envelope, or the command being absent.
 
         describe is the consumers' contract (they build their schemas from it), so a describe that only
-        the fresh resolution breaks fails this step; a package without the Describe part answers typer's
-        "No such command" usage error, which is not a failure.
+        the fresh resolution breaks fails this step. A package without the Describe part answers typer's
+        "No such command" usage error, which is not a failure: the command is absent, not broken.
         """
         result = subprocess.run(
             [str(exe), *DESCRIBE],
@@ -448,7 +458,7 @@ class Gate:
             check=False,
         )
         command = f"`{script} {' '.join(DESCRIBE)}`"
-        if result.returncode == 2 and NO_SUCH_COMMAND in result.stderr:
+        if _names_no_such_command(result.stdout + result.stderr):
             return f"{command} absent (the Describe part is off)"
         payload = _json_object(result.stdout)
         if payload is None or payload.get("ok") is False or not isinstance(payload.get("command"), dict):

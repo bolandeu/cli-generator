@@ -634,23 +634,24 @@ def main() -> None:
         sys.stdout.write("Usage: demo [OPTIONS] COMMAND [ARGS]...\\n")
 '''
 
-# A CLI without the Describe part: typer answers the command with a usage error (exit 2, stderr).
-NO_DESCRIBE_MODULE = '''"""A demo CLI without the Describe part: `describe` is typer's "No such command" usage error."""
+# A CLI without the Describe part: under --json the root group turns typer's "No such command" usage error into the
+# INVALID_ARGUMENTS error envelope on stdout, exit 2 — stderr stays empty.
+NO_DESCRIBE_MODULE = '''"""A demo CLI without the Describe part: `describe --json` is the INVALID_ARGUMENTS usage error."""
 
 import importlib.metadata
+import json
 import sys
 
-NO_SUCH_COMMAND = """Usage: demo [OPTIONS] COMMAND [ARGS]...
-Try 'demo --help' for help.
-
-Error: No such command 'describe'.
-"""
+NO_SUCH_COMMAND = {
+    "ok": False,
+    "error": {"code": "INVALID_ARGUMENTS", "message": "No such command 'describe'."},
+}
 
 def main() -> None:
     if "--version" in sys.argv:
         sys.stdout.write(importlib.metadata.version("demo"))
     elif "describe" in sys.argv:
-        sys.stderr.write(NO_SUCH_COMMAND)
+        sys.stdout.write(json.dumps(NO_SUCH_COMMAND))
         raise SystemExit(2)
     else:
         sys.stdout.write("Usage: demo [OPTIONS] COMMAND [ARGS]...\\n")
