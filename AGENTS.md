@@ -12,6 +12,10 @@ refactors existing ones onto a shared Python/Typer/uv architecture. See
 workflow, and `skills/cli-builder/reference/standard.md` (the Standard)
 for what every package must and should be.
 
+The one measure of a change here: it makes writing a CLI with the package
+simpler. A rule, an option or a gate step that does not remove work from the
+package's author is refused, however correct it looks (the Human, 2026-11-13).
+
 ## Role
 
 The agent of this repo owns the standard for every CLI package the Human
