@@ -595,15 +595,65 @@ fakedep = {{ index = "local" }}
 homeserver = []
 mac = false
 """
-FAKEDEP_MODULE = '''"""A demo CLI that imports its dependency when it loads."""
+FAKEDEP_MODULE = '''"""A demo CLI that imports its dependency when it loads: `describe --json` answers its envelope."""
 
 import importlib.metadata
+import json
 import sys
 
 from fakedep import kept
 
 def main() -> None:
-    sys.stdout.write(importlib.metadata.version("demo") if "--version" in sys.argv else kept())
+    if "--version" in sys.argv:
+        sys.stdout.write(importlib.metadata.version("demo"))
+    elif "describe" in sys.argv:
+        sys.stdout.write(json.dumps({"ok": True, "command": {"name": "demo"}, "kept": kept()}))
+    else:
+        sys.stdout.write(kept())
+'''
+
+# A CLI whose `describe --json` imports its dependency only when the command runs: the locked wheel keeps it working
+# while the next minor of the dependency breaks it.
+DESCRIBE_MODULE = '''"""A demo CLI whose `describe --json` imports its dependency when the command runs."""
+
+import importlib.metadata
+import json
+import sys
+
+def describe() -> str:
+    from fakedep import kept
+
+    return json.dumps({"ok": True, "command": {"name": "demo"}, "kept": kept()})
+
+def main() -> None:
+    if "--version" in sys.argv:
+        sys.stdout.write(importlib.metadata.version("demo"))
+    elif "describe" in sys.argv:
+        sys.stdout.write(describe())
+    else:
+        sys.stdout.write("Usage: demo [OPTIONS] COMMAND [ARGS]...\\n")
+'''
+
+# A CLI without the Describe part: typer answers the command with a usage error (exit 2, stderr).
+NO_DESCRIBE_MODULE = '''"""A demo CLI without the Describe part: `describe` is typer's "No such command" usage error."""
+
+import importlib.metadata
+import sys
+
+NO_SUCH_COMMAND = """Usage: demo [OPTIONS] COMMAND [ARGS]...
+Try 'demo --help' for help.
+
+Error: No such command 'describe'.
+"""
+
+def main() -> None:
+    if "--version" in sys.argv:
+        sys.stdout.write(importlib.metadata.version("demo"))
+    elif "describe" in sys.argv:
+        sys.stderr.write(NO_SUCH_COMMAND)
+        raise SystemExit(2)
+    else:
+        sys.stdout.write("Usage: demo [OPTIONS] COMMAND [ARGS]...\\n")
 '''
 
 # The same package as a library: no console script, so the fresh install has no tool to run.
@@ -643,7 +693,9 @@ def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install(
     monkeypatch.setenv("UV_OFFLINE", "1")
     gate = Gate(root)
     assert gate.check_installed_wheel().startswith("demo-0.1.0-py3-none-any.whl; `demo --version` = 0.1.0")
-    assert gate.check_fresh_install() == "resolved from the index; `demo --version` = 0.1.0; `demo --help` ok"
+    assert gate.check_fresh_install() == (
+        "resolved from the index; `demo --version` = 0.1.0; `demo --help` ok; `demo describe --json` ok"
+    )
 
     _fake_dependency(index, "2.0.0", keeps_the_name=False)  # the next minor drops what the CLI imports
 
@@ -652,6 +704,44 @@ def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install(
     with pytest.raises(StepFailed) as raised:
         next_release.check_fresh_install()
     assert "ImportError: cannot import name 'kept'" in raised.value.output
+
+
+def test_a_describe_that_breaks_only_under_a_fresh_resolution_fails_the_fresh_install(
+    in_package, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "index"
+    index.mkdir()
+    _fake_dependency(index, "1.0.0", keeps_the_name=True)
+    root = in_package(DESCRIBE_MODULE, pyproject=FAKEDEP_PYPROJECT.format(index=index))
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    gate = Gate(root)
+    assert gate.check_installed_wheel().startswith("demo-0.1.0-py3-none-any.whl; `demo --version` = 0.1.0")
+    assert gate.check_fresh_install().endswith("`demo describe --json` ok")
+
+    _fake_dependency(index, "2.0.0", keeps_the_name=False)  # the next minor drops what describe imports
+
+    next_release = Gate(root)  # the locked wheel still carries fakedep 1.0.0, so its describe keeps working
+    assert next_release.check_installed_wheel().startswith("demo-0.1.0-py3-none-any.whl; `demo --version` = 0.1.0")
+    with pytest.raises(StepFailed) as raised:
+        next_release.check_fresh_install()
+    assert "`demo describe --json` gave no envelope" in raised.value.output
+    assert "ImportError: cannot import name 'kept'" in raised.value.output
+
+
+def test_the_fresh_install_names_an_absent_describe_and_stays_green(
+    in_package, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "index"
+    index.mkdir()
+    _fake_dependency(index, "1.0.0", keeps_the_name=True)
+    root = in_package(NO_DESCRIBE_MODULE, pyproject=FAKEDEP_PYPROJECT.format(index=index))
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    gate = Gate(root)
+    gate.check_installed_wheel()
+    assert gate.check_fresh_install() == (
+        "resolved from the index; `demo --version` = 0.1.0; `demo --help` ok; "
+        "`demo describe --json` absent (the Describe part is off)"
+    )
 
 
 def test_a_dependency_minor_that_drops_an_imported_name_fails_the_fresh_install_of_a_library(

@@ -260,9 +260,9 @@ that would have to keep it.
   at build time: with a tag in reach the wheel is never `0.0.0`. A new repo is tagged `v0.1.0` on its first commit.
 - **Mandatory** (gate: `fresh install`). The package installs into an empty environment whose dependencies come from
   the package index, as on a new machine — not from `uv.lock`. A tool prints the version being released for
-  `<cli> --version` and `<cli> --help` works; a library imports every top-level package and `importlib.metadata`
-  reports that version. Why: the wheel step installs the locked set, so it stays green while a dependency's new minor
-  release breaks every fresh install.
+  `<cli> --version`, `<cli> --help` works and `<cli> describe --json` gives its envelope; a library imports every
+  top-level package and `importlib.metadata` reports that version. Why: the wheel step installs the locked set, so it
+  stays green while a dependency's new minor release breaks every fresh install.
 - **Mandatory** (gate: `vulnerability audit`). `osv-scanner` finds no known vulnerability in `uv.lock` (install it:
   `brew install osv-scanner`; without it the step is skipped with a notice). This failure alone ends with
   `release: audit failed`, exit 3: bump the dependency, the code is fine.
