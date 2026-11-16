@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.27.10 — 2026-11-16
+
+### Outside epics
+
+- Gate: the fresh install runs describe --json, so a broken describe cannot reach a tag (CG-093)
+
 ## v1.27.9 — 2026-11-13
 
 ### Outside epics
