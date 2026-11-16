@@ -4,7 +4,7 @@ title: the gate refuses a `[tool.uv.sources]` git URL for one of our packages
 created: '2026-11-08T10:09:47+00:00'
 source_project: cli-generator
 source_path: /Users/bolandau/Work/tools/cli-generator
-status: new
+status: dropped
 triage:
   serves: []
   risks: []
@@ -14,6 +14,10 @@ triage:
   score: 2.0
   route: task
   at: '2026-11-08T14:15:43+00:00'
+reason: 'These add rules or gate strictness without removing work from the package
+  author: the goal is a package that makes writing a CLI as simple as possible.'
+confirmed: мне не нужны лишние бесполезные идеи важно - наш пакет должен максимально
+  просто давать писать cli а не усложнять
 ---
 
 From the CG-082 extraction of docs/plans/freeze-list.md (F10.1 a dependency by a GitHub git URL passes the local gate and fails CI at `uv sync`; no gate step catches it).
